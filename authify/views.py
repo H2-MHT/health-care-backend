@@ -1,40 +1,21 @@
-from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import update_last_login
-from django.contrib.auth.tokens import (
-    PasswordResetTokenGenerator,
-    default_token_generator,
-)
-from django.shortcuts import get_object_or_404
+import random
+
+from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
-import random
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.conf import settings
-from .serializers import RegistrationSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.sessions.models import Session
-from datetime import timedelta
-from django.utils import timezone
-from django.contrib.auth import get_user_model
 
 from users.models import User
-import random
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-from django.conf import settings
-from .serializers import RegistrationSerializer, SignInSerializer, OTPVerificationSerializer
+
+from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
+                          SignInSerializer)
 
 
 def get_tokens_for_user(user):
@@ -61,12 +42,14 @@ class SignUpView(APIView):
     and creating a new user instance.
     """
 
+    @staticmethod
     def generate_otp(self):
         """
         Generate a 6-digit OTP.
         """
         return str(random.randint(100000, 999999))
 
+    @staticmethod
     def send_otp_email(self, email, otp):
         """
         Send the OTP to the user's email via SendGrid.
@@ -74,10 +57,10 @@ class SignUpView(APIView):
         message = Mail(
             from_email=settings.SENDGRID_FROM_EMAIL,
             to_emails=email,
-            subject='Your OTP Code',
-            plain_text_content=f'Your OTP code is {otp}',
+            subject="Your OTP Code",
+            plain_text_content=f"Your OTP code is {otp}",
         )
-        
+
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
@@ -89,7 +72,7 @@ class SignUpView(APIView):
         serializer = RegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            
+
             # Generate OTP
             otp = self.generate_otp()
 
@@ -108,7 +91,7 @@ class SignUpView(APIView):
 
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
-            
+
             return Response(
                 {
                     "message": "User registered successfully. OTP sent to your email.",
@@ -131,39 +114,37 @@ class OTPVerificationView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = OTPVerificationSerializer(data=request.data)
         if serializer.is_valid():
-            otp = serializer.validated_data['otp']
-            user = request.user  # Assuming the user is already authenticated or another way to identify the user
+            otp = serializer.validated_data["otp"]
+            user = request.user  # Assuming the user is already authenticated
 
-            try:
-                # Check if OTP exists and is still valid
-                if user.otp != otp:
-                    return Response(
-                        {"message": "Invalid OTP."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # Check if OTP expired (e.g., 5 minutes)
-                otp_timestamp = user.date_joined  # Assuming OTP was set when user was created
-                if (timezone.now() - otp_timestamp).total_seconds() > 300:  # Expire OTP after 5 minutes
-                    return Response(
-                        {"message": "OTP has expired. Please request a new one."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # OTP is valid, now activate the user's account
-                user.is_verified = True
-                user.save()
-
+            # Check if OTP exists and is still valid
+            if user.otp != otp:
                 return Response(
-                    {"message": "OTP verified successfully!"},
-                    status=status.HTTP_200_OK,
-                )
-            except User.DoesNotExist:
-                return Response(
-                    {"message": "User does not exist."},
+                    {"message": "Invalid OTP."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # Check if OTP expired (e.g., 5 minutes)
+            otp_timestamp = (
+                user.date_joined
+            )  # Assuming OTP was set when the user was created
+            if (timezone.now() - otp_timestamp).total_seconds() > 300:
+                return Response(
+                    {"message": "OTP has expired. Please request a new one."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # OTP is valid, now activate the user's account
+            user.is_verified = True
+            user.save()
+
+            return Response(
+                {"message": "OTP verified successfully!"},
+                status=status.HTTP_200_OK,
+            )
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class SignInView(APIView):
     """
@@ -192,42 +173,6 @@ class SignInView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class OTPVerificationView(APIView):
-    """
-    API view to verify OTP for user registration.
-    """
-
-    def post(self, request, *args, **kwargs):
-        serializer = OTPVerificationSerializer(data=request.data)
-        if serializer.is_valid():
-            otp = serializer.validated_data['otp']
-            user = request.user
-            email = user.email
-            
-            try:
-                # Check if OTP exists and is still valid
-                user_otp = User.objects.get(email=email, otp=otp)
-                if (timezone.now() - user_otp.created_at).total_seconds() > 300:  # Expire OTP after 5 minutes
-                    return Response(
-                        {"message": "OTP has expired. Please request a new one."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                # OTP is valid, now activate the user's account or proceed with your logic
-                # For example, you could set a field like user.is_active = True
-                user.is_verified = True
-                user.save()
-
-                return Response(
-                    {"message": "OTP verified successfully!"},
-                    status=status.HTTP_200_OK,
-                )
-            except User.DoesNotExist:
-                return Response(
-                    {"message": "Invalid OTP."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GoogleLoginView(APIView):
     """
@@ -307,64 +252,3 @@ class AppleLoginView(APIView):
         except Exception as e:
             # Catch and return any exceptions that occur
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Token generator for password reset
-token_generator = PasswordResetTokenGenerator()
-
-
-class ResetPasswordView(APIView):
-    """
-    API for resetting the password using the email and reset token from the headers.
-    """
-
-    permission_classes = [AllowAny]  # Allow any user to access this endpoint
-
-    def patch(self, request):
-        # Get email and token from headers
-        email = request.headers.get("email")
-        print(email, "--------------------------------------Email")
-        token = request.headers.get("token")
-        print(token, "--------------------------------------Token")
-
-        if not email or not token:
-            return Response(
-                {"error": "Email and token must be provided in the headers."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Validate user by email
-        user = get_object_or_404(get_user_model(), email=email)
-        print(user, type(user), "-----------------------------user>")
-        
-        # Check if the token is valid
-        if not default_token_generator.check_token(user, token):
-            return Response(
-                {"error": "Invalid or expired token."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Get new password and confirm password
-        new_password = request.data.get("new_password")
-        print(new_password, "-----------------------------new_password>")
-        confirm_password = request.data.get("confirm_password")
-        print(confirm_password, "-----------------------------confirm_password>")
-
-        # Check if the passwords match
-        if new_password != confirm_password:
-            raise ValidationError("Passwords do not match.")
-
-        # Check password strength (basic validation example)
-        if len(new_password) < 8:
-            raise ValidationError("Password must be at least 8 characters long.")
-
-        # Optionally, add more password complexity checks (e.g., uppercase, special characters)
-
-        # Set the new password after hashing
-        user.password = make_password(new_password)
-        user.save()
-
-        return Response(
-            {"message": "Password has been reset successfully."},
-            status=status.HTTP_200_OK,
-        )

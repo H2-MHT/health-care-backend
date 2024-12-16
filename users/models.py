@@ -1,10 +1,12 @@
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 from django.core.exceptions import ValidationError
+from django.db import models
+
 
 def validate_terms(value):
     if not value:
         raise ValidationError("You must agree to the terms and conditions.")
+
 
 class User(AbstractUser):
     ROLE_CHOICES = [
