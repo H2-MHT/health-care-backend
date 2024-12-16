@@ -8,6 +8,7 @@ colorama==0.4.6
 cryptography==44.0.0
 defusedxml==0.8.0rc2
 Django==4.2.5
+django-cors-headers==4.6.0
 djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.1
 idna==3.10
