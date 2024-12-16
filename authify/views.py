@@ -42,14 +42,14 @@ class SignUpView(APIView):
     and creating a new user instance.
     """
 
-    @staticmethod
+    # @staticmethod
     def generate_otp(self):
         """
         Generate a 6-digit OTP.
         """
         return str(random.randint(100000, 999999))
 
-    @staticmethod
+    # @staticmethod
     def send_otp_email(self, email, otp):
         """
         Send the OTP to the user's email via SendGrid.
