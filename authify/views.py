@@ -17,8 +17,11 @@ from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
 
 from users.models import User
-
-from .serializers import UserSerializer
+import random
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from django.conf import settings
+from .serializers import RegistrationSerializer, SignInSerializer
 
 
 def get_tokens_for_user(user):
@@ -45,31 +48,62 @@ class SignUpView(APIView):
     and creating a new user instance.
     """
 
-    def post(self, request):
+    def generate_otp(self):
         """
-        Handles POST requests for user registration.
-
-        Args:
-            request (Request): The HTTP request containing user registration data.
-
-        Returns:
-            Response: A success message and a JWT token on successful registration, or errors on failure.
+        Generate a 6-digit OTP.
         """
-        serializer = UserSerializer(
-            data=request.data
-        )  # Validate the incoming data using the serializer
+        return str(random.randint(100000, 999999))
+
+    def send_otp_email(self, email, otp):
+        """
+        Send the OTP to the user's email via SendGrid.
+        """
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject='Your OTP Code',
+            plain_text_content=f'Your OTP code is {otp}',
+        )
+        
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+
+    def post(self, request, *args, **kwargs):
+        serializer = RegistrationSerializer(data=request.data)
         if serializer.is_valid():
-            # Save the user instance after validation
             user = serializer.save()
-            # Generate tokens for the new user
-            token = get_tokens_for_user(user)
+            
+            # Generate OTP
+            otp = self.generate_otp()
+
+            # Send OTP to user's email
+            email_response = self.send_otp_email(user.email, otp)
+
+            if isinstance(email_response, str):
+                return Response(
+                    {"message": f"Failed to send OTP: {email_response}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
             return Response(
-                {"message": "User created successfully", "token": token},
+                {
+                    "message": "User registered successfully. OTP sent to your email.",
+                    "user": serializer.data,
+                    "tokens": {
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                    },
+                },
                 status=status.HTTP_201_CREATED,
             )
-        # Return validation errors if any
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class SignInView(APIView):
     """
@@ -78,35 +112,26 @@ class SignInView(APIView):
     and generates a JWT token for subsequent requests.
     """
 
-    def post(self, request):
-        """
-        Handles POST requests for user login.
-
-        Args:
-            request (Request): The HTTP request containing username and password.
-
-        Returns:
-            Response: A success message and a JWT token on successful authentication, or an error on failure.
-        """
-        # Extract credentials from the request
-        username = request.data.get("username")
-        password = request.data.get("password")
-        # Authenticate the user
-        user = authenticate(request, username=username, password=password)
-
-        if user is not None:
-            # Update the last login timestamp for the user
-            update_last_login(None, user)
-            # Generate tokens for the authenticated user
-            token = get_tokens_for_user(user)
+    def post(self, request, *args, **kwargs):
+        serializer = SignInSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data["user"]
+            tokens = get_tokens_for_user(user)
             return Response(
-                {"message": "Login successful", "token": token},
+                {
+                    "message": "Login successful.",
+                    "user": {
+                        "email": user.email,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "role": user.role,
+                    },
+                    "tokens": tokens,
+                },
                 status=status.HTTP_200_OK,
             )
-        # Return error if authentication fails
-        return Response(
-            {"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class GoogleLoginView(APIView):
