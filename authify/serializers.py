@@ -27,6 +27,10 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class OTPVerificationSerializer(serializers.Serializer):
+    otp = serializers.CharField(max_length=6)
+
+    
 class SignInSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)

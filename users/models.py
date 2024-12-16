@@ -49,6 +49,8 @@ class User(AbstractUser):
     terms_and_condition = models.BooleanField(
         validators=[validate_terms], default=False
     )
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
 
     # Set email as the unique identifier
     USERNAME_FIELD = "email"

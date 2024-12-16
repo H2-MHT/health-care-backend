@@ -15,13 +15,26 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
+import random
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.conf import settings
+from .serializers import RegistrationSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.sessions.models import Session
+from datetime import timedelta
+from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from users.models import User
 import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from django.conf import settings
-from .serializers import RegistrationSerializer, SignInSerializer
+from .serializers import RegistrationSerializer, SignInSerializer, OTPVerificationSerializer
 
 
 def get_tokens_for_user(user):
@@ -88,7 +101,11 @@ class SignUpView(APIView):
                     {"message": f"Failed to send OTP: {email_response}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-            
+
+            # Store OTP in the database for verification later
+            user.otp = otp
+            user.save()
+
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
             
@@ -103,6 +120,49 @@ class SignUpView(APIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OTPVerificationView(APIView):
+    """
+    API view to verify OTP for user registration.
+    """
+
+    def post(self, request, *args, **kwargs):
+        serializer = OTPVerificationSerializer(data=request.data)
+        if serializer.is_valid():
+            otp = serializer.validated_data['otp']
+            user = request.user  # Assuming the user is already authenticated or another way to identify the user
+
+            try:
+                # Check if OTP exists and is still valid
+                if user.otp != otp:
+                    return Response(
+                        {"message": "Invalid OTP."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Check if OTP expired (e.g., 5 minutes)
+                otp_timestamp = user.date_joined  # Assuming OTP was set when user was created
+                if (timezone.now() - otp_timestamp).total_seconds() > 300:  # Expire OTP after 5 minutes
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # OTP is valid, now activate the user's account
+                user.is_verified = True
+                user.save()
+
+                return Response(
+                    {"message": "OTP verified successfully!"},
+                    status=status.HTTP_200_OK,
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "User does not exist."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class SignInView(APIView):
@@ -132,7 +192,42 @@ class SignInView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class OTPVerificationView(APIView):
+    """
+    API view to verify OTP for user registration.
+    """
 
+    def post(self, request, *args, **kwargs):
+        serializer = OTPVerificationSerializer(data=request.data)
+        if serializer.is_valid():
+            otp = serializer.validated_data['otp']
+            user = request.user
+            email = user.email
+            
+            try:
+                # Check if OTP exists and is still valid
+                user_otp = User.objects.get(email=email, otp=otp)
+                if (timezone.now() - user_otp.created_at).total_seconds() > 300:  # Expire OTP after 5 minutes
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # OTP is valid, now activate the user's account or proceed with your logic
+                # For example, you could set a field like user.is_active = True
+                user.is_verified = True
+                user.save()
+
+                return Response(
+                    {"message": "OTP verified successfully!"},
+                    status=status.HTTP_200_OK,
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "Invalid OTP."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GoogleLoginView(APIView):
     """
@@ -220,24 +315,29 @@ token_generator = PasswordResetTokenGenerator()
 
 class ResetPasswordView(APIView):
     """
-    API for resetting the password using the username and reset token from the headers.
+    API for resetting the password using the email and reset token from the headers.
     """
 
     permission_classes = [AllowAny]  # Allow any user to access this endpoint
 
     def patch(self, request):
-        # Get username and token from headers
-        username = request.headers.get("username")
+        # Get email and token from headers
+        email = request.headers.get("email")
+        print(email, "--------------------------------------Email")
         token = request.headers.get("token")
+        print(token, "--------------------------------------Token")
 
-        if not username or not token:
+        if not email or not token:
             return Response(
-                {"error": "Username and token must be provided in the headers."},
+                {"error": "Email and token must be provided in the headers."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate username and token
-        user = get_object_or_404(User, username=username)
+        # Validate user by email
+        user = get_object_or_404(get_user_model(), email=email)
+        print(user, type(user), "-----------------------------user>")
+        
+        # Check if the token is valid
         if not default_token_generator.check_token(user, token):
             return Response(
                 {"error": "Invalid or expired token."},
@@ -246,7 +346,9 @@ class ResetPasswordView(APIView):
 
         # Get new password and confirm password
         new_password = request.data.get("new_password")
+        print(new_password, "-----------------------------new_password>")
         confirm_password = request.data.get("confirm_password")
+        print(confirm_password, "-----------------------------confirm_password>")
 
         # Check if the passwords match
         if new_password != confirm_password:
@@ -258,8 +360,8 @@ class ResetPasswordView(APIView):
 
         # Optionally, add more password complexity checks (e.g., uppercase, special characters)
 
-        # Set new password
-        user.password = make_password(new_password)  # Hash the new password
+        # Set the new password after hashing
+        user.password = make_password(new_password)
         user.save()
 
         return Response(

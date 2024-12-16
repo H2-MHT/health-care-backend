@@ -159,4 +159,4 @@ AUTH_USER_MODEL = 'users.User'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
-SENDGRID_FROM_EMAIL = os.getenv('FROM_EMAIL')
+SENDGRID_FROM_EMAIL = os.getenv('SENDGRID_FROM_EMAIL')
