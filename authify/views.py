@@ -285,6 +285,68 @@ class ResetPasswordView(APIView):
             status=status.HTTP_200_OK,
         )
 
+class ResendOTPView(APIView):
+    """
+    API view for resending an OTP if the previous OTP has expired or is invalid.
+    """
+
+    def generate_otp(self):
+        """
+        Generate a 6-digit OTP.
+        """
+        return str(random.randint(100000, 999999))
+
+    def send_otp_email(self, email, otp):
+        """
+        Send the OTP to the user's email using SendGrid.
+        """
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject="Password Reset OTP - Resend",
+            plain_text_content=f"Your new OTP for password reset is {otp}. It is valid for 10 minutes."
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handle resend OTP request.
+        """
+        email = request.data.get("email")
+
+        # Check if user exists with the provided email
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"message": "No user found with this email."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Generate and send a new OTP
+        new_otp = self.generate_otp()
+        email_response = self.send_otp_email(email, new_otp)
+
+        if isinstance(email_response, str):
+            return Response(
+                {"message": f"Failed to resend OTP: {email_response}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Update the user's OTP in the database
+        user.otp = new_otp
+        user.save()
+
+        return Response(
+            {"message": "A new OTP has been sent successfully to your email."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class GoogleLoginView(APIView):
