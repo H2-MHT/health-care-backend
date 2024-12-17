@@ -13,6 +13,7 @@ from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
 from users.models import User
 from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth import get_user_model
 
 from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
                             SignInSerializer)
@@ -166,6 +167,124 @@ class SignInView(APIView):
                 status=status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+User = get_user_model()
+
+class ForgotPasswordView(APIView):
+    """
+    API view for handling forgot password requests.
+    Generates an OTP and sends it to the user's registered email for verification.
+    """
+
+    def generate_otp(self):
+        """
+        Generate a 6-digit OTP.
+        """
+        return str(random.randint(100000, 999999))
+
+    def send_otp_email(self, email, otp):
+        """
+        Send the OTP to the user's email using SendGrid.
+        """
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject="Password Reset OTP",
+            plain_text_content=f"Your OTP for password reset is {otp}. It is valid for 10 minutes."
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+
+    def post(self, request, *args, **kwargs):
+        """
+        Handle forgot password request.
+        """
+        email = request.data.get("email")
+        print(email, "-----------------------------email")
+        # Check if user exists with the provided email
+        try:
+            user = User.objects.get(email=email)
+            print(user, "-----------------------------user")
+        except User.DoesNotExist:
+            return Response(
+                {"message": "No user found with this email."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Generate and send OTP
+        otp = self.generate_otp()
+        print(otp, "-----------------------------otp")
+        email_response = self.send_otp_email(email, otp)
+        print(email_response, "-----------------------------email_response")
+        if isinstance(email_response, str):
+            return Response(
+                {"message": f"Failed to send OTP: {email_response}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Store OTP in user's model
+        user.otp = otp  # Custom User model with 'otp' field
+        user.save()
+        return Response(
+            {"message": "OTP sent successfully to your email."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResetPasswordView(APIView):
+    """
+    API view for resetting the password after OTP verification.
+    """
+
+    def post(self, request, *args, **kwargs):
+        """
+        Verify OTP and reset the user's password.
+        """
+        email = request.data.get("email")
+        print(email, "-----------------------------email-----1")
+        otp = request.data.get("otp")
+        print(otp, "-----------------------------otp-----2")
+        new_password = request.data.get("new_password")
+        print(new_password, "-----------------------------new_password-----3")
+
+        # Validate input fields
+        if not all([email, otp, new_password]):
+            return Response(
+                {"message": "Email, OTP, and new password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Fetch the user
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"message": "No user found with this email."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check if OTP matches
+        if user.otp != otp:  # Custom User model with 'otp' field
+            return Response(
+                {"message": "Invalid OTP. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Reset password
+        user.set_password(new_password)
+        user.otp = None  # Clear OTP after successful reset
+        user.save()
+
+        return Response(
+            {"message": "Password reset successfully."},
+            status=status.HTTP_200_OK,
+        )
+
 
 
 class GoogleLoginView(APIView):
