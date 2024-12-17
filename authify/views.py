@@ -11,11 +11,11 @@ from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
-
 from users.models import User
+from rest_framework.permissions import IsAuthenticated
 
 from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
-                          SignInSerializer)
+                            SignInSerializer)
 
 
 def get_tokens_for_user(user):
@@ -34,22 +34,19 @@ def get_tokens_for_user(user):
         "access": str(refresh.access_token),
     }
 
-
 class SignUpView(APIView):
     """
     API view for user sign-up.
     Handles the registration of a new user by validating the provided data
     and creating a new user instance.
     """
-
-    # @staticmethod
+    
     def generate_otp(self):
         """
         Generate a 6-digit OTP.
         """
         return str(random.randint(100000, 999999))
 
-    # @staticmethod
     def send_otp_email(self, email, otp):
         """
         Send the OTP to the user's email via SendGrid.
@@ -108,43 +105,40 @@ class SignUpView(APIView):
 
 class OTPVerificationView(APIView):
     """
-    API view to verify OTP for user registration.
+    API view to verify OTP for the currently authenticated user.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         serializer = OTPVerificationSerializer(data=request.data)
         if serializer.is_valid():
             otp = serializer.validated_data["otp"]
-            user = request.user  # Assuming the user is already authenticated
+            user = request.user  # Get the currently logged-in user
 
-            # Check if OTP exists and is still valid
+            # Check if OTP matches
             if user.otp != otp:
                 return Response(
                     {"message": "Invalid OTP."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Check if OTP expired (e.g., 5 minutes)
-            otp_timestamp = (
-                user.date_joined
-            )  # Assuming OTP was set when the user was created
+            # OTP expired (e.g., 5 minutes from `date_joined` or OTP timestamp)
+            otp_timestamp = user.date_joined  # OTP sent when user is created
             if (timezone.now() - otp_timestamp).total_seconds() > 300:
                 return Response(
                     {"message": "OTP has expired. Please request a new one."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # OTP is valid, now activate the user's account
+            # OTP is valid, verify the user's account
             user.is_verified = True
             user.save()
-
             return Response(
                 {"message": "OTP verified successfully!"},
                 status=status.HTTP_200_OK,
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class SignInView(APIView):
     """
