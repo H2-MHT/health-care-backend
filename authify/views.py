@@ -13,7 +13,7 @@ from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
 from users.models import User
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth import get_user_model
+
 
 from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
                             SignInSerializer)
@@ -34,6 +34,7 @@ def get_tokens_for_user(user):
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }
+
 
 class SignUpView(APIView):
     """
@@ -87,17 +88,10 @@ class SignUpView(APIView):
             user.otp = otp
             user.save()
 
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-
             return Response(
                 {
                     "message": "User registered successfully. OTP sent to your email.",
                     "user": serializer.data,
-                    "tokens": {
-                        "refresh": str(refresh),
-                        "access": str(refresh.access_token),
-                    },
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -106,15 +100,23 @@ class SignUpView(APIView):
 
 class OTPVerificationView(APIView):
     """
-    API view to verify OTP for the currently authenticated user.
+    API view to verify OTP for the given user using email and OTP.
     """
-    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         serializer = OTPVerificationSerializer(data=request.data)
         if serializer.is_valid():
+            email = serializer.validated_data["email"]
             otp = serializer.validated_data["otp"]
-            user = request.user  # Get the currently logged-in user
+
+            # Retrieve user by email
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
             # Check if OTP matches
             if user.otp != otp:
@@ -134,8 +136,15 @@ class OTPVerificationView(APIView):
             # OTP is valid, verify the user's account
             user.is_verified = True
             user.save()
+
+            # Generate JWT tokens after OTP verification
+            tokens = get_tokens_for_user(user)
+
             return Response(
-                {"message": "OTP verified successfully!"},
+                {
+                    "message": "OTP verified successfully!",
+                    "tokens": tokens,
+                },
                 status=status.HTTP_200_OK,
             )
 
@@ -168,7 +177,6 @@ class SignInView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-User = get_user_model()
 
 class ForgotPasswordView(APIView):
     """
@@ -205,11 +213,9 @@ class ForgotPasswordView(APIView):
         Handle forgot password request.
         """
         email = request.data.get("email")
-        print(email, "-----------------------------email")
         # Check if user exists with the provided email
         try:
             user = User.objects.get(email=email)
-            print(user, "-----------------------------user")
         except User.DoesNotExist:
             return Response(
                 {"message": "No user found with this email."},
@@ -218,9 +224,7 @@ class ForgotPasswordView(APIView):
 
         # Generate and send OTP
         otp = self.generate_otp()
-        print(otp, "-----------------------------otp")
         email_response = self.send_otp_email(email, otp)
-        print(email_response, "-----------------------------email_response")
         if isinstance(email_response, str):
             return Response(
                 {"message": f"Failed to send OTP: {email_response}"},
@@ -236,52 +240,87 @@ class ForgotPasswordView(APIView):
         )
 
 
-class ResetPasswordView(APIView):
+class VerifyEmailAndGenerateTokensView(APIView):
     """
-    API view for resetting the password after OTP verification.
+    API view to verify email using OTP and generate access and refresh tokens.
     """
 
     def post(self, request, *args, **kwargs):
         """
-        Verify OTP and reset the user's password.
+        Verify OTP and email, then generate access and refresh tokens.
         """
-        email = request.data.get("email")
-        print(email, "-----------------------------email-----1")
+        email = request.data.get("email", "").lower().strip()
         otp = request.data.get("otp")
-        print(otp, "-----------------------------otp-----2")
-        new_password = request.data.get("new_password")
-        print(new_password, "-----------------------------new_password-----3")
 
         # Validate input fields
-        if not all([email, otp, new_password]):
+        if not all([email, otp]):
             return Response(
-                {"message": "Email, OTP, and new password are required."},
+                {"message": "Email and OTP are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Fetch the user
+        # get the user
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response(
-                {"message": "No user found with this email."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Check if OTP matches
-        if user.otp != otp:  # Custom User model with 'otp' field
-            return Response(
-                {"message": "Invalid OTP. Please try again."},
+                {"message": "Invalid email or OTP."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Reset password
+        # Check if OTP matches
+        if user.otp != otp:
+            return Response(
+                {"message": "Invalid email or OTP."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Clear OTP after successful verification
+        user.otp = None
+        user.save()
+
+        # Generate access and refresh tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+
+        return Response(
+            {
+                "message": "Email verified successfully.",
+                "access_token": access_token,
+                "refresh_token": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ChangePasswordView(APIView):
+    """
+    API view for changing the password after email verification.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Change the password for the authenticated user.
+        """
+        new_password = request.data.get("new_password")
+
+        # Validate the new password
+        if not new_password:
+            return Response(
+                {"message": "New password is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get the authenticated user
+        user = request.user
+
+        # Change the user's password
         user.set_password(new_password)
-        user.otp = None  # Clear OTP after successful reset
         user.save()
 
         return Response(
-            {"message": "Password reset successfully."},
+            {"message": "Password changed successfully."},
             status=status.HTTP_200_OK,
         )
 
@@ -347,7 +386,6 @@ class ResendOTPView(APIView):
             {"message": "A new OTP has been sent successfully to your email."},
             status=status.HTTP_200_OK,
         )
-
 
 class GoogleLoginView(APIView):
     """
