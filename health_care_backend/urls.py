@@ -21,5 +21,7 @@ urlpatterns = [
 
     # This includes the URLs from the 'authify' app
     path('auth/', include('authify.urls')),
+    # Include the urls from the review app
+    path('reviews/', include('reviews.urls')),
 
 ]
