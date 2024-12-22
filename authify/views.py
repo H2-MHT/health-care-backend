@@ -14,9 +14,8 @@ from social_django.utils import load_strategy
 from users.models import User
 from rest_framework.permissions import IsAuthenticated
 
-
 from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
-                            SignInSerializer)
+                          SignInSerializer)
 
 
 def get_tokens_for_user(user):
@@ -42,7 +41,7 @@ class SignUpView(APIView):
     Handles the registration of a new user by validating the provided data
     and creating a new user instance.
     """
-    
+
     def generate_otp(self):
         """
         Generate a 6-digit OTP.
@@ -149,6 +148,7 @@ class OTPVerificationView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class SignInView(APIView):
     """
@@ -324,6 +324,7 @@ class ChangePasswordView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 class ResendOTPView(APIView):
     """
     API view for resending an OTP if the previous OTP has expired or is invalid.
@@ -386,6 +387,7 @@ class ResendOTPView(APIView):
             {"message": "A new OTP has been sent successfully to your email."},
             status=status.HTTP_200_OK,
         )
+
 
 class GoogleLoginView(APIView):
     """
