@@ -54,11 +54,9 @@ class User(AbstractUser):
 
     # Remove 'username' and use 'email' as the unique identifier
     username = None
-    first_name = models.CharField(max_length=150, null=False)
-    last_name = models.CharField(max_length=150, null=False)
     email = models.EmailField(unique=True, null=False)
     password = models.CharField(max_length=128, null=False)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="Patient", null = True, blank=True)
     dob = models.DateField(null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GENDER_CHOICES, null=True, blank=True
