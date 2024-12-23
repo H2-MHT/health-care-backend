@@ -15,8 +15,8 @@ from users.models import User
 from rest_framework.permissions import IsAuthenticated
 
 from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
-                            SignInSerializer)
-
+                            SignInSerializer, SocialLoginSerializer)
+from authify.utils import validate_google_id_token
 
 def get_tokens_for_user(user):
     """
@@ -184,29 +184,75 @@ class GoogleLoginView(APIView):
         Returns:
             Response: A success message and a JWT token on successful authentication, or an error on failure.
         """
-        strategy = load_strategy(request)  # Load the social authentication strategy
-        token = request.data.get(
-            "token"
-        )  # Get the Google OAuth2 token from the request
-
         try:
-            # Use the Google OAuth2 backend to authenticate the user
-            backend = GoogleOAuth2(strategy=strategy)
-            user = backend.do_auth(token)
-            if user:
-                # Generate tokens for the authenticated user
-                token = get_tokens_for_user(user)
+            # Use the SocialLoginSerializer to validate the role and token
+            social_login_serializer = SocialLoginSerializer(data=request.data)
+
+            if not social_login_serializer.is_valid():
                 return Response(
-                    {"message": "Login successful", "token": token},
+                    social_login_serializer.errors, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            token = request.data.get('token')
+            client_id = "853181483027-b3pgc8d9m5vq2l83f4hu10mu5se690gi.apps.googleusercontent.com"
+
+            if not token:
+                return Response(
+                    {"error": "Token is required"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate the Google token
+            validation_result = validate_google_id_token(token, client_id)
+            if validation_result["status"] == "valid":
+                user_info = validation_result["user_info"]
+
+                # Extract user information from the token
+                email = user_info.get("email")
+                full_name = user_info.get("name", "")
+                first_name = user_info.get("given_name", "")
+                last_name = user_info.get("family_name", "")
+                role = request.data.get("role", None)
+                # Fallback to parsing the full name if first_name or last_name is missing
+                if not first_name or not last_name:
+                    name_parts = full_name.split()
+                    first_name = name_parts[0] if name_parts else ""
+                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                # Retrieve or create the user based on the email
+                user, created = User.objects.get_or_create(
+                    email=email,
+                )
+                if created:
+                    user.first_name = first_name
+                    user.last_name = last_name
+                    if role:
+                        user.role = role
+                    user.save()
+
+                # Generate JWT tokens for the user
+                token = get_tokens_for_user(user)
+
+                return Response(
+                    {
+                        "message": "Login successful",
+                        "token": token,
+                    },
                     status=status.HTTP_200_OK,
                 )
-            # Return error if authentication fails
-            return Response(
-                {"error": "Authentication failed"}, status=status.HTTP_400_BAD_REQUEST
-            )
+
+            elif validation_result["status"] == "expired":
+                return Response(
+                    {"error": "Token is expired"}, status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                return Response(
+                    {"error": validation_result["message"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         except Exception as e:
-            # Catch and return any exceptions that occur
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class AppleLoginView(APIView):

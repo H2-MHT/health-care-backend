@@ -49,3 +49,11 @@ class SignInSerializer(serializers.Serializer):
         
         data["user"] = user
         return data
+
+class SocialLoginSerializer(serializers.Serializer):
+    ROLE_CHOICES = [
+        ('Patient', 'Patient'),
+        ('Doctor', 'Doctor'),
+    ]
+    role = serializers.ChoiceField(choices=ROLE_CHOICES, required=False)
+    token = serializers.CharField(required=True)
