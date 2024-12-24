@@ -3,6 +3,8 @@ import random
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.generics import UpdateAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -11,12 +13,18 @@ from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
-from users.models import User
-from rest_framework.permissions import IsAuthenticated
 
-from .serializers import (OTPVerificationSerializer, RegistrationSerializer,
-                            SignInSerializer, SocialLoginSerializer)
 from authify.utils import validate_google_id_token
+from users.models import User
+
+from .serializers import (
+    OTPVerificationSerializer,
+    RegistrationSerializer,
+    SignInSerializer,
+    SocialLoginSerializer,
+    UserProfileUpdateSerializer,
+)
+
 
 def get_tokens_for_user(user):
     """
@@ -198,7 +206,7 @@ class ForgotPasswordView(APIView):
             from_email=settings.SENDGRID_FROM_EMAIL,
             to_emails=email,
             subject="Password Reset OTP",
-            plain_text_content=f"Your OTP for password reset is {otp}. It is valid for 10 minutes."
+            plain_text_content=f"Your OTP for password reset is {otp}. It is valid for 10 minutes.",
         )
 
         try:
@@ -297,6 +305,7 @@ class ChangePasswordView(APIView):
     """
     API view for changing the password after email verification.
     """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
@@ -344,7 +353,7 @@ class ResendOTPView(APIView):
             from_email=settings.SENDGRID_FROM_EMAIL,
             to_emails=email,
             subject="Password Reset OTP - Resend",
-            plain_text_content=f"Your new OTP for password reset is {otp}. It is valid for 10 minutes."
+            plain_text_content=f"Your new OTP for password reset is {otp}. It is valid for 10 minutes.",
         )
 
         try:
@@ -414,7 +423,7 @@ class GoogleLoginView(APIView):
                     social_login_serializer.errors, status=status.HTTP_400_BAD_REQUEST
                 )
 
-            token = request.data.get('token')
+            token = request.data.get("token")
             client_id = "853181483027-b3pgc8d9m5vq2l83f4hu10mu5se690gi.apps.googleusercontent.com"
 
             if not token:
@@ -475,7 +484,6 @@ class GoogleLoginView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class AppleLoginView(APIView):
     """
     API view for Apple-based authentication.
@@ -513,3 +521,15 @@ class AppleLoginView(APIView):
         except Exception as e:
             # Catch and return any exceptions that occur
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserProfileUpdateView(UpdateAPIView):
+    """
+    API endpoint to partially update a user's profile.
+    """
+
+    serializer_class = UserProfileUpdateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
