@@ -10,6 +10,7 @@ from doctors.models import Doctor
 from patients.models import MedicalHistory
 from reviews.models import Review
 from users.models import User
+from patients.models import Patient
 
 # Create your views here.
 
@@ -23,8 +24,8 @@ class DashboardAPIView(APIView):
         reviews = Review.objects.select_related("patient__user", "doctor__user")[:10]
         reviews_data = [
             {
-                "patient": f"{review.patient.user.first_name} {review.patient.user.last_name}",
-                "doctor": f"{review.doctor.user.first_name} {review.doctor.user.last_name}",
+                "patient_name": f"{review.patient.user.first_name} {review.patient.user.last_name}",
+                "doctor_name": f"{review.doctor.user.first_name} {review.doctor.user.last_name}",
                 "rating": review.rating,
                 "content": review.content,
                 "recommend": review.recommend,
@@ -41,8 +42,8 @@ class DashboardAPIView(APIView):
         appointments_data = [
             {
                 "id": appointment.id,
-                "patient": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
-                "doctor": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
+                "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
+                "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
                 "clinic": appointment.clinic.name,
                 "date_time": appointment.date_time.isoformat(),
                 "status": appointment.status,
@@ -53,7 +54,7 @@ class DashboardAPIView(APIView):
         # Doctor Notes Data (Example placeholder notes)
         doctor_notes = [
             {
-                "doctor": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
+                "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
                 "note": "Sample note for patient follow-up",
                 "date": datetime.now().isoformat(),
             }
@@ -64,7 +65,8 @@ class DashboardAPIView(APIView):
         diagnoses = MedicalHistory.objects.select_related("patient__user")[:5]
         diagnoses_data = [
             {
-                "patient": f"{history.patient.user.first_name} {history.patient.user.last_name}",
+                "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
+                "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
                 "condition": history.condition,
                 "diagnosis_date": (
                     history.diagnosis_date.isoformat()
@@ -73,8 +75,39 @@ class DashboardAPIView(APIView):
                 ),
                 "notes": history.notes,
             }
+            for doctor in Doctor.objects.all()[:5]
             for history in diagnoses
         ]
+        
+        # Last Reports for Patients from MedicalHistory
+        patients = Patient.objects.all()
+        last_reports_data = []
+        for patient in patients:
+            last_diagnosis = (
+                MedicalHistory.objects.filter(patient=patient)
+                .order_by("-diagnosis_date")
+                .first()
+            )
+            last_reports_data.append(
+                {
+                    "patient_name": f"{patient.user.first_name} {patient.user.last_name}",
+                    "condition": last_diagnosis.condition if last_diagnosis else "No Diagnosis",
+                    "diagnosis_date": (
+                        last_diagnosis.diagnosis_date.strftime("%a, %b %d, %Y")
+                        if last_diagnosis and last_diagnosis.diagnosis_date
+                        else None
+                    ),
+                    "time": (
+                        f"{last_diagnosis.diagnosis_date.strftime('%I:%M %p')} - {last_diagnosis.diagnosis_date.strftime('%I:%M %p')}"
+                        if last_diagnosis and last_diagnosis.diagnosis_date
+                        else None
+                    ),
+                    "notes": last_diagnosis.notes if last_diagnosis else "No Notes",
+                    "status": last_diagnosis.status
+                    if last_diagnosis and hasattr(last_diagnosis, "status")
+                    else "Unknown",
+                }
+            )
 
         # Statistics
         total_consultations = Appointment.objects.count()
@@ -90,6 +123,7 @@ class DashboardAPIView(APIView):
             "appointments": appointments_data,
             "doctor_notes": doctor_notes,
             "patient_diagnoses": diagnoses_data,
+            "last_report:": last_reports_data,
             "total_consultations": total_consultations,
             "total_clients": total_clients,
             "returns_percentage": returns_percentage,
