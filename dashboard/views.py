@@ -123,7 +123,7 @@ class DashboardAPIView(APIView):
             "appointments": appointments_data,
             "doctor_notes": doctor_notes,
             "patient_diagnoses": diagnoses_data,
-            "last_report:": last_reports_data,
+            "last_report": last_reports_data,
             "total_consultations": total_consultations,
             "total_clients": total_clients,
             "returns_percentage": returns_percentage,
