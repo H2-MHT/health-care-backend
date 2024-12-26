@@ -11,6 +11,8 @@ from patients.models import MedicalHistory
 from reviews.models import Review
 from users.models import User
 from patients.models import Patient
+from datetime import timedelta
+from appointments.models import Appointment
 
 # Create your views here.
 
@@ -50,6 +52,46 @@ class DashboardAPIView(APIView):
             }
             for appointment in appointments
         ]
+        
+        # Filter for archived appointments
+        archived_appointments = Appointment.objects.filter(status="Archived").values(
+            "patient__user__first_name",
+            "patient__user__last_name",
+            "doctor__user__first_name",
+            "doctor__user__last_name",
+            "clinic__name",
+            "date_time",
+            "status"
+        )
+
+        # Filter for confirmed appointments
+        confirmed_appointments = Appointment.objects.filter(status="Confirmed").values(
+            "patient__user__first_name",
+            "patient__user__last_name",
+            "doctor__user__first_name",
+            "doctor__user__last_name",
+            "clinic__name",
+            "date_time",
+            "status"
+        )
+
+        # Format the results with required date and time formatting
+        def format_appointment_data(appointments):
+            return [
+                {
+                    "patient_name": f"{appt['patient__user__first_name']} {appt['patient__user__last_name']}",
+                    "doctor_name": f"{appt['doctor__user__first_name']} {appt['doctor__user__last_name']}",
+                    "clinic": appt["clinic__name"],
+                    "date": appt["date_time"].strftime("%a, %b %d, %Y"),
+                    "time": f"{appt['date_time'].strftime('%I:%M %p')} - {(appt['date_time'] + timedelta(minutes=30)).strftime('%I:%M %p')}",
+                    "status": appt["status"],
+                }
+                for appt in appointments
+            ]
+
+        # Process archived and confirmed appointments
+        archived_data = format_appointment_data(archived_appointments)
+        confirmed_data = format_appointment_data(confirmed_appointments)
 
         # Doctor Notes Data (Example placeholder notes)
         doctor_notes = [
@@ -113,7 +155,7 @@ class DashboardAPIView(APIView):
         total_consultations = Appointment.objects.count()
         total_clients = User.objects.filter(role="Patient").count()
         returns_percentage = round(
-            (total_consultations / total_clients) * 100 if total_clients else 0, 2
+            (total_clients / total_consultations) * 100 if total_clients else 0, 2
         )
 
         # Final Response
@@ -123,6 +165,8 @@ class DashboardAPIView(APIView):
             "appointments": appointments_data,
             "doctor_notes": doctor_notes,
             "patient_diagnoses": diagnoses_data,
+            "archived_data": archived_data,
+            "confirmed_data": confirmed_data,
             "last_report": last_reports_data,
             "total_consultations": total_consultations,
             "total_clients": total_clients,
