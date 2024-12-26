@@ -15,6 +15,7 @@ class Appointment(models.Model):
             ("Confirmed", "Confirmed"),
             ("Completed", "Completed"),
             ("Cancelled", "Cancelled"),
+            ("Archived", "Archived"),
         ],
     )
     records = models.TextField(null=True, blank=True)
