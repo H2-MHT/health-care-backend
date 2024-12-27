@@ -80,9 +80,6 @@ class User(AbstractUser):
     expertise = models.TextField(null=True, blank=True)
     professional_stat = models.TextField(null=True, blank=True)
     working_time = models.CharField(max_length=255, null=True, blank=True)
-    licenses_certificate = models.TextField(null=True, blank=True)
-    media_digest = models.TextField(null=True, blank=True)
-
     # Agreement
     terms_and_condition = models.BooleanField(validators=[validate_terms], default=False)
 
@@ -98,3 +95,17 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+def user_fileq(instance, filename):
+    return '{0}-{1}'.format(instance.type, filename)
+
+
+class UserFile(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="files")
+    file = models.FileField(upload_to="licenses_certificates/", null=True, blank=True)
+    type = models.CharField(max_length=20, null=True, blank=True, choices=[("Certificate", "Certificate"), ("Media", "Media")])
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.type}"
