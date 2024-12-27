@@ -8,7 +8,8 @@ from .views import (
     ForgotPasswordView,
     ResendOTPView,
     VerifyEmailAndGenerateTokensView,
-    ChangePasswordView, UserProfileUpdateView,
+    ChangePasswordView,
+    UpdateUserProfileAPIView,
 )
 
 urlpatterns = [
@@ -22,6 +23,5 @@ urlpatterns = [
     path("resend-otp/", ResendOTPView.as_view(), name="resend-otp"),
     path("login/google/", GoogleLoginView.as_view(), name="google-login"),
     path("login/apple/", AppleLoginView.as_view(), name="apple-login"),
-    path("profile/update/", UserProfileUpdateView.as_view(), name="profile-update"),
-
+    path("update-profile/", UpdateUserProfileAPIView.as_view(), name="update-profile"),
 ]
