@@ -110,3 +110,28 @@ class UserProfileUpdateSerializer(serializers.Serializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "dob",
+            "gender",
+            "phone_number",
+            "bio",
+            "country",
+            "city",
+            "languages",
+            "work_place",
+            "expertise",
+            "professional_stat",
+            "working_time",
+            "profile_picture",
+        ]
+    
+    

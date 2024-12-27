@@ -10,6 +10,7 @@ from .views import (
     VerifyEmailAndGenerateTokensView,
     ChangePasswordView,
     UpdateUserProfileAPIView,
+    GetUserProfileAPIView,
 )
 
 urlpatterns = [
@@ -24,4 +25,5 @@ urlpatterns = [
     path("login/google/", GoogleLoginView.as_view(), name="google-login"),
     path("login/apple/", AppleLoginView.as_view(), name="apple-login"),
     path("update-profile/", UpdateUserProfileAPIView.as_view(), name="update-profile"),
+    path("view-profile/", GetUserProfileAPIView.as_view(), name="view-profile"),
 ]

@@ -14,6 +14,7 @@ from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import AuthenticationFailed
 
 from authify.utils import validate_google_id_token
 from users.models import User
@@ -24,6 +25,7 @@ from .serializers import (
     SignInSerializer,
     SocialLoginSerializer,
     UserProfileUpdateSerializer,
+    UserProfileSerializer,
 )
 
 
@@ -550,3 +552,40 @@ class UpdateUserProfileAPIView(APIView):
             }
             return Response({"message": "Profile updated successfully.", "data": user_data}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class GetUserProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            if not request.user.is_authenticated:
+                raise AuthenticationFailed("User is not authenticated.")
+            
+            user = request.user
+            role = user.role
+
+            # Handle case where the role is missing or invalid
+            if not role:
+                return Response({"message": "User role is not assigned."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Role-based response logic
+            if role == 'Patient':
+                serializer = UserProfileSerializer(user)
+                data = serializer.data
+                return Response({"message": "Patient profile.", "data": data}, status=status.HTTP_200_OK)
+            elif role == 'Doctor':
+                serializer = UserProfileSerializer(user)
+                data = serializer.data
+                return Response({"message": "Doctor profile.", "data": data}, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": "Invalid role assigned to user."}, status=status.HTTP_400_BAD_REQUEST)
+
+        except AuthenticationFailed as e:
+            # Handle case where user is not authenticated
+            return Response({"message": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+
+        except Exception as e:
+            # Catch any other unexpected errors
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
