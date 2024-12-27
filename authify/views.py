@@ -13,6 +13,7 @@ from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from authify.utils import validate_google_id_token
 from users.models import User
@@ -523,13 +524,29 @@ class AppleLoginView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserProfileUpdateView(UpdateAPIView):
-    """
-    API endpoint to partially update a user's profile.
-    """
-
-    serializer_class = UserProfileUpdateSerializer
+class UpdateUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
-    def get_object(self):
-        return self.request.user
+    def patch(self, request):
+        serializer = UserProfileUpdateSerializer(instance=request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            user = serializer.save()
+            user_data = {
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "dob": user.dob,
+                "gender": user.gender,
+                "phone_number": user.phone_number,
+                "bio": user.bio,
+                "country": user.country,
+                "city": user.city,
+                "languages": user.languages,
+                "work_place": user.work_place,
+                "expertise": user.expertise,
+                "professional_stat": user.professional_stat,
+                "working_time": user.working_time,
+                "profile_picture": user.profile_picture.url if user.profile_picture else None
+            }
+            return Response({"message": "Profile updated successfully.", "data": user_data}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

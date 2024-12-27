@@ -82,62 +82,31 @@ class SocialLoginSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
 
 
-class UserProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = [
-            "first_name",
-            "last_name",
-            "email",
-            "role",
-            "dob",
-            "gender",
-            "phone_number",
-            "profile_picture",
-            "bio",
-            "country",
-            "city",
-            "residence",
-            "languages",
-            "work_place",
-            "expertise",
-            "professional_stat",
-            "working_time",
-            "licenses_certificate",
-            "media_digest",
-        ]
-        read_only_fields = ["email", "role", "is_verified"]
+# Validation for profile picture
+def validate_profile_picture(value):
+    if value.size > 2 * 1024 * 1024:  # Limit size to 2 MB
+        raise serializers.ValidationError("Profile picture must be smaller than 2 MB.")
+    if not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+        raise serializers.ValidationError("Profile picture must be a PNG or JPG file.")
+    return value
+class UserProfileUpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    dob = serializers.DateField(required=False)
+    gender = serializers.ChoiceField(choices=["Male", "Female", "Other"], required=False)
+    phone_number = serializers.CharField(required=False)
+    bio = serializers.CharField(required=False)
+    country = serializers.CharField(required=False)
+    city = serializers.CharField(required=False)
+    languages = serializers.CharField(required=False)
+    work_place = serializers.CharField(required=False)
+    expertise = serializers.CharField(required=False)
+    professional_stat = serializers.CharField(required=False)
+    working_time = serializers.CharField(required=False)
+    profile_picture = serializers.ImageField(required=False, validators=[validate_profile_picture])
 
-    def validate_first_name(self, value):
-        if not value:
-            raise serializers.ValidationError("First name is required.")
-        return value
-
-    def validate_last_name(self, value):
-        if not value:
-            raise serializers.ValidationError("Last name is required.")
-        return value
-
-    def validate_phone_number(self, value):
-        if value and not value.isdigit():
-            raise serializers.ValidationError("Phone number must contain only digits.")
-        return value
-
-    def validate(self, data):
-        """
-        Ensure mandatory fields are not empty during update.
-        """
-        user = self.instance  # Existing user instance
-
-        if "first_name" in data and not data["first_name"]:
-            raise serializers.ValidationError({"first_name": "First name cannot be empty."})
-        if "last_name" in data and not data["last_name"]:
-            raise serializers.ValidationError({"last_name": "Last name cannot be empty."})
-
-        if not user.first_name:
-            raise serializers.ValidationError({"first_name": "First name is required."})
-        if not user.last_name:
-            raise serializers.ValidationError({"last_name": "Last name is required."})
-
-        return data
-
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
