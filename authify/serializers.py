@@ -28,8 +28,6 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "professional_stat",
             "residence",
             "working_time",
-            "licenses_certificate",
-            "media_digest",
             "profile_picture",
             "phone_number",
         ]
