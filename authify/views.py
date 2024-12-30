@@ -13,7 +13,7 @@ from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_core.backends.google import GoogleOAuth2
 from social_django.utils import load_strategy
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import AuthenticationFailed
 
 from authify.utils import validate_google_id_token
@@ -528,7 +528,7 @@ class AppleLoginView(APIView):
 
 class UpdateUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def patch(self, request):
         serializer = UserProfileUpdateSerializer(instance=request.user, data=request.data, partial=True)
