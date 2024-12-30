@@ -27,5 +27,7 @@ urlpatterns = [
     path('reviews/', include('reviews.urls')),
     # Include the urls from the dashboard app
     path('dashboard/', include('dashboard.urls')),
+    # Include the urls from the doctors app
+    path('doctors/', include('doctors.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
