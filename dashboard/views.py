@@ -43,7 +43,8 @@ class DashboardAPIView(APIView):
         )[:10]
         appointments_data = [
             {
-                "id": appointment.id,
+                "appointment_id": appointment.id,
+                "patient_id": appointment.patient.id,
                 "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
                 "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
                 "clinic": appointment.clinic.name,
