@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from datetime import datetime
+from pytz import timezone
 from .models import Appointment
 
 class RescheduleAppointmentSerializer(serializers.ModelSerializer):
@@ -16,7 +17,13 @@ class RescheduleAppointmentSerializer(serializers.ModelSerializer):
 
         # Combine day and time into a single datetime object
         try:
-            data['new_date_time'] = datetime.combine(day, time)
+            # Create naive datetime
+            naive_datetime = datetime.combine(day, time)
+
+            # Convert to IST timezone
+            ist = timezone('Asia/Kolkata')
+            data['new_date_time'] = ist.localize(naive_datetime)
+
         except ValueError:
             raise serializers.ValidationError("Invalid day or time format.")
         
