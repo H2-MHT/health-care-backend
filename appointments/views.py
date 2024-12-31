@@ -29,7 +29,7 @@ class RescheduleAppointmentView(APIView):
 
                 # Format day and time for response
                 updated_day = new_date_time.strftime("%Y-%m-%d")
-                updated_time = new_date_time.strftime("%H:%M")
+                updated_time = new_date_time.strftime("%I:%M %p")
 
                 patient_name = f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}"
 
