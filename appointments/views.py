@@ -24,7 +24,7 @@ class RescheduleAppointmentView(APIView):
             if serializer.is_valid():
                 new_date_time = serializer.validated_data['new_date_time']
                 appointment.date_time = new_date_time
-                appointment.status = "Pending"
+                appointment.status = "Confirmed"
                 appointment.save()
 
                 # Format day and time for response
