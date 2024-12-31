@@ -10,6 +10,9 @@ class Doctor(models.Model):
     experience_years = models.PositiveIntegerField(null=True, blank=True)
     available_dates = models.JSONField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return self.user.get_full_name()
 
 class DoctorNotes(models.Model):
     patient = models.ForeignKey(

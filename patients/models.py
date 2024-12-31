@@ -22,6 +22,8 @@ class Patient(models.Model):
     show_phone = models.BooleanField(default=False)
     health_documents = models.CharField(max_length=255, null=True, blank=True)
 
+    def __str__(self):
+        return self.user.get_full_name()
 
 class MedicalHistory(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
