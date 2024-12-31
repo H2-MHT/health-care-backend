@@ -4,7 +4,7 @@ from .models import Appointment
 
 class RescheduleAppointmentSerializer(serializers.ModelSerializer):
     day = serializers.DateField()
-    time = serializers.TimeField()
+    time = serializers.TimeField(input_formats=['%I:%M%p'])  # Accepts formats like 11:00am
 
     class Meta:
         model = Appointment

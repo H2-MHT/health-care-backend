@@ -12,35 +12,27 @@ from rest_framework.response import Response
 class RescheduleAppointmentView(APIView):
     def patch(self, request, pk):
         try:
-            # Retrieve the appointment by primary key (pk)
             appointment = Appointment.objects.get(pk=pk)
 
-            # Check if the user is a doctor
             if request.user.role != "Doctor":
                 return Response({"error": "You must be logged in as a doctor to reschedule appointments."}, status=status.HTTP_403_FORBIDDEN)
 
-            # Check if the authenticated doctor is the one assigned to the appointment
             if appointment.doctor.user != request.user:
                 return Response({"error": "You are not the doctor for this appointment."}, status=status.HTTP_403_FORBIDDEN)
 
-            # Proceed if the doctor is authorized to reschedule
             serializer = RescheduleAppointmentSerializer(data=request.data)
             if serializer.is_valid():
-                # Update the appointment's date and time
                 new_date_time = serializer.validated_data['new_date_time']
                 appointment.date_time = new_date_time
-                appointment.status = "Pending"  # Set status as pending after rescheduling
+                appointment.status = "Pending"
                 appointment.save()
 
-                # Format the updated date and time
-                updated_day = new_date_time.strftime("%A, %d %B %Y")
-                updated_time = new_date_time.strftime("%H:%M %p")
+                # Format day and time for response
+                updated_day = new_date_time.strftime("%Y-%m-%d")
+                updated_time = new_date_time.strftime("%H:%M")
 
-                # Get the patient's full name
-                patient_user = appointment.patient.user  # Access the related User model for the patient
-                patient_name = f"{patient_user.first_name} {patient_user.last_name}"
+                patient_name = f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}"
 
-                # Return the response with patient name, updated time, and updated day
                 return Response({
                     "message": "Appointment rescheduled successfully.",
                     "patient_name": patient_name,
@@ -48,12 +40,10 @@ class RescheduleAppointmentView(APIView):
                     "updated_time": updated_time
                 }, status=status.HTTP_200_OK)
 
-            # If the serializer is not valid, return the errors
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Appointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
-
 
 @csrf_exempt
 def update_appointment_status(request):
