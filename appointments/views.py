@@ -64,9 +64,21 @@ def update_appointment_status(request):
             if not appointment:
                 return JsonResponse({"error": "No appointment found for this patient."}, status=404)
 
-            # Restrict status update to "Pending" -> ["Confirmed", "Cancelled"]
-            if appointment.status != "Pending" or new_status not in ["Confirmed", "Cancelled"]:
-                return JsonResponse({"error": "Status can only be updated from 'Pending' to 'Confirmed' or 'Cancelled'."}, status=400)
+            # Handle cancellation separately
+            if new_status == "Cancelled":
+                appointment.status = new_status
+                appointment.save()
+                return JsonResponse({
+                    "message": "Appointment successfully cancelled.",
+                    "appointment_id": appointment.id,
+                    "new_status": appointment.status
+                }, status=200)
+
+            # Restrict other status updates to "Pending" -> ["Confirmed"]
+            if appointment.status != "Pending" or new_status != "Confirmed":
+                return JsonResponse({
+                    "error": "Status can only be updated from 'Pending' to 'Confirmed'."
+                }, status=400)
 
             # Update the status
             appointment.status = new_status
