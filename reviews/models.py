@@ -20,7 +20,6 @@ class Reply(models.Model):
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="replies")
     user = models.ForeignKey("users.User", on_delete=models.CASCADE)  # Could be patient or doctor
     content = models.TextField()
-    parent_reply = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name="nested_replies")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

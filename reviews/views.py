@@ -57,55 +57,69 @@ class ReviewPIView(APIView):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-# class ReplyAPIView(APIView):
-#     permission_classes = [permissions.IsAuthenticated]
+class ReplyAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
 
-#     def post(self, request, review_id, *args, **kwargs):
-#         # Ensure the review exists
-#         try:
-#             review = Review.objects.get(id=review_id)
-#         except Review.DoesNotExist:
-#             return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
+    def post(self, request, review_id, *args, **kwargs):
+        # Ensure the review exists
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
 
-#         user = request.user
-#         # Check if the user is a patient or doctor
-#         if hasattr(user, 'patient'):
-#             # Patient can reply if they have an active appointment with the doctor
-#             patient = user.patient
-#             doctor = review.doctor
-#             appointment = Appointment.objects.filter(patient=patient, doctor=doctor, status="Confirmed").exists()
-#             if not appointment:
-#                 return Response(
-#                     {"detail": "You must have an active appointment with the doctor to reply."},
-#                     status=status.HTTP_403_FORBIDDEN
-#                 )
-#         elif hasattr(user, 'doctor'):
-#             doctor = user.doctor
-#         else:
-#             return Response(
-#                 {"detail": "Only doctors or patients can reply."},
-#                 status=status.HTTP_403_FORBIDDEN
-#             )
+        user = request.user
+        # Check if the user is a patient or doctor
+        if hasattr(user, 'patient'):
+            # Patient can reply if they have an active appointment with the doctor
+            patient = user.patient
+            doctor = review.doctor
+            appointment = Appointment.objects.filter(patient=patient, doctor=doctor, status="Confirmed").exists()
+            if not appointment:
+                return Response(
+                    {"detail": "You must have an active appointment with the doctor to reply."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        elif hasattr(user, 'doctor'):
+            doctor = user.doctor
+        else:
+            return Response(
+                {"detail": "Only doctors or patients can reply."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-#         # Create a reply for the review
-#         serializer = ReplySerializer(data=request.data, context={'request': request})
-#         if serializer.is_valid():
-#             serializer.save(review=review, user=user)  # Save the reply under the review
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        # Create a reply for the review
+        serializer = ReplySerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(review=review, user=user)  # Save the reply under the review
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-#     def get(self, request, review_id, *args, **kwargs):
-#         # Fetch all replies for the review, including nested replies
-#         try:
-#             review = Review.objects.get(id=review_id)
-#         except Review.DoesNotExist:
-#             return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
-
-#         # Get all replies to the review
-#         replies = Reply.objects.filter(review=review).order_by('created_at')
-#         serializer = ReplySerializer(replies, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)    
+    def get(self, request, review_id, *args, **kwargs):
+        # Fetch all replies for the review
+        try:
+            review = Review.objects.get(id=review_id)
+        except Review.DoesNotExist:
+            return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get the reviewer's name
+        if hasattr(review, 'patient'):
+            reviewer_name = review.patient.user.first_name
+        elif hasattr(review, 'doctor'):
+            reviewer_name = review.doctor.user.first_name
+        else:
+            reviewer_name = "Unknown"
+            
+        # Get all replies to the review
+        replies = Reply.objects.filter(review=review).order_by('-created_at')
+        serializer = ReplySerializer(replies, many=True)
+        total_replies = replies.count()
+        response_data = {
+            'reviewer_name': reviewer_name,
+            'total_replies': total_replies,
+            'replies': serializer.data
+            }
+        return Response(response_data, status=status.HTTP_200_OK)    
     
 class DoctorReviewsAPIView(generics.ListAPIView):
     serializer_class = ReviewSerializer
