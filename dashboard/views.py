@@ -31,7 +31,6 @@ class DashboardAPIView(APIView):
                 "rating": review.rating,
                 "content": review.content,
                 "recommend": review.recommend,
-                "reply": review.reply,
                 "created_at": review.created_at.isoformat(),
             }
             for review in reviews
