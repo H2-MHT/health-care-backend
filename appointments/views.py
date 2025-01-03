@@ -54,10 +54,27 @@ def update_appointment_status(request):
             patient_id = data.get("patient_id")
             appointment_id = data.get("appointment_id")
             new_status = data.get("status")
+            new_date = data.get("date")  # Expected format: YYYY-MM-DD
+            new_time = data.get("time")  # Expected format: HH:MM (24-hour format)
 
             # Validate input
             if not patient_id or not appointment_id or not new_status:
-                return JsonResponse({"error": "Patient ID, Appointment ID, and Status are required."}, status=400)
+                return JsonResponse({
+                    "error": "Patient ID, Appointment ID, and Status are required."
+                }, status=400)
+
+            # Validate date and time if provided
+            if new_date:
+                try:
+                    new_date = datetime.strptime(new_date, "%Y-%m-%d").date()
+                except ValueError:
+                    return JsonResponse({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+            if new_time:
+                try:
+                    new_time = datetime.strptime(new_time, "%I:%M %p").time()
+                except ValueError:
+                    return JsonResponse({"error": "Invalid time format. Use hh:mm AM/PM."}, status=400)
 
             # Fetch the appointment for the given patient
             appointment = Appointment.objects.filter(id=appointment_id, patient_id=patient_id).first()
@@ -67,11 +84,15 @@ def update_appointment_status(request):
             # Handle cancellation separately
             if new_status == "Cancelled":
                 appointment.status = new_status
+                appointment.date = new_date if new_date else appointment.date
+                appointment.time = new_time if new_time else appointment.time
                 appointment.save()
                 return JsonResponse({
                     "message": "Appointment successfully cancelled.",
                     "appointment_id": appointment.id,
-                    "new_status": appointment.status
+                    "new_status": appointment.status,
+                    "new_date": appointment.date,
+                    "new_time": appointment.time.strftime("%I:%M %p")
                 }, status=200)
 
             # Restrict other status updates to "Pending" -> ["Confirmed"]
@@ -80,14 +101,18 @@ def update_appointment_status(request):
                     "error": "Status can only be updated from 'Pending' to 'Confirmed'."
                 }, status=400)
 
-            # Update the status
+            # Update the status, date, and time
             appointment.status = new_status
+            appointment.date = new_date if new_date else appointment.date
+            appointment.time = new_time if new_time else appointment.time
             appointment.save()
 
             return JsonResponse({
                 "message": "Appointment status updated successfully.",
                 "appointment_id": appointment.id,
-                "new_status": appointment.status
+                "new_status": appointment.status,
+                "new_date": appointment.date,
+                "new_time": appointment.time
             }, status=200)
 
         except json.JSONDecodeError:
