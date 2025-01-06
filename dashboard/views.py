@@ -54,7 +54,7 @@ class DashboardAPIView(APIView):
                 "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
                 "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
                 "clinic": appointment.clinic.name,
-                "date_time": appointment.date_time.strftime("%d-%m-%Y %H:%M"),
+                "date_time": appointment.date_time,
                 "status": appointment.status,
             }
             for appointment in appointments
