@@ -28,8 +28,8 @@ class RescheduleAppointmentView(APIView):
                 appointment.save()
 
                 # Format day and time for response
-                updated_day = new_date_time.strftime("%Y-%m-%d")
-                updated_time = new_date_time.strftime("%I:%M %p")
+                updated_day = new_date_time.strftime("%d-%m-%Y")
+                updated_time = new_date_time.strftime("%H:%M")
 
                 patient_name = f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}"
 
@@ -45,6 +45,7 @@ class RescheduleAppointmentView(APIView):
         except Appointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
+
 @csrf_exempt
 def update_appointment_status(request):
     if request.method == "PATCH":
@@ -54,8 +55,8 @@ def update_appointment_status(request):
             patient_id = data.get("patient_id")
             appointment_id = data.get("appointment_id")
             new_status = data.get("status")
-            new_date = data.get("date")  # Expected format: YYYY-MM-DD
-            new_time = data.get("time")  # Expected format: HH:MM (24-hour format)
+            new_date = data.get("date")
+            new_time = data.get("time")
 
             # Validate input
             if not patient_id or not appointment_id or not new_status:
@@ -66,15 +67,17 @@ def update_appointment_status(request):
             # Validate date and time if provided
             if new_date:
                 try:
-                    new_date = datetime.strptime(new_date, "%Y-%m-%d").date()
+                    # Use DD-MM-YYYY format for the date
+                    new_date = datetime.strptime(new_date, "%d-%m-%Y").date()
                 except ValueError:
-                    return JsonResponse({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+                    return JsonResponse({"error": "Invalid date format. Use MM-DD-YYYY."}, status=400)
 
             if new_time:
                 try:
-                    new_time = datetime.strptime(new_time, "%I:%M %p").time()
+                    # Use 24-hour HH:mm format for the time
+                    new_time = datetime.strptime(new_time, "%H:%M").time()
                 except ValueError:
-                    return JsonResponse({"error": "Invalid time format. Use hh:mm AM/PM."}, status=400)
+                    return JsonResponse({"error": "Invalid time format. Use HH:mm."}, status=400)
 
             # Fetch the appointment for the given patient
             appointment = Appointment.objects.filter(id=appointment_id, patient_id=patient_id).first()
@@ -91,8 +94,8 @@ def update_appointment_status(request):
                     "message": "Appointment successfully cancelled.",
                     "appointment_id": appointment.id,
                     "new_status": appointment.status,
-                    "new_date": appointment.date,
-                    "new_time": appointment.time.strftime("%I:%M %p")
+                    "new_date": appointment.date.strftime("%d-%m-%Y"),
+                    "new_time": appointment.time.strftime("%H:%M")
                 }, status=200)
 
             # Restrict other status updates to "Pending" -> ["Confirmed"]
@@ -111,8 +114,8 @@ def update_appointment_status(request):
                 "message": "Appointment status updated successfully.",
                 "appointment_id": appointment.id,
                 "new_status": appointment.status,
-                "new_date": appointment.date,
-                "new_time": appointment.time
+                "new_date": appointment.date.strftime("%d-%m-%Y"),
+                "new_time": appointment.time.strftime("%H:%M")
             }, status=200)
 
         except json.JSONDecodeError:
