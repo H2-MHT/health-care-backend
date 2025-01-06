@@ -70,7 +70,7 @@ def update_appointment_status(request):
                     # Use DD-MM-YYYY format for the date
                     new_date = datetime.strptime(new_date, "%d-%m-%Y").date()
                 except ValueError:
-                    return JsonResponse({"error": "Invalid date format. Use MM-DD-YYYY."}, status=400)
+                    return JsonResponse({"error": "Invalid date format. Use DD-MM-YYYY."}, status=400)
 
             if new_time:
                 try:
