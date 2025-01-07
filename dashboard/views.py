@@ -23,9 +23,16 @@ class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        # Check if the logged-in user is a doctor
+        if not hasattr(request.user, 'doctor'):
+            return Response({"error": "Access restricted to doctors only."}, status=403)
+        
+        # Get the logged-in doctor's profile
+        doctor = request.user.doctor
+
         # Reviews Data
-        total_reviews = Review.objects.count()
-        reviews = Review.objects.select_related("patient__user", "doctor__user")[:10]
+        total_reviews = Review.objects.filter(doctor=doctor).count()
+        reviews = Review.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user")[:10]
         reviews_data = [
             {
                 "patient_name": f"{review.patient.user.first_name} {review.patient.user.last_name}",
@@ -39,7 +46,7 @@ class DashboardAPIView(APIView):
         ]
 
         # Appointments Data
-        appointments = Appointment.objects.select_related(
+        appointments = Appointment.objects.filter(doctor=doctor).select_related(
             "patient__user", "doctor__user", "clinic"
         )[:10]
         appointments_data = [
@@ -55,8 +62,8 @@ class DashboardAPIView(APIView):
             for appointment in appointments
         ]
         
-        # Filter for archived appointments
-        archived_appointments = Appointment.objects.filter(status="Archived").values(
+        # Archived and Confirmed Appointments
+        archived_appointments = Appointment.objects.filter(doctor=doctor, status="Archived").values(
             "patient__user__first_name",
             "patient__user__last_name",
             "doctor__user__first_name",
@@ -66,8 +73,7 @@ class DashboardAPIView(APIView):
             "status"
         )
 
-        # Filter for confirmed appointments
-        confirmed_appointments = Appointment.objects.filter(status="Confirmed").values(
+        confirmed_appointments = Appointment.objects.filter(doctor=doctor, status="Confirmed").values(
             "patient__user__first_name",
             "patient__user__last_name",
             "doctor__user__first_name",
@@ -77,7 +83,6 @@ class DashboardAPIView(APIView):
             "status"
         )
 
-        # Format the results with required date and time formatting
         def format_appointment_data(appointments):
             return [
                 {
@@ -91,21 +96,19 @@ class DashboardAPIView(APIView):
                 for appt in appointments
             ]
 
-        # Process archived and confirmed appointments
         archived_data = format_appointment_data(archived_appointments)
         confirmed_data = format_appointment_data(confirmed_appointments)
 
-        # Doctor Notes Data
-        # Fetch doctor notes created by the logged-in doctor
+        # Doctor Notes
         if request.user.role == "Doctor":
             doctor_notes = DoctorNotes.objects.filter(doctor=request.user).order_by('-created_at')
             doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
             doctor_notes_data = doctor_notes_serializer.data
         else:
             doctor_notes_data = []
-
-        # Patient Diagnoses
-        diagnoses = MedicalHistory.objects.select_related("patient__user")[:5]
+            
+        # Diagnoses Data
+        diagnoses = MedicalHistory.objects.filter(patient__appointment__doctor=doctor).select_related("patient__user")[:5]
         diagnoses_data = [
             {
                 "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
@@ -118,12 +121,11 @@ class DashboardAPIView(APIView):
                 ),
                 "notes": history.notes,
             }
-            for doctor in Doctor.objects.all()[:5]
             for history in diagnoses
         ]
-        
-        # Last Reports for Patients from MedicalHistory
-        patients = Patient.objects.all()
+
+        # Last Reports for Patients
+        patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
         last_reports_data = []
         for patient in patients:
             last_diagnosis = (
@@ -153,10 +155,10 @@ class DashboardAPIView(APIView):
             )
 
         # Statistics
-        total_consultations = Appointment.objects.count()
-        total_clients = User.objects.filter(role="Patient").count()
+        total_consultations = Appointment.objects.filter(doctor=doctor).count()
+        total_clients = patients.count()
         returns_percentage = round(
-            (total_clients / total_consultations) * 100 if total_clients else 0, 2
+            (total_clients / total_consultations) * 100 if total_consultations else 0, 2
         )
 
         # Final Response
