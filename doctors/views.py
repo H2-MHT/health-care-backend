@@ -9,13 +9,12 @@ class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        user = request.user
+        #  only doctors can create notes
+        if request.user.role != "Doctor":
+            return Response({"error": "Only doctors can create notes."}, status=status.HTTP_403_FORBIDDEN)
         
-        if user.role != "Doctor":
-            return Response({"error": "Only authenticated doctors can create notes."}, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = DoctorNotesSerializer(data=request.data)
+        serializer = DoctorNotesSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save(doctor=user)
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
