@@ -22,4 +22,21 @@ class DoctorNotesCreateAPIView(APIView):
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, *args, **kwargs):
+        # Only doctors can delete notes
+        if request.user.role != "Doctor":
+            return Response({"error": "Only doctors can delete notes."}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Ensure the note exists and belongs to the logged-in doctor
+        note_id = kwargs.get('pk')
+        try:
+            note = DoctorNotes.objects.get(id=note_id, doctor=request.user)
+        except DoctorNotes.DoesNotExist:
+            return Response({"error": "Note not found or you do not have permission to delete it."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Delete the note
+        note.delete()
+        return Response({
+            "message": "Note deleted successfully."
+        }, status=status.HTTP_204_NO_CONTENT)
