@@ -27,9 +27,5 @@ class DoctorNotes(models.Model):
     updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
 
     def __str__(self):
-        return f"Note by Dr. {self.doctor.first_name} for {self.patient.first_name}"
-
-
-    def __str__(self):
-        return f"Note by Dr. {self.doctor.first_name} for {self.patient.first_name}"
+        return f"Note by Dr. {self.doctor.first_name}"
 
