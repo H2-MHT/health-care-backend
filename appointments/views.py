@@ -80,9 +80,12 @@ def update_appointment_status(request):
                     return JsonResponse({"error": "Invalid time format. Use HH:mm."}, status=400)
 
             # Fetch the appointment for the given patient
-            appointment = Appointment.objects.filter(id=appointment_id, patient_id=patient_id).first()
+            appointment = Appointment.objects.filter(id=appointment_id, patient_id=patient_id).select_related('patient').first()
             if not appointment:
                 return JsonResponse({"error": "No appointment found for this patient."}, status=404)
+
+            # Get the patient's name
+            patient_name = appointment.patient.user.first_name
 
             # Handle cancellation separately
             if new_status == "Cancelled":
@@ -93,6 +96,7 @@ def update_appointment_status(request):
                 return JsonResponse({
                     "message": "Appointment successfully cancelled.",
                     "appointment_id": appointment.id,
+                    "patient_name": patient_name,
                     "new_status": appointment.status,
                     "new_date": appointment.date.strftime("%d-%m-%Y"),
                     "new_time": appointment.time.strftime("%H:%M")
@@ -113,6 +117,7 @@ def update_appointment_status(request):
             return JsonResponse({
                 "message": "Appointment status updated successfully.",
                 "appointment_id": appointment.id,
+                "patient_name": patient_name,
                 "new_status": appointment.status,
                 "new_date": appointment.date.strftime("%d-%m-%Y"),
                 "new_time": appointment.time.strftime("%H:%M")
