@@ -13,6 +13,8 @@ from users.models import User
 from patients.models import Patient
 from datetime import timedelta
 from appointments.models import Appointment
+from doctors.models import DoctorNotes
+from doctors.serializers import DoctorNotesSerializer
 
 # Create your views here.
 
@@ -93,15 +95,14 @@ class DashboardAPIView(APIView):
         archived_data = format_appointment_data(archived_appointments)
         confirmed_data = format_appointment_data(confirmed_appointments)
 
-        # Doctor Notes Data (Example placeholder notes)
-        doctor_notes = [
-            {
-                "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
-                "note": "Sample note for patient follow-up",
-                "date": datetime.now().isoformat(),
-            }
-            for doctor in Doctor.objects.all()[:5]
-        ]
+        # Doctor Notes Data
+        # Fetch doctor notes created by the logged-in doctor
+        if request.user.role == "Doctor":
+            doctor_notes = DoctorNotes.objects.filter(doctor=request.user).order_by('-created_at')
+            doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
+            doctor_notes_data = doctor_notes_serializer.data
+        else:
+            doctor_notes_data = []
 
         # Patient Diagnoses
         diagnoses = MedicalHistory.objects.select_related("patient__user")[:5]
@@ -163,7 +164,7 @@ class DashboardAPIView(APIView):
             "total_reviews": total_reviews,
             "reviews": reviews_data,
             "appointments": appointments_data,
-            "doctor_notes": doctor_notes,
+            "doctor_notes": doctor_notes_data,
             "patient_diagnoses": diagnoses_data,
             "archived_data": archived_data,
             "confirmed_data": confirmed_data,

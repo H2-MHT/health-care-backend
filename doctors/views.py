@@ -23,15 +23,3 @@ class DoctorNotesCreateAPIView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request, *args, **kwargs):
-        # Only doctors can access their notes
-        if request.user.role != "Doctor":
-            return Response({"error": "Only doctors can access their notes."}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Fetch notes created by the logged-in doctor
-        notes = DoctorNotes.objects.filter(doctor=request.user).order_by('-created_at')
-        serializer = DoctorNotesSerializer(notes, many=True)
-        return Response({
-            "message": "Doctor notes fetched successfully.",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
