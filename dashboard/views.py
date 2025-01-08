@@ -89,8 +89,7 @@ class DashboardAPIView(APIView):
                     "patient_name": f"{appt['patient__user__first_name']} {appt['patient__user__last_name']}",
                     "doctor_name": f"{appt['doctor__user__first_name']} {appt['doctor__user__last_name']}",
                     "clinic": appt["clinic__name"],
-                    "date": appt["date_time"].strftime("%d-%m-%Y"),
-                    "time": f"{appt['date_time'].strftime('%H:%M')} - {(appt['date_time'] + timedelta(minutes=30)).strftime('%H:%M')}",
+                    "date": appt["date_time"].isoformat(),
                     "status": appt["status"],
                 }
                 for appt in appointments
