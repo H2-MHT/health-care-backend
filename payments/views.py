@@ -60,7 +60,12 @@ class StripePaymentAPIView(APIView):
             )
 
             return Response(
-                {"message": "Payment successful!", "clientSecret": intent['id'], "status": intent['status']},
+                {
+                    "message": "Payment successful!",
+                    "payment_intent_id": intent['id'],
+                    "status": intent['status'],
+                    "clientSecret": intent.client_secret,
+                    },
                 status=status.HTTP_200_OK,
             )
 
