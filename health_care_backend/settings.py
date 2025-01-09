@@ -173,6 +173,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
 SENDGRID_FROM_EMAIL = os.getenv('SENDGRID_FROM_EMAIL')
 
+# Stripe authentication credentials
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+
 # JWT
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
