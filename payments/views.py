@@ -93,7 +93,8 @@ class StripePaymentAPIView(APIView):
             
 class TransactionHistoryAPIView(APIView):
     """
-    API to fetch transaction history and include total, clinic charges, and final amount.
+    API to fetch transaction history and include total, clinic charges, final amount,
+    and current balance after clinic charge deductions.
     """
 
     permission_classes = [IsAuthenticated]
@@ -124,6 +125,11 @@ class TransactionHistoryAPIView(APIView):
             # Clinic charge deduction
             clinic_charge = 4.8
 
+            # Calculate total balance and current balance
+            total_balance = sum([transaction.amount for transaction in transactions])  # Total before deductions
+            final_amounts = [float(transaction.amount) - clinic_charge for transaction in transactions]  # After clinic charge deductions
+            total_final_amount = sum(final_amounts)  # Final amount after deductions
+
             # Serialize transactions and apply the clinic charge deduction
             transaction_data = [
                 {
@@ -137,8 +143,13 @@ class TransactionHistoryAPIView(APIView):
                 for transaction in transactions
             ]
 
+            # response with transactions and balance information
             return Response(
-                {"transactions": transaction_data},
+                {
+                    "transactions": transaction_data,
+                    "total_balance": total_balance,  # The sum of total amounts before deductions
+                    "current_balance": total_final_amount,  # The sum of amounts after clinic charge deductions
+                },
                 status=status.HTTP_200_OK,
             )
 
