@@ -9,7 +9,8 @@ import stripe
 from django.conf import settings
 from .models import Payment
 from appointments.models import Appointment
-
+from rest_framework.permissions import IsAuthenticated
+from doctors.models import Doctor
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -25,7 +26,8 @@ class StripePaymentAPIView(APIView):
             amount = request.data.get('amount')
             appointment_id = request.data.get('appointment_id')
             payment_method_types = request.data.get('payment_method_types')
-
+            description = request.data.get('description')
+            
             # Validate required fields
             if not test_token or not amount or not appointment_id or not payment_method_types:
                 return Response(
@@ -48,7 +50,7 @@ class StripePaymentAPIView(APIView):
                 currency="usd",
                 payment_method=test_token,
                 confirm=True,
-                description=f"Payment for Appointment {appointment.id}",
+                description=description or f"Payment for Appointment {appointment.id}",
                 payment_method_types=payment_method_types,
             )
             print(intent, '------------------INTENT')
@@ -59,6 +61,7 @@ class StripePaymentAPIView(APIView):
                 total_amount=amount,
                 method=intent.get("payment_method_types", ["unknown"])[0],
                 status=intent.get("status", "unknown"),
+                payment_notes=intent.get("description"),
             )
 
             return Response(
@@ -68,6 +71,8 @@ class StripePaymentAPIView(APIView):
                     "status": intent['status'],
                     "payment_method": intent['payment_method'],
                     "payment_method_type": intent['payment_method_types'],
+                    "amount": amount,
+                    "payment_notes": intent.description,
                     "clientSecret": intent.client_secret,
                     },
                 status=status.HTTP_200_OK,
@@ -81,5 +86,64 @@ class StripePaymentAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": "Payment failed", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+            
+            
+class TransactionHistoryAPIView(APIView):
+    """
+    API to fetch transaction history and include total, clinic charges, and final amount.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # Ensure the logged-in user is a doctor
+            if request.user.role != "Doctor":
+                return Response(
+                    {"error": "You are not authorized to view this information."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Fetch the doctor instance linked to the logged-in user
+            try:
+                doctor = request.user.doctor
+            except Doctor.DoesNotExist:
+                return Response(
+                    {"error": "Doctor profile not found for the current user."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Fetch transactions associated with this doctor
+            transactions = Payment.objects.filter(
+                appointment__doctor=doctor
+            ).select_related("appointment", "appointment__patient")
+
+            # Clinic charge deduction
+            clinic_charge = 4.8
+
+            # Serialize transactions and apply the clinic charge deduction
+            transaction_data = [
+                {
+                    "sender": f"{transaction.appointment.patient.user.first_name} {transaction.appointment.patient.user.last_name}",
+                    "date": transaction.timestamp,
+                    "total": float(transaction.amount),  # The total amount from the payment
+                    "clinic_charge": clinic_charge,  # The clinic charge field
+                    "final_amount": round(float(transaction.amount) - clinic_charge, 2),  # Deduct the clinic charge to get the final amount
+                    "description": transaction.payment_notes or f"Payment for Appointment {transaction.appointment.id}",
+                }
+                for transaction in transactions
+            ]
+
+            return Response(
+                {"transactions": transaction_data},
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": "An error occurred.", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

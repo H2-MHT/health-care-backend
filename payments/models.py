@@ -15,4 +15,5 @@ class Payment(models.Model):
     status = models.CharField(
         max_length=20, choices=[("Paid", "Paid"), ("Pending", "Pending")]
     )
+    payment_notes = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
