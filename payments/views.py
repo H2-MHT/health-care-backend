@@ -24,10 +24,15 @@ class StripePaymentAPIView(APIView):
             test_token = request.data.get('test_token')
             amount = request.data.get('amount')
             appointment_id = request.data.get('appointment_id')
+            payment_method_types = request.data.get('payment_method_types')
 
-            if not test_token or not amount or not appointment_id:
+            # Validate required fields
+            if not test_token or not amount or not appointment_id or not payment_method_types:
                 return Response(
-                    {"error": "Missing required fields: 'test_token', 'amount', or 'appointment_id'."},
+                    {
+                        "error": "Missing required fields",
+                        "message": "'test_token', 'amount', 'appointment_id', and 'payment_method_types' are required.",
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -44,10 +49,7 @@ class StripePaymentAPIView(APIView):
                 payment_method=test_token,
                 confirm=True,
                 description=f"Payment for Appointment {appointment.id}",
-                automatic_payment_methods={
-                    "enabled": True,
-                    "allow_redirects": "never"
-                }
+                payment_method_types=payment_method_types,
             )
             print(intent, '------------------INTENT')
             # Save payment details
@@ -64,6 +66,8 @@ class StripePaymentAPIView(APIView):
                     "message": "Payment successful!",
                     "payment_intent_id": intent['id'],
                     "status": intent['status'],
+                    "payment_method": intent['payment_method'],
+                    "payment_method_type": intent['payment_method_types'],
                     "clientSecret": intent.client_secret,
                     },
                 status=status.HTTP_200_OK,
