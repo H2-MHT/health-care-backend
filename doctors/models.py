@@ -15,12 +15,6 @@ class Doctor(models.Model):
         return self.user.get_full_name()
 
 class DoctorNotes(models.Model):
-    patient = models.ForeignKey(
-        "users.User", 
-        on_delete=models.CASCADE, 
-        limit_choices_to={'role': 'Patient'}, 
-        related_name='notes_as_patient'
-    )
     doctor = models.ForeignKey(
         "users.User", 
         on_delete=models.CASCADE, 
@@ -33,9 +27,5 @@ class DoctorNotes(models.Model):
     updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
 
     def __str__(self):
-        return f"Note by Dr. {self.doctor.first_name} for {self.patient.first_name}"
-
-
-    def __str__(self):
-        return f"Note by Dr. {self.doctor.first_name} for {self.patient.first_name}"
+        return f"Note by Dr. {self.doctor.first_name}"
 

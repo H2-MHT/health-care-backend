@@ -31,5 +31,7 @@ urlpatterns = [
     path('doctors/', include('doctors.urls')),
     # Include the urls from the appointments app
     path('appointments/', include('appointments.urls')),
+    # Include the urls from the payments app
+    path('payment/', include('payments.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
