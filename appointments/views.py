@@ -1,11 +1,11 @@
 from django.http import JsonResponse
 from rest_framework.views import APIView
-from rest_framework import status
-from appointments.models import Appointment
+from rest_framework import status, permissions
+from appointments.models import Appointment, Call, Chat
 from datetime import datetime
 import json
 from django.views.decorators.csrf import csrf_exempt
-from .serializers import RescheduleAppointmentSerializer
+from .serializers import RescheduleAppointmentSerializer, CallSerializer, ChatSerializer, AppointmentSerializer
 
 from rest_framework.response import Response
 
@@ -121,3 +121,130 @@ def update_appointment_status(request):
             return JsonResponse({"error": str(e)}, status=500)
     else:
         return JsonResponse({"error": "Invalid request method. Use PATCH."}, status=405)
+
+
+class AppointmentAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    """
+    GET:
+    - Fetch all appointments.
+    - Returns: List of Appointment objects.
+      Response Structure:
+        [
+          {
+            "id": int,
+            "patient": int,
+            "doctor": int,
+            "clinic": int,
+            "date_time": datetime,
+            "status": string,
+            "records": string,
+            "notes": string
+          }
+        ]
+
+    POST:
+    - Create a new appointment.
+    - Required params: patient, doctor, clinic, date_time, status.
+    - Returns: Created Appointment object.
+      Response Structure:
+        {
+          "id": int,
+          "patient": int,
+          "doctor": int,
+          "clinic": int,
+          "date_time": datetime,
+          "status": string,
+          "records": string,
+          "notes": string
+        }
+    """
+
+    def get(self, request):
+        appointments = Appointment.objects.all()
+        serializer = AppointmentSerializer(appointments, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = AppointmentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChatAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    """
+    GET:
+    - Fetch all chats.
+    - Returns: List of Chat objects.
+      Response Structure:
+        [
+          {
+            "id": int,
+            "appointment": int,
+            "participants": [int],
+            "created_at": datetime,
+            "messages": [...],
+            "calls": [...]
+          }
+        ]
+
+    POST:
+    - Create a new chat.
+    - Required params: appointment, participants.
+    - Returns: Created Chat object.
+      Response Structure:
+        {
+          "id": int,
+          "appointment": int,
+          "participants": [int],
+          "created_at": datetime,
+          "messages": [...],
+          "calls": [...]
+        }
+    """
+
+    def get(self, request):
+        chats = Chat.objects.all()
+        serializer = ChatSerializer(chats, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = ChatSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CallAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    """
+    GET:
+    - Fetch all calls for a specific chat.
+    - Required params: chat_id.
+    - Returns: List of Call objects.
+      Response Structure:
+        [
+          {
+            "id": int,
+            "chat": int,
+            "caller": int,
+            "callee": int,
+            "started_at": datetime,
+            "ended_at": datetime,
+            "call_duration": duration,
+            "recording": string
+          }
+        ]
+    """
+
+    def get(self, request, chat_id):
+        calls = Call.objects.filter(chat_id=chat_id)
+        serializer = CallSerializer(calls, many=True)
+        return Response(serializer.data)
