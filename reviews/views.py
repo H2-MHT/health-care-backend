@@ -4,29 +4,56 @@ from .models import Review, Reply
 from .serializers import ReviewSerializer, ReplySerializer
 from rest_framework.views import APIView
 from rest_framework import status, permissions
+from doctors.models import Doctor
 from appointments.models import Appointment
 # Create your views here.
 
-class ReviewPIView(APIView):
+class AddReviewPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
 # create new review
     def post(self, request, *args, **kwargs):
         # Ensure the user is logged in and is a patient
         if not hasattr(request.user, 'patient'):
-            # print(request.user,"--------------->>>>> request.user.patient")
             return Response(
                 {"detail": "Only patients can create reviews."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         patient = request.user.patient
-        # print(patient,"--------------->>>>>")
+        doctor_id = request.data.get('doctor')  # doctor ID is passed in the request data
+
+        if not doctor_id:
+            return Response(
+                {"detail": "Doctor ID is required to create a review."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Verify if the doctor exists
+            doctor = Doctor.objects.get(id=doctor_id)
+
+            # Check if the patient has any appointment with this doctor
+            has_any_appointment = Appointment.objects.filter(
+                patient=patient, doctor=doctor
+            ).exists()
+
+            if not has_any_appointment:
+                return Response(
+                    {"detail": "You can only review doctors you have had an appointment with."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        except Doctor.DoesNotExist:
+            return Response(
+                {"detail": "The specified doctor does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Proceed with review creation
         serializer = ReviewSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-            serializer.save(patient=patient)  # Automatically associate the patient
-            # print(serializer.data,"--------------->>>>> serializer.data")
+            serializer.save(patient=patient)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -59,31 +86,25 @@ class ReviewPIView(APIView):
 
 class ReplyAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-
     def post(self, request, review_id, *args, **kwargs):
-        # check if the review exists
+        # Check if the review exists
         try:
             review = Review.objects.get(id=review_id)
         except Review.DoesNotExist:
             return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
-
         user = request.user
-
         # Check if the user is the review owner (patient) or the associated doctor
         if hasattr(user, 'patient'):
             patient = user.patient
-
-            # check if the patient is the review owner
+            # Check if the patient is the review owner
             if review.patient != patient:
                 return Response(
                     {"detail": "Only the review owner or the associated doctor can reply."},
                     status=status.HTTP_403_FORBIDDEN
                 )
-
         elif hasattr(user, 'doctor'):
             doctor = user.doctor
-
-            # check if the doctor associated with the review is replying
+            # Check if the doctor associated with the review is replying
             if review.doctor != doctor:
                 return Response(
                     {"detail": "Only the review owner or the associated doctor can reply."},
@@ -94,40 +115,37 @@ class ReplyAPIView(APIView):
                 {"detail": "Only patients or doctors can reply."},
                 status=status.HTTP_403_FORBIDDEN
             )
-
-        # reply for the review
+        # Reply for the review
         serializer = ReplySerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save(review=review, user=user)  # Save the reply under the review
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+            reply = serializer.save(review=review, user=user)  # Save the reply under the review
+            # Add the reply to the review's response
+            review_data = ReviewSerializer(review).data
+            review_data['replies'] = ReplySerializer(review.replies.all(), many=True).data
+            # Return the review with the associated replies and user names
+            return Response(review_data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    # GET method to fetch reviews with replies and user details
+    
+    def get(self, request, *args, **kwargs):
+        # Fetch all reviews
+        reviews = Review.objects.all()
 
-    def get(self, request, review_id, *args, **kwargs):
-        # Fetch all replies for the review
-        try:
-            review = Review.objects.get(id=review_id)
-        except Review.DoesNotExist:
-            return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
-        
-        # Get the reviewer's name
-        if hasattr(review, 'patient'):
-            reviewer_name = review.patient.user.first_name
-        elif hasattr(review, 'doctor'):
-            reviewer_name = review.doctor.user.first_name
-        else:
-            reviewer_name = "Unknown"
-            
-        # Get all replies to the review
-        replies = Reply.objects.filter(review=review).order_by('-created_at')
-        serializer = ReplySerializer(replies, many=True)
-        total_replies = replies.count()
-        response_data = {
-            'reviewer_name': reviewer_name,
-            'total_replies': total_replies,
-            'replies': serializer.data
-        }
-        return Response(response_data, status=status.HTTP_200_OK)    
+        # Serialize reviews and their replies
+        reviews_data = []
+        for review in reviews:
+            review_data = ReviewSerializer(review).data
+            replies_data = ReplySerializer(review.replies.all(), many=True).data
+
+            # Add replies to each review's data
+            review_data['replies'] = replies_data
+            reviews_data.append(review_data)
+
+        return Response(reviews_data, status=status.HTTP_200_OK)
+    
+    
 class DoctorReviewsAPIView(generics.ListAPIView):
     serializer_class = ReviewSerializer
 
