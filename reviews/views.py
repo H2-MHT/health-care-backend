@@ -11,7 +11,7 @@ from appointments.models import Appointment
 class AddReviewPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-# create new review
+    # Create a new review
     def post(self, request, *args, **kwargs):
         # Ensure the user is logged in and is a patient
         if not hasattr(request.user, 'patient'):
