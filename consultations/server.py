@@ -118,5 +118,5 @@ def disconnect(sid):
 # Run the server
 if __name__ == "__main__":
     ip_address = "0.0.0.0"
-    port = 80
+    port = 8080
     eventlet.wsgi.server(eventlet.listen((ip_address, port)), app)
