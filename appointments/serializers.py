@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from datetime import datetime
 from pytz import timezone
-from .models import Appointment, Chat, Call, Message
+from .models import Appointment
 
 
 class RescheduleAppointmentSerializer(serializers.ModelSerializer):
@@ -25,30 +25,3 @@ class RescheduleAppointmentSerializer(serializers.ModelSerializer):
                 
         return data
     
-
-
-class AppointmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Appointment
-        fields = '__all__'
-
-
-class MessageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Message
-        fields = '__all__'
-
-
-class CallSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Call
-        fields = '__all__'
-
-
-class ChatSerializer(serializers.ModelSerializer):
-    messages = MessageSerializer(many=True, read_only=True)
-    calls = CallSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Chat
-        fields = '__all__'
