@@ -15,12 +15,14 @@ def connect(sid, environ):
 @sio.event
 def register(sid, data):
     """
-    Register a user with their email and user ID.
+    Register a user with their user ID (no email).
     """
-    email = data.get("email")
-    user_id = data.get("user_id")
-    users[user_id] = sid
-    print(f"User registered: {user_id} with session ID: {sid}")
+    user_id = data.get("user_id")  # Only use user_id
+    if user_id:
+        users[user_id] = sid
+        print(f"User registered: {user_id} with session ID: {sid}")
+    else:
+        print(f"Registration failed: No user_id provided for session {sid}")
 
 @sio.event
 def initiateCall(sid, data):
