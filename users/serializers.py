@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Education, Media, Skill
+from .models import Education, Media, Skill, User
 
 
 class SkillSerializer(serializers.ModelSerializer):
@@ -53,3 +53,13 @@ class EducationSerializer(serializers.ModelSerializer):
             education.media.add(media)
 
         return education
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id", "first_name", "last_name", "email", "phone_number", 
+            "gender", "dob", "profile_picture", "bio", "country", 
+            "city", "residence", "role"
+        ]

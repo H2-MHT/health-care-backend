@@ -5,6 +5,7 @@ from rest_framework import status
 from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes
+from users.serializers import UserSerializer
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -69,3 +70,13 @@ class DoctorNotesCreateAPIView(APIView):
         return Response({
             "message": "Note deleted successfully."
         }, status=status.HTTP_204_NO_CONTENT)
+
+
+class DoctorListAPIView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Filter users with role="Doctor"
+        doctors = User.objects.filter(role="Doctor")
+        serializer = UserSerializer(doctors, many=True)
+        return Response(serializer.data)
