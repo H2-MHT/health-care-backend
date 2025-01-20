@@ -63,9 +63,13 @@ class User(AbstractUser):
     first_name = models.CharField(max_length=150, null=False, blank=False)
     last_name = models.CharField(max_length=150, null=False, blank=False)
     dob = models.DateField(null=True, blank=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, null=True, blank=True)
+    gender = models.CharField(
+        max_length=10, choices=GENDER_CHOICES, null=True, blank=True
+    )
     phone_number = models.CharField(max_length=20, null=True, blank=True)
-    profile_picture = models.ImageField(upload_to="profile_pictures/", null=True, blank=True)
+    profile_picture = models.ImageField(
+        upload_to="profile_pictures/", null=True, blank=True
+    )
     bio = models.TextField(null=True, blank=True)
 
     # Address Information
@@ -74,14 +78,18 @@ class User(AbstractUser):
     residence = models.CharField(max_length=255, null=True, blank=True)
 
     # Professional Information
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="Patient", null=False)
+    role = models.CharField(
+        max_length=20, choices=ROLE_CHOICES, default="Patient", null=False
+    )
     languages = models.TextField(null=True, blank=True)
     work_place = models.CharField(max_length=255, null=True, blank=True)
     expertise = models.TextField(null=True, blank=True)
     professional_stat = models.TextField(null=True, blank=True)
     working_time = models.CharField(max_length=255, null=True, blank=True)
     # Agreement
-    terms_and_condition = models.BooleanField(validators=[validate_terms], default=False)
+    terms_and_condition = models.BooleanField(
+        validators=[validate_terms], default=False
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
@@ -98,14 +106,54 @@ class User(AbstractUser):
 
 
 def user_fileq(instance, filename):
-    return '{0}-{1}'.format(instance.type, filename)
+    return "{0}-{1}".format(instance.type, filename)
 
 
 class UserFile(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="files")
     file = models.FileField(upload_to="licenses_certificates/", null=True, blank=True)
-    type = models.CharField(max_length=20, null=True, blank=True, choices=[("Certificate", "Certificate"), ("Media", "Media")])
+    type = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        choices=[("Certificate", "Certificate"), ("Media", "Media")],
+    )
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user.email} - {self.type}"
+
+
+class Education(models.Model):
+    school = models.CharField(max_length=255)
+    degree = models.CharField(max_length=100, blank=True, null=True)
+    field_of_study = models.CharField(max_length=100, blank=True, null=True)
+    start_date = models.DateField()
+    end_date = models.DateField(blank=True, null=True)
+    grade = models.CharField(max_length=50, blank=True, null=True)
+    activities_and_societies = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+
+    # Assuming skills are a ManyToMany relationship
+    skills = models.ManyToManyField("Skill", related_name="educations", blank=True)
+
+    # For media, you can either store files or URLs
+    media = models.ManyToManyField("Media", related_name="educations", blank=True)
+
+    def __str__(self):
+        return f"{self.school} - {self.degree or 'Education'}"
+
+
+class Skill(models.Model):
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+
+class Media(models.Model):
+    file = models.FileField(upload_to="education_media/", blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.file.name if self.file else "Media"
