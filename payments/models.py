@@ -1,5 +1,5 @@
 from django.db import models
-
+from users.models import User
 # Create your models here.
 
 
@@ -17,3 +17,19 @@ class Payment(models.Model):
     )
     payment_notes = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    
+
+class AccountDetail(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    account_number = models.CharField(max_length=30)
+    confirm_account_number = models.CharField(max_length=30)
+    full_name = models.CharField(max_length=100)
+    ifsc_code = models.CharField(max_length=20)
+
+    def __str__(self):
+        return self.account_number + self.full_name
+    
+    class Meta:
+        verbose_name = 'Account Detail'
+        verbose_name_plural = 'Account Details'
+        
