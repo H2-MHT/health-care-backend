@@ -11,6 +11,9 @@ from .models import Payment
 from appointments.models import Appointment
 from rest_framework.permissions import IsAuthenticated
 from doctors.models import Doctor
+from .serializers import AccountDetailSerializer
+from .models import AccountDetail
+
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -158,3 +161,36 @@ class TransactionHistoryAPIView(APIView):
                 {"error": "An error occurred.", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+class AddAccountDetailAPIView(APIView):
+    """
+    API to allow doctors to add their account details.
+    Only authenticated doctors can add their own details.
+    A doctor can add multiple accounts with unique account numbers.
+    """
+    permission_classes = [IsAuthenticated]
+    def post(self, request, *args, **kwargs):
+        if not hasattr(request.user, 'doctor'):
+            return Response(
+                {"error": "Only doctors can add account details."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        # Check if account number already exists
+        account_number = request.data.get('account_number')
+        if AccountDetail.objects.filter(user=request.user, account_number=account_number).exists():
+            return Response(
+                {"error": "Account with this account number already exists."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        # Create a new account
+        serializer = AccountDetailSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(
+                {
+                    "message": "Account detail added successfully.", 
+                    "data": serializer.data
+                    },
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
