@@ -1,15 +1,18 @@
 from django.db import models
 
-from users.models import User
-
-
 # Create your models here.
 
 
 class Appointment(models.Model):
-    patient = models.ForeignKey("patients.Patient", on_delete=models.CASCADE)
-    doctor = models.ForeignKey("doctors.Doctor", on_delete=models.CASCADE)
-    clinic = models.ForeignKey("clinics.Clinic", on_delete=models.CASCADE)
+    patient = models.ForeignKey(
+        "patients.Patient", on_delete=models.CASCADE, null=False, blank=False
+    )
+    doctor = models.ForeignKey(
+        "doctors.Doctor", on_delete=models.CASCADE, null=False, blank=False
+    )
+    clinic = models.ForeignKey(
+        "clinics.Clinic", on_delete=models.CASCADE, null=False, blank=False
+    )
     date_time = models.DateTimeField()
     status = models.CharField(
         max_length=20,
