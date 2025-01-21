@@ -1,9 +1,15 @@
 import socketio
 import eventlet
 
-# Create a Socket.IO server instance
-sio = socketio.Server(cors_allowed_origins="*")
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Use the logger with Socket.IO
+sio = socketio.Server(cors_allowed_origins="*", logger=True, engineio_logger=True)
 app = socketio.WSGIApp(sio)
+
 
 # Store registered users
 users = {}
