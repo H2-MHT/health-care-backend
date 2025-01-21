@@ -39,7 +39,7 @@ def initiateCall(sid, data):
     Handle call initiation and emit 'incomingCall' event to the target user.
     """
     logging.info(f"initiateCall connected with session ID: {sid}")
-    logging.info(users, "Registered users")
+    logging.info(f"Registered users: {users}")
     logging.info("Initiating call...")
     target_id = data.get("targetId")
     signal_data = data.get("signalData")
