@@ -8,7 +8,7 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ('id', 'username', 'email','role', 'is_staff', 'is_superuser')
     
 class EducationAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'degree', 'start_date', 'end_date', 'grade')
+    list_display = ('id', 'user', 'degree', 'start_month', 'start_year', 'end_month', 'end_year', 'grade')
 
 admin.site.register(Education, EducationAdmin)
 admin.site.register(User, UserAdmin)

@@ -18,9 +18,11 @@ class UpdateEducationAPIView(APIView):
             # Fetch the user by ID
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)        
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
         # Check if the user already has an education record
         education = Education.objects.filter(user=user).first()
+
         # Use the serializer to validate and save data
         serializer = EducationSerializer(education, data=request.data, partial=True)
         if serializer.is_valid():
