@@ -18,6 +18,8 @@ print(users, "Registered users")
 @sio.event
 def connect(sid, environ):
     print(f"User connected with session ID: {sid}")
+    logging.info(f"User connected with session ID: {sid}")
+
 
 @sio.event
 def register(sid, data):
@@ -36,6 +38,8 @@ def initiateCall(sid, data):
     """
     Handle call initiation and emit 'incomingCall' event to the target user.
     """
+    logging.info(f"initiateCall connected with session ID: {sid}")
+
     print("Initiating call...")
     target_id = data.get("targetId")
     signal_data = data.get("signalData")
