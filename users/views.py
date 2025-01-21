@@ -29,9 +29,27 @@ class UpdateEducationAPIView(APIView):
             if education:
                 # Update the existing record
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "message": "Education record updated successfully.",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
             else:
                 # Create a new record if no existing education record was found
                 serializer.save(user=user)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "message": "Education record created successfully.",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+        return Response(
+            {
+                "message": "Invalid data provided.",
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
