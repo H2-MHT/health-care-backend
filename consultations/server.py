@@ -7,6 +7,7 @@ app = socketio.WSGIApp(sio)
 
 # Store registered users
 users = {}
+print(users, "Registered users")
 
 @sio.event
 def connect(sid, environ):
