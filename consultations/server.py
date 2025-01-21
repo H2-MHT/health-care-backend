@@ -13,7 +13,7 @@ app = socketio.WSGIApp(sio)
 
 # Store registered users
 users = {}
-print(users, "Registered users")
+
 
 @sio.event
 def connect(sid, environ):
@@ -29,9 +29,9 @@ def register(sid, data):
     user_id = data.get("user_id")  # Only use user_id
     if user_id:
         users[user_id] = sid
-        print(f"User registered: {user_id} with session ID: {sid}")
+        logging.info(f"User registered: {user_id} with session ID: {sid}")
     else:
-        print(f"Registration failed: No user_id provided for session {sid}")
+        logging.info(f"Registration failed: No user_id provided for session {sid}")
 
 @sio.event
 def initiateCall(sid, data):
@@ -39,16 +39,16 @@ def initiateCall(sid, data):
     Handle call initiation and emit 'incomingCall' event to the target user.
     """
     logging.info(f"initiateCall connected with session ID: {sid}")
-
-    print("Initiating call...")
+    logging.info(users, "Registered users")
+    logging.info("Initiating call...")
     target_id = data.get("targetId")
     signal_data = data.get("signalData")
     sender_id = data.get("senderId")
     sender_name = data.get("senderName")
     target_sid = users.get(target_id)
-    print("Sending call to target user...")
+    logging.info("Sending call to target user...")
     if not target_sid:
-        print("Target ID is undefined or invalid")
+        logging.info("Target ID is undefined or invalid")
         return
 
     try:
@@ -57,9 +57,9 @@ def initiateCall(sid, data):
             "from": sender_id,
             "name": sender_name,
         }, to=target_sid)
-        print(f"Call initiated and 'incomingCall' event emitted to {target_sid}")
+        logging.info(f"Call initiated and 'incomingCall' event emitted to {target_sid}")
     except Exception as e:
-        print(f"Error initiating call: {e}")
+        logging.info(f"Error initiating call: {e}")
 
 @sio.event
 def changeMediaStatus(sid, data):
@@ -89,7 +89,7 @@ def sendMessage(sid, data):
             "senderName": sender_name,
         }, to=target_sid)
     else:
-        print(f"Target user {target_id} is not connected")
+        logging.info(f"Target user {target_id} is not connected")
 
 @sio.event
 def answerCall(sid, data):
@@ -127,7 +127,7 @@ def disconnect(sid):
     user_id = next((key for key, value in users.items() if value == sid), None)
     if user_id:
         del users[user_id]
-    print(f"User disconnected with session ID: {sid}")
+    logging.info(f"User disconnected with session ID: {sid}")
 
 # Run the server
 if __name__ == "__main__":
