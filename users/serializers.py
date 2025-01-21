@@ -58,8 +58,5 @@ class EducationSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = [
-            "id", "first_name", "last_name", "email", "phone_number", 
-            "gender", "dob", "profile_picture", "bio", "country", 
-            "city", "residence", "role"
+        fields = ["id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture", "bio", "country", "city", "residence", "role"
         ]

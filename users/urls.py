@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import EducationAPIView
+from .views import UpdateEducationAPIView
 
 urlpatterns = [
-    path('add_education/', EducationAPIView.as_view(), name='education-api'),
+        path('update-education/<int:user_id>/', UpdateEducationAPIView.as_view(), name='update-education'),
 ]
