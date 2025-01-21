@@ -125,10 +125,11 @@ class UserFile(models.Model):
 
 
 class Education(models.Model):
-    school = models.CharField(max_length=255)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="educations")
+    school = models.CharField(max_length=255, blank=True, null=True)
     degree = models.CharField(max_length=100, blank=True, null=True)
     field_of_study = models.CharField(max_length=100, blank=True, null=True)
-    start_date = models.DateField()
+    start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(blank=True, null=True)
     grade = models.CharField(max_length=50, blank=True, null=True)
     activities_and_societies = models.TextField(blank=True, null=True)
