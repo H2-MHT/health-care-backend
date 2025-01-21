@@ -29,12 +29,13 @@ def initiateCall(sid, data):
     """
     Handle call initiation and emit 'incomingCall' event to the target user.
     """
+    print("Initiating call...")
     target_id = data.get("targetId")
     signal_data = data.get("signalData")
     sender_id = data.get("senderId")
     sender_name = data.get("senderName")
-
     target_sid = users.get(target_id)
+    print("Sending call to target user...")
     if not target_sid:
         print("Target ID is undefined or invalid")
         return
