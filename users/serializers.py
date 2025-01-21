@@ -10,49 +10,57 @@ class SkillSerializer(serializers.ModelSerializer):
 
 
 class MediaSerializer(serializers.ModelSerializer):
+    file = serializers.FileField()
     class Meta:
         model = Media
         fields = ["id", "file", "description"]
 
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = SkillSerializer(many=True)
-    media = MediaSerializer(many=True)
+    skills = SkillSerializer(many=True, required=False)  # Allow nested skills input
 
     class Meta:
         model = Education
         fields = [
-            "id",
-            "school",
-            "degree",
-            "field_of_study",
-            "start_date",
-            "end_date",
-            "grade",
-            "activities_and_societies",
-            "description",
-            "skills",
-            "media",
+            'id',
+            'school',
+            'degree',
+            'field_of_study',
+            'start_date',
+            'end_date',
+            'grade',
+            'activities_and_societies',
+            'description',
+            'skills',
         ]
 
     def create(self, validated_data):
-        skills_data = validated_data.pop("skills", [])
-        media_data = validated_data.pop("media", [])
-
-        # Create the Education instance
+        skills_data = validated_data.pop('skills', [])
         education = Education.objects.create(**validated_data)
 
-        # Create or get Skill instances
+        # Add or create skills
         for skill_data in skills_data:
             skill, _ = Skill.objects.get_or_create(**skill_data)
             education.skills.add(skill)
 
-        # Create Media instances
-        for media_item in media_data:
-            media = Media.objects.create(**media_item)
-            education.media.add(media)
-
         return education
+
+    def update(self, instance, validated_data):
+        skills_data = validated_data.pop('skills', None)
+        # Update all other fields in the Education model
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Handle the 'skills' field
+        if skills_data is not None:
+            # Clear existing skills before adding the new ones
+            instance.skills.clear()
+            # Add or create the new skills and associate them with the instance
+            for skill_data in skills_data:
+                skill, _ = Skill.objects.get_or_create(**skill_data)
+                instance.skills.add(skill)
+        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):
