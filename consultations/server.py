@@ -98,15 +98,16 @@ def answerCall(sid, data):
     """
     media_type = data.get("mediaType")
     media_status = data.get("mediaStatus")
-    target_sid = data.get("to")
-
+    # target_sid = data.get("to")
+    target_result = users.get(data["to"])
+    logging.info(f"target_result: {target_result}")
     sio.emit("mediaStatusChanged", {
         "mediaType": media_type,
         "isActive": media_status,
     }, skip_sid=sid)
 
-    if target_sid:
-        sio.emit("callAnswered", data, to=target_sid)
+    if target_result:
+        sio.emit("callAnswered", data, to=target_result)
 
 @sio.event
 def terminateCall(sid, data):

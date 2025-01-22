@@ -138,10 +138,11 @@ class Education(models.Model):
     description = models.TextField(blank=True, null=True)
 
     # Assuming skills are a ManyToMany relationship
-    skills = models.ManyToManyField("Skill", related_name="educations", blank=True)
+    skills = models.JSONField(default=list, blank=True)
+
 
     # For media, you can either store files or URLs
-    media = models.ManyToManyField("Media", related_name="educations", blank=True)
+    media = models.ImageField(upload_to='education_media/', blank=True, null=True)
 
     def __str__(self):
         return f"{self.school} - {self.degree or 'Education'}"
