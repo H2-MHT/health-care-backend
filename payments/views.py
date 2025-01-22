@@ -142,6 +142,7 @@ class TransactionHistoryAPIView(APIView):
                     "clinic_charge": clinic_charge,  # The clinic charge field
                     "final_amount": round(float(transaction.amount) - clinic_charge, 2),  # Deduct the clinic charge to get the final amount
                     "description": transaction.payment_notes or f"Payment for Appointment {transaction.appointment.id}",
+                    "status": transaction.status,
                 }
                 for transaction in transactions
             ]
@@ -194,3 +195,25 @@ class AddAccountDetailAPIView(APIView):
                 status=status.HTTP_200_OK
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request, *args, **kwargs):
+        """
+        Fetch all account details for the current logged-in doctor.
+        """
+        # Check if the user is a doctor
+        if not hasattr(request.user, 'doctor'):
+            return Response(
+                {"error": "Only doctors can view their account details."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Fetch all account details for the logged-in doctor
+        accounts = AccountDetail.objects.filter(user=request.user)
+        serializer = AccountDetailSerializer(accounts, many=True)
+        return Response(
+            {
+                "message": "Account details fetched successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
