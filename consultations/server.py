@@ -99,7 +99,9 @@ def answerCall(sid, data):
     media_type = data.get("mediaType")
     media_status = data.get("mediaStatus")
     # target_sid = data.get("to")
-    target_result = users.get(data["to"])
+    target_sid = data.get("to")
+    logging.info(f"target_sid: {target_sid}")
+    target_result = users.get(target_sid)
     logging.info(f"target_result: {target_result}")
     sio.emit("mediaStatusChanged", {
         "mediaType": media_type,
