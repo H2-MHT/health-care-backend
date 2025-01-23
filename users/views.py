@@ -45,3 +45,13 @@ class UpdateEducationAPIView(APIView):
             {"message": "Invalid data provided.", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    def get(self, request, user_id, *args, **kwargs):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        education = Education.objects.filter(user=user).first()
+        serializer = EducationSerializer(education)
+        return Response(serializer.data, status=status.HTTP_200_OK)
