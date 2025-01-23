@@ -11,8 +11,8 @@ from .models import Payment
 from appointments.models import Appointment
 from rest_framework.permissions import IsAuthenticated
 from doctors.models import Doctor
-from .serializers import AccountDetailSerializer
-from .models import AccountDetail
+from .serializers import AccountDetailSerializer, TransactionSerializer
+from .models import AccountDetail, Transaction
 
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -91,7 +91,6 @@ class StripePaymentAPIView(APIView):
                 {"error": "Payment failed", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
             
             
 class TransactionHistoryAPIView(APIView):
@@ -171,29 +170,51 @@ class AddAccountDetailAPIView(APIView):
     """
     permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
+        # Ensure the user is a doctor
         if not hasattr(request.user, 'doctor'):
             return Response(
                 {"error": "Only doctors can add account details."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        # Check if account number already exists
+        
+        # Check if the account already exists
         account_number = request.data.get('account_number')
-        if AccountDetail.objects.filter(user=request.user, account_number=account_number).exists():
-            return Response(
-                {"error": "Account with this account number already exists."},
-                status=status.HTTP_400_BAD_REQUEST
+        account = AccountDetail.objects.filter(user=request.user, account_number=account_number).first()
+        
+        if account:
+            # Create a transaction record for the existing account
+            transaction=Transaction.objects.create(
+                account=account,
+                transaction_type="1",
+                amount=request.data.get('amount'),
             )
-        # Create a new account
+            transaction_serializer = TransactionSerializer(transaction)
+            return Response(
+                {
+                    "message": "Transaction recorded successfully.",
+                    "data": transaction_serializer.data
+                    },
+                status=status.HTTP_200_OK
+            )
+        
+        # Create a new account if it doesn't exist
         serializer = AccountDetailSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            account = serializer.save(user=request.user)
+            # Optionally create a transaction for the new account
+            Transaction.objects.create(
+                account=account,
+                transaction_type="1",
+                amount=request.data.get('amount'),
+            )
             return Response(
                 {
                     "message": "Account detail added successfully.", 
                     "data": serializer.data
-                    },
+                },
                 status=status.HTTP_200_OK
             )
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, *args, **kwargs):
