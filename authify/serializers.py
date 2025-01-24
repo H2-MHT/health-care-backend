@@ -1,5 +1,5 @@
-from django.contrib.auth import authenticate
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 
 from users.models import User
 
@@ -60,13 +60,22 @@ class SignInSerializer(serializers.Serializer):
         email = data.get("email")
         password = data.get("password")
 
-        # Authenticate the user
-        user = authenticate(email=email, password=password)
+        # Get the user by email
+        user = get_user_model().objects.filter(email=email).first()
+
+        # Check if the user exists
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
+        
+        # Reactivate the account if it's inactive
         if not user.is_active:
-            raise serializers.ValidationError("Account is inactive.")
-
+            user.is_active = True
+            user.save()
+        
+        # Check if the password matches
+        if not user.check_password(password):
+            raise serializers.ValidationError("Invalid email or password.")
+        
         data["user"] = user
         return data
 
