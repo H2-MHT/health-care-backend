@@ -316,18 +316,24 @@ class ChangePasswordView(APIView):
         """
         Change the password for the authenticated user.
         """
+        current_password = request.data.get("current_password")
         new_password = request.data.get("new_password")
-
-        # Validate the new password
-        if not new_password:
+        # Validate the provided data
+        if not current_password or not new_password:
             return Response(
-                {"message": "New password is required."},
+                {"message": "Current password and new password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Get the authenticated user
         user = request.user
 
+        # Check if the current password matches
+        if not user.check_password(current_password):
+            return Response(
+                {"message": "Current password is incorrect."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # Change the user's password
         user.set_password(new_password)
         user.save()
