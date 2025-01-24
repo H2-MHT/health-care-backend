@@ -1,5 +1,5 @@
 import random
-
+import re
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
@@ -325,6 +325,27 @@ class ChangePasswordView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Password strength validation: 8+ characters, mix of letters, numbers, and symbols
+        if len(new_password) < 8:
+            return Response(
+                {"message": "New password must be at least 8 characters long."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not re.search(r'[A-Za-z]', new_password):
+            return Response(
+                {"message": "New password must contain at least one letter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not re.search(r'[0-9]', new_password):
+            return Response(
+                {"message": "New password must contain at least one number."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not re.search(r'[@$!%*?&]', new_password):
+            return Response(
+                {"message": "New password must contain at least one special character (e.g., @$!%*?&)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # Get the authenticated user
         user = request.user
 
@@ -342,7 +363,6 @@ class ChangePasswordView(APIView):
             {"message": "Password changed successfully."},
             status=status.HTTP_200_OK,
         )
-
 
 class ResendOTPView(APIView):
     """
