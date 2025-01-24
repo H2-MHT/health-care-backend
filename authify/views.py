@@ -316,6 +316,7 @@ class ChangePasswordView(APIView):
         """
         Change the password for the authenticated user.
         """
+        current_password = request.data.get("current_password")
         new_password = request.data.get("new_password")
 
         # Validate the new password
