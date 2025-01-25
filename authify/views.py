@@ -163,15 +163,15 @@ class OTPVerificationView(APIView):
 
 class SignInView(APIView):
     """
-    API view for user sign-in.
-    Authenticates the user using the provided username and password
-    and generates a JWT token for subsequent requests.
+    API view for user sign-in and account activation.
     """
 
     def post(self, request, *args, **kwargs):
         serializer = SignInSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data["user"]
+
+            # Generate JWT tokens
             tokens = get_tokens_for_user(user)
             return Response(
                 {
@@ -182,6 +182,7 @@ class SignInView(APIView):
                         "first_name": user.first_name,
                         "last_name": user.last_name,
                         "role": user.role,
+                        "is_verified": user.is_verified,
                     },
                     "tokens": tokens,
                 },
