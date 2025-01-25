@@ -6,6 +6,8 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes
 from users.serializers import UserSerializer
+from .models import Referral
+from .serializers import ReferralSerializer, InvitationSerializer
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -80,3 +82,47 @@ class DoctorListAPIView(APIView):
         doctors = User.objects.filter(role="Doctor")
         serializer = UserSerializer(doctors, many=True)
         return Response(serializer.data)
+    
+
+class ReferralView(APIView):
+    """
+    API to fetch personal referral details (personal code, registry link, etc.).
+    """
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            referral = Referral.objects.get(user=user)
+            serializer = ReferralSerializer(referral)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Referral.DoesNotExist:
+            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class InvitationView(APIView):
+    """
+    API to create an invitation using a personal referral code.
+    """
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Fetch the user's referral
+        try:
+            referral = Referral.objects.get(user=user)
+        except Referral.DoesNotExist:
+            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = InvitationSerializer(data=request.data, context={'invited_by': referral})
+        if serializer.is_valid():
+            invitation = serializer.save()
+            referral.users_invited += 1  # Increment users invited count
+            referral.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
