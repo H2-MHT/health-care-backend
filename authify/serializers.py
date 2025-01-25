@@ -60,22 +60,24 @@ class SignInSerializer(serializers.Serializer):
         email = data.get("email")
         password = data.get("password")
 
-        # Get the user by email
-        user = get_user_model().objects.filter(email=email).first()
+        # Get the user model
+        User = get_user_model()
 
-        # Check if the user exists
+        # Retrieve the user by email
+        user = User.objects.filter(email=email).first()
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
-        
+
+        # Check the user's password
+        if not user.check_password(password):
+            raise serializers.ValidationError("Invalid email or password.")
+
         # Reactivate the account if it's inactive
         if not user.is_active:
             user.is_active = True
             user.save()
-        
-        # Check if the password matches
-        if not user.check_password(password):
-            raise serializers.ValidationError("Invalid email or password.")
-        
+
+        # Add the user object to the validated data
         data["user"] = user
         return data
 
