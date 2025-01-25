@@ -65,3 +65,28 @@ class Invitation(models.Model):
         return f"Invitation by {self.invited_by.user.username} to {self.invited_user_email}"
 
 
+class AppointmentManagement(models.Model):
+    
+    DAYS_CHOICES = [
+        ('Mon', 'Monday'),
+        ('Tue', 'Tuesday'),
+        ('Wed', 'Wednesday'),
+        ('Thu', 'Thursday'),
+        ('Fri', 'Friday'),
+        ('Sat', 'Saturday'),
+        ('Sun', 'Sunday'),
+    ]
+    
+    APPOINTMENT_TYPE_CHOICES = [
+        ('Planned', 'Planned consultation'),
+        ('Urgent', 'Urgent call'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="appointment_preferences")
+    appointment_type = models.CharField(max_length=50, choices=APPOINTMENT_TYPE_CHOICES)
+    days = models.CharField(max_length=100, help_text="Comma-separated days, e.g., Mon,Fri,Sat")
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    
+    def __str__(self):
+        return f"{self.appointment_type} ({self.days} {self.start_time}-{self.end_time})"

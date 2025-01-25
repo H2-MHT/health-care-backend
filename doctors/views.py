@@ -6,8 +6,8 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes
 from users.serializers import UserSerializer
-from .models import Referral
-from .serializers import ReferralSerializer, InvitationSerializer
+from .models import Referral,AppointmentManagement
+from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -126,3 +126,52 @@ class InvitationView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class AppointmentManagementAPIView(APIView):
+    """
+    API to manage appointment preferences (list, create, update, delete).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Get all appointment preferences for the logged-in user.
+        """
+        preferences = AppointmentManagement.objects.filter(user=request.user)
+        serializer = AppointmentManagementSerializer(preferences, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        """
+        Create a new appointment preference for the logged-in user.
+        """
+        serializer = AppointmentManagementSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        """
+        Update an existing appointment preference.
+        """
+        try:
+            preference = AppointmentManagement.objects.get(pk=pk, user=request.user)
+        except AppointmentManagement.DoesNotExist:
+            return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AppointmentManagementSerializer(preference, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        """
+        Delete an appointment preference.
+        """
+        try:
+            preference = AppointmentManagement.objects.get(pk=pk, user=request.user)
+            preference.delete()
+            return Response({"message": "Preference deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        except AppointmentManagement.DoesNotExist:
+            return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)

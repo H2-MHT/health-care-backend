@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import DoctorNotes
-from .models import Referral, Invitation
+from .models import Referral, Invitation, AppointmentManagement
 from users.models import User
 from django.contrib.auth import get_user_model
 
@@ -55,3 +55,10 @@ class InvitationSerializer(serializers.ModelSerializer):
 
     def send_invitation_email(self, email, link):
         print(f"Invitation email sent to {email} with link: {link}")  # Replace with actual email logic
+
+
+class AppointmentManagementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AppointmentManagement
+        fields = ['id', 'user', 'appointment_type', 'days', 'start_time', 'end_time']
+        read_only_fields = ['user']
