@@ -5,6 +5,9 @@ from .views import (
     ReferralView,
     InvitationView,
     AppointmentManagementAPIView,
+    ConsultationSettingsAPIView,
+    ConsultationSettingsDetailAPIView
+
     )
 
 
@@ -20,5 +23,9 @@ urlpatterns = [
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('preferences/<int:pk>/', AppointmentManagementAPIView.as_view(), name='appointment-preference-detail'),
+    
+    path('consultations/', ConsultationSettingsAPIView.as_view(), name='consultation-list'),
+    path('consultations/<int:pk>/', ConsultationSettingsDetailAPIView.as_view(), name='consultation-detail'),
+
 
 ]
