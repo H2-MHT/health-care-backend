@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework import status
 from users.models import User
 from .serializers import DoctorNotesSerializer
-from .models import DoctorNotes, Doctor
+from .models import DoctorNotes, Doctor, Invitation
 from users.serializers import UserSerializer
 from .models import Referral,AppointmentManagement, ConsultationSettings
 from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer, ConsultationSettingsSerializer
@@ -82,49 +82,6 @@ class DoctorListAPIView(APIView):
         doctors = User.objects.filter(role="Doctor")
         serializer = UserSerializer(doctors, many=True)
         return Response(serializer.data)
-    
-
-class ReferralView(APIView):
-    """
-    API to fetch personal referral details (personal code, registry link, etc.).
-    """
-    def get(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        try:
-            referral = Referral.objects.get(user=user)
-            serializer = ReferralSerializer(referral)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Referral.DoesNotExist:
-            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
-
-
-class InvitationView(APIView):
-    """
-    API to create an invitation using a personal referral code.
-    """
-    def post(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # Fetch the user's referral
-        try:
-            referral = Referral.objects.get(user=user)
-        except Referral.DoesNotExist:
-            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = InvitationSerializer(data=request.data, context={'invited_by': referral})
-        if serializer.is_valid():
-            invitation = serializer.save()
-            referral.users_invited += 1  # Increment users invited count
-            referral.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class AppointmentManagementAPIView(APIView):
     """
@@ -175,6 +132,49 @@ class AppointmentManagementAPIView(APIView):
             return Response({"message": "Preference deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         except AppointmentManagement.DoesNotExist:
             return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ReferralView(APIView):
+    """
+    API to fetch personal referral details (personal code, registry link, etc.).
+    """
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            referral = Referral.objects.get(user=user)
+            serializer = ReferralSerializer(referral)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Referral.DoesNotExist:
+            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class InvitationView(APIView):
+    """
+    API to create an invitation using a personal referral code.
+    """
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Fetch the user's referral
+        try:
+            referral = Referral.objects.get(user=user)
+        except Referral.DoesNotExist:
+            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = InvitationSerializer(data=request.data, context={'invited_by': referral})
+        if serializer.is_valid():
+            invitation = serializer.save()
+            referral.users_invited += 1  # Increment users invited count
+            referral.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         
         
 class ConsultationSettingsAPIView(APIView):
@@ -304,4 +304,191 @@ class ConsultationSettingsDetailAPIView(APIView):
             {"message": "Failed to update consultation setting.", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+class CombinedAPIView(APIView):
+    """
+    API to return combined response for Referral, Invitation, and Consultation Settings (GET, POST, PUT).
+    """
+
+    def get(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Initialize response with empty placeholders
+        response_data = {
+            "referral": {},
+            "invitation": {},
+            "consultation_settings": {}
+        }
+
+        # Fetch Referral details
+        referral_response = self.get_referral_data(request)
+        response_data["referral"] = referral_response if referral_response else {}
+
+        # Fetch Invitation details
+        invitation_response = self.get_invitation_data(request)
+        response_data["invitation"] = invitation_response if invitation_response else {}
+
+        # Fetch Consultation Settings
+        consultation_response = self.get_consultation_settings(request)
+        response_data["consultation_settings"] = consultation_response if consultation_response else {}
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Initialize response with empty placeholders
+        response_data = {
+            "referral": {},
+            "invitation": {},
+            "consultation_settings": {}
+        }
+
+        # Handle Referral
+        referral_response = self.create_or_get_referral(request)
+        response_data["referral"] = referral_response if referral_response else {}
+
+        # Handle Invitation creation
+        invitation_response = self.create_invitation(request)
+        response_data["invitation"] = invitation_response if invitation_response.get("success") else {}
+
+        # Handle Consultation Settings creation
+        consultation_response = self.create_consultation_settings(request)
+        response_data["consultation_settings"] = consultation_response if consultation_response.get("success") else {}
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, pk):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Initialize response with empty placeholders
+        response_data = {
+            "referral": {"message": "Referral update not supported."},
+            "invitation": {"message": "Invitation update not supported."},
+            "consultation_settings": {}
+        }
+
+        # Handle Consultation Settings update
+        consultation_response = self.update_consultation_settings(request, pk)
+        response_data["consultation_settings"] = consultation_response if consultation_response.get("success") else {}
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    # Helper methods for each API logic
+
+    def get_referral_data(self, request):
+        """
+        Retrieve referral-related data.
+        """
+        try:
+            referral = Referral.objects.get(user=request.user)
+            serializer = ReferralSerializer(referral)
+            return serializer.data
+        except Referral.DoesNotExist:
+            return None
+
+    def get_invitation_data(self, request):
+        """
+        Fetch the invitation data related to the user.
+        """
+        try:
+            referral = Referral.objects.get(user=request.user)
+            invitation = Invitation.objects.filter(invited_by=referral).first()  # Adjust as necessary
+            if invitation:
+                serializer = InvitationSerializer(invitation)
+                return serializer.data
+            else:
+                return {"message": "No invitation found for this user."}
+        except Referral.DoesNotExist:
+            return {"message": "Referral system not set up for this user."}
+
+    def get_consultation_settings(self, request):
+        """
+        Retrieve consultation settings for doctors.
+        """
+        if request.user.role != "Doctor":
+            return None
+        try:
+            doctor = request.user.doctor
+            consultations = ConsultationSettings.objects.filter(doctor=doctor)
+            serializer = ConsultationSettingsSerializer(consultations, many=True)
+            return serializer.data
+        except Doctor.DoesNotExist:
+            return None
+
+    def create_or_get_referral(self, request):
+        """
+        Retrieve or handle referral-related actions in POST.
+        """
+        try:
+            referral = Referral.objects.get(user=request.user)
+            serializer = ReferralSerializer(referral)
+            return serializer.data
+        except Referral.DoesNotExist:
+            return None
+
+    def create_invitation(self, request):
+        """
+        Create an invitation using the provided data.
+        """
+        try:
+            referral = Referral.objects.get(user=request.user)
+            serializer = InvitationSerializer(data=request.data, context={'invited_by': referral})
+            if serializer.is_valid():
+                invitation = serializer.save()
+                referral.users_invited += 1
+                referral.save()
+                return {"success": True, "data": serializer.data}
+            else:
+                return {"success": False, "errors": serializer.errors}
+        except Referral.DoesNotExist:
+            return None
+
+    def create_consultation_settings(self, request):
+        """
+        Create consultation settings for doctors.
+        """
+        if request.user.role != "Doctor":
+            return {"success": False, "error": "Only doctors can create consultation settings."}
+
+        try:
+            doctor = request.user.doctor
+            data = request.data.copy()
+            data["doctor"] = doctor.id
+            serializer = ConsultationSettingsSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return {"success": True, "data": serializer.data}
+            else:
+                return {"success": False, "errors": serializer.errors}
+        except Doctor.DoesNotExist:
+            return {"success": False, "error": "Doctor profile not found."}
+
+    def update_consultation_settings(self, request, pk):
+        """
+        Update consultation settings for doctors.
+        """
+        if request.user.role != "Doctor":
+            return {"success": False, "error": "Only doctors can update consultation settings."}
+
+        try:
+            doctor = request.user.doctor
+            consultation = ConsultationSettings.objects.get(pk=pk, doctor=doctor)
+            serializer = ConsultationSettingsSerializer(consultation, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return {"success": True, "data": serializer.data}
+            else:
+                return {"success": False, "errors": serializer.errors}
+        except ConsultationSettings.DoesNotExist:
+            return {"success": False, "error": "Consultation setting not found or does not belong to you."}
+        except Doctor.DoesNotExist:
+            return {"success": False, "error": "Doctor profile not found."}
 
