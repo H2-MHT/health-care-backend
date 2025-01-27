@@ -90,3 +90,19 @@ class AppointmentManagement(models.Model):
     
     def __str__(self):
         return f"{self.appointment_type} ({self.days} {self.start_time}-{self.end_time})"
+
+
+class ConsultationSettings(models.Model):
+    CONSULTATION_TYPE_CHOICES = [
+        ('planned', 'Planned Consultation'),
+        ('urgent', 'Urgent Call'),
+    ]
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    session_type = models.CharField(max_length=50, choices=CONSULTATION_TYPE_CHOICES)
+    session_length = models.IntegerField(choices=[(15, '15 minutes'), (30, '30 minutes')])
+    buffer_time = models.DurationField(blank=True, null=True)
+    planned_fee_per_15_min = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    urgent_fee_per_15_min = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.session_type} ({self.session_length} minutes)"

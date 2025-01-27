@@ -4,10 +4,10 @@ from rest_framework.views import APIView
 from rest_framework import status
 from users.models import User
 from .serializers import DoctorNotesSerializer
-from .models import DoctorNotes
+from .models import DoctorNotes, Doctor
 from users.serializers import UserSerializer
-from .models import Referral,AppointmentManagement
-from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer
+from .models import Referral,AppointmentManagement, ConsultationSettings
+from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer, ConsultationSettingsSerializer
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -175,3 +175,133 @@ class AppointmentManagementAPIView(APIView):
             return Response({"message": "Preference deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
         except AppointmentManagement.DoesNotExist:
             return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+        
+        
+class ConsultationSettingsAPIView(APIView):
+    """
+    API for managing Consultation Settings for authenticated doctors.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Create a new consultation setting for the authenticated doctor.
+        """
+        if request.user.role != "Doctor":
+            return Response({"message": "Only doctors can create consultation settings."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Fetch the authenticated doctor's profile
+        try:
+            doctor = request.user.doctor
+        except Doctor.DoesNotExist:
+            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data.copy()
+        data["doctor"] = doctor.id
+
+        # save the consultation setting
+        serializer = ConsultationSettingsSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Consultation setting created successfully.", "data": serializer.data},
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            {"message": "Failed to create consultation setting.", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    def get(self, request, *args, **kwargs):
+        """
+        Retrieve all consultation settings for the authenticated doctor.
+        """
+        if request.user.role != "Doctor":
+            return Response({"message": "Only doctors can view consultation settings."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            doctor = request.user.doctor
+        except Doctor.DoesNotExist:
+            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Retrieve consultation settings for the authenticated doctor
+        consultations = ConsultationSettings.objects.filter(doctor=doctor)
+        serializer = ConsultationSettingsSerializer(consultations, many=True)
+        return Response(
+            {"message": "Consultation settings retrieved successfully.", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class ConsultationSettingsDetailAPIView(APIView):
+    """
+    API for retrieving, updating, and deleting a single Consultation Setting.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, doctor):
+        try:
+            return ConsultationSettings.objects.get(pk=pk, doctor=doctor)
+        except ConsultationSettings.DoesNotExist:
+            return None
+
+    def get(self, request, pk, *args, **kwargs):
+        """
+        Retrieve a single consultation setting for the authenticated doctor.
+        """
+        if request.user.role != "Doctor":
+            return Response({"message": "Only doctors can view consultation settings."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            doctor = request.user.doctor
+        except Doctor.DoesNotExist:
+            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        consultation = self.get_object(pk, doctor)
+        if not consultation:
+            return Response(
+                {"message": "Consultation setting not found or does not belong to you."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = ConsultationSettingsSerializer(consultation)
+        return Response(
+            {"message": "Consultation setting retrieved successfully.", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+    def put(self, request, pk, *args, **kwargs):
+        """
+        Update a single consultation setting for the authenticated doctor.
+        """
+        if request.user.role != "Doctor":
+            return Response({"message": "Only doctors can update consultation settings."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            doctor = request.user.doctor
+        except Doctor.DoesNotExist:
+            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        consultation = self.get_object(pk, doctor)
+        if not consultation:
+            return Response(
+                {"message": "Consultation setting not found or does not belong to you."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        data = request.data.copy()
+        
+        serializer = ConsultationSettingsSerializer(consultation, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Consultation setting updated successfully.", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+        
+        return Response(
+            {"message": "Failed to update consultation setting.", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
