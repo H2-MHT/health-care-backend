@@ -8,7 +8,7 @@ from .models import DoctorNotes, Doctor, Invitation
 from users.serializers import UserSerializer
 from .models import Referral,AppointmentManagement, ConsultationSettings
 from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer, ConsultationSettingsSerializer
-from rest_framework.generics import get_object_or_404
+from rest_framework.exceptions import ValidationError
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -123,13 +123,23 @@ class AppointmentManagementAPIView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, pk):
+    def delete(self, request):
         """
-        Delete an appointment preference.
+        Delete an appointment preference by ID provided in the request body.
         """
-        preference = get_object_or_404(AppointmentManagement, pk=pk, user=request.user)
-        preference.delete()
-        return Response({"message": "Preference deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        # Get the 'pk' from the request body
+        pk = request.data.get('pk')
+        
+        if not pk:
+            raise ValidationError("The 'pk' field is required in the request body.")
+        
+        try:
+            # Retrieve the preference based on pk and the logged-in user
+            preference = AppointmentManagement.objects.get(pk=pk, user=request.user)
+            preference.delete()
+            return Response({"message": "Preference deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+        except AppointmentManagement.DoesNotExist:
+            return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
 
 class ReferralView(APIView):
     """
