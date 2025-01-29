@@ -2,9 +2,10 @@ from django.urls import path
 from .views import (
     DoctorNotesCreateAPIView,
     DoctorListAPIView,
-    ReferralView,
-    InvitationView,
     AppointmentManagementAPIView,
+    GenerateReferralCodeView,
+    InviteUserView,
+    redeem_invitation,
     )
 
 
@@ -14,8 +15,10 @@ urlpatterns = [
     path("get-doctors/", DoctorListAPIView.as_view(), name="doctor-list"),
     
     # referral and invitation 
-    path('referral/', ReferralView.as_view(), name='referral'),
-    path('invitation/', InvitationView.as_view(), name='invitation'),
+    path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
+    path('invite/', InviteUserView.as_view(), name='invite_user'),
+    path('referral/redeem/<str:invitation_code>/', redeem_invitation, name='redeem_invitation'),
+
     
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
