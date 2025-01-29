@@ -1,6 +1,7 @@
 from django.db import models
 from  users.models import User
 import random
+import string
 
 # Create your models here.
 
@@ -33,37 +34,51 @@ class DoctorNotes(models.Model):
 
 
 def generate_referral_code():
-    """
-    Generates a unique 7-digit personal referral code.
-    """
-    while True:
-        code = ''.join(random.choices('0123456789', k=7))
-        if not Referral.objects.filter(personal_code=code).exists():
-            return code
-
+    """Generate a unique 7-digit referral code."""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=7))
 
 class Referral(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='referral')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="referral")
     personal_code = models.CharField(max_length=7, unique=True, default=generate_referral_code)
-    registry_link = models.URLField(blank=True, null=True)
-    points = models.IntegerField(default=0)
-    users_invited = models.IntegerField(default=0)
+    invited_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="invited_users")
+    referral_points = models.PositiveIntegerField(default=0)
+    invited_users_count = models.PositiveIntegerField(default=0)
 
     def __str__(self):
-        return f"{self.user.first_name}'s Referral"
+        return f"{self.user.first_name} - {self.personal_code}"
+
+    def get_registration_link(self):
+        """Generate a registration link that includes the personal referral code."""
+        return f"http://localhost:8000/register?referral_code={self.personal_code}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+    def increase_invite_count(self):
+        """Increase the invited users count for the inviter."""
+        if self.invited_by:
+            inviter_referral = self.invited_by.referral
+            print(f"Inviter Referral Found: {inviter_referral.user.first_name}, Current Count: {inviter_referral.invited_users_count}")
+            inviter_referral.invited_users_count += 1
+
+            # Debugging: Before saving, print the inviter's referral count
+            print(f"Before Saving - Inviter Referral Count: {inviter_referral.invited_users_count}")
+            inviter_referral.save()
+            # Debugging: After saving, print the updated count
+            print(f"After Saving - Inviter Referral Count: {inviter_referral.invited_users_count}")
+        else:
+            print("No inviter found for this referral.")  # Debugging: Check if there's an inviter
+
 
 
 class Invitation(models.Model):
     invited_by = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name='invitations')
     invitation_code = models.CharField(max_length=7)  # Personal code of the inviter
-    invited_user_email = models.EmailField(unique=True)  # Email of the invitee
     invited_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
-    created_at = models.DateTimeField(auto_now_add=True)
-    redeemed = models.BooleanField(default=False)  # To track if the invitation was used
-
+    is_used = models.BooleanField(default=False)
+    
     def __str__(self):
-        return f"Invitation by {self.invited_by.user.username} to {self.invited_user_email}"
-
+        return f"Invitation by {self.invited_by.user.first_name}"
 
 class AppointmentManagement(models.Model):
     

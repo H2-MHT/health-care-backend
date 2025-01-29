@@ -19,43 +19,25 @@ class DoctorNotesSerializer(serializers.ModelSerializer):
     
     
 class ReferralSerializer(serializers.ModelSerializer):
+    registration_link = serializers.SerializerMethodField()
+
     class Meta:
         model = Referral
-        fields = ['personal_code', 'registry_link', 'points', 'users_invited']
+        fields = ['personal_code', 'referral_points', 'invited_users_count', 'registration_link']
 
-
-User = get_user_model()
-
+    def get_registration_link(self, obj):
+        return obj.get_registration_link()
+    
+    
 class InvitationSerializer(serializers.ModelSerializer):
-    invited_user_email = serializers.EmailField(write_only=True)
-
     class Meta:
         model = Invitation
-        fields = ['id', 'invitation_code', 'invited_user_email', 'created_at', 'redeemed']
+        fields = ['invited_by', 'invitation_code', 'invited_user_email', 'redeemed']
 
     def create(self, validated_data):
-        invited_by = self.context['invited_by']
-        invited_user_email = validated_data['invited_user_email']
-
-        # Ensure the email isn't already registered
-        if User.objects.filter(email=invited_user_email).exists():  # Fixed: Now uses the correct User model
-            raise serializers.ValidationError({"invited_user_email": "This email is already registered."})
-
-        # Create the invitation
-        invitation = Invitation.objects.create(
-            invited_by=invited_by,
-            invitation_code=invited_by.personal_code,
-            invited_user_email=invited_user_email
-        )
-
-        # Mock email sending (replace with actual implementation)
-        self.send_invitation_email(invited_user_email, invited_by.registry_link)
-
+        """Create an invitation and associate the inviter."""
+        invitation = Invitation.objects.create(**validated_data)
         return invitation
-
-    def send_invitation_email(self, email, link):
-        print(f"Invitation email sent to {email} with link: {link}")
-
 
 class AppointmentManagementSerializer(serializers.ModelSerializer):
     class Meta:
