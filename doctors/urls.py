@@ -5,6 +5,8 @@ from .views import (
     AppointmentManagementAPIView,
     GenerateReferralCodeView,
     InviteUserView,
+    ConsultationSettingsAPIView,
+    ConsultationSettingsDetailAPIView,
     redeem_invitation,
     )
 
@@ -18,6 +20,8 @@ urlpatterns = [
     path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
     path('invite/', InviteUserView.as_view(), name='invite_user'),
     path('referral/redeem/<str:invitation_code>/', redeem_invitation, name='redeem_invitation'),
+    path('consultations/', ConsultationSettingsAPIView.as_view(), name='consultation-list'),
+    path('consultations/<int:pk>/', ConsultationSettingsDetailAPIView.as_view(), name='consultation-detail'),
 
     
     # appointment management 
