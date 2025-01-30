@@ -1,4 +1,4 @@
-from django.http import JsonResponse
+from django.forms import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,11 +7,11 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes, Invitation
 from users.serializers import UserSerializer
-from .models import Referral,AppointmentManagement
-from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer
+from .models import Referral,AppointmentManagement, Doctor, ConsultationSettings
+from .serializers import ReferralSerializer, InvitationSerializer, AppointmentManagementSerializer, ConsultationSettingsSerializer
 from django.utils.crypto import get_random_string
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view
 
 
 class DoctorNotesCreateAPIView(APIView):
