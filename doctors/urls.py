@@ -22,7 +22,5 @@ urlpatterns = [
     
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
-    path('doctor-setting/', CombinedAPIView.as_view(), name='combined-api'),
-    path('doctor-setting/<int:pk>/', CombinedAPIView.as_view(), name='combined-api'),
 
 ]
