@@ -1,9 +1,6 @@
 from rest_framework import serializers
 from .models import DoctorNotes
 from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings
-from users.models import User
-from django.contrib.auth import get_user_model
-
 
 class DoctorNotesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -49,10 +46,14 @@ class AppointmentManagementSerializer(serializers.ModelSerializer):
 class ConsultationSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConsultationSettings
-        fields = ['id', 'session_type', 'session_length', 'buffer_time', 'planned_fee_per_15_min', 'urgent_fee_per_15_min', 'doctor'
-        ]
-    
-    def validate_session_length(self, value):
-        if value not in [15, 30]:
-            raise serializers.ValidationError("Session length must be either 15 or 30 minutes.")
-        return value
+        fields = '__all__'
+        extra_kwargs = {
+            'doctor': {'required': False},
+            'planned_session': {'required': False},
+            'urgent_session': {'required': False},
+            'planned_session_length': {'required': False},
+            'urgent_session_length': {'required': False},
+            'buffer_time': {'required': False},
+            'planned_fee': {'required': False},
+            'urgent_fee': {'required': False}
+        }

@@ -162,19 +162,6 @@ class GenerateReferralCodeView(APIView):
                 referral.personal_code = self.generate_referral_code()
                 referral.save()
 
-            # Check if the user was invited by someone
-            if referral.invited_by:
-                inviter_referral = Referral.objects.get(user=referral.invited_by)
-
-                # Debugging: check if inviter referral is found
-                print(f"Inviter: {inviter_referral.user.first_name} - Current Count: {inviter_referral.invited_users_count}")
-
-                # Use the increase_invite_count method to increase the count
-                inviter_referral.increase_invite_count()
-
-                # Debugging: print count after increment
-                print(f"Updated Inviter Count: {inviter_referral.invited_users_count}")
-
             # Serialize and return the referral data (referral code, registration link, etc.)
             serializer = ReferralSerializer(referral)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -192,51 +179,43 @@ class InviteUserView(APIView):
     def post(self, request):
         referral_code = request.data.get('referral_code')  # Get referral code from request body
 
+        if not request.user.is_authenticated:
+            return Response({'error': 'You must be logged in to use a referral code.'}, status=status.HTTP_403_FORBIDDEN)
+
         try:
             # Check if the referral code exists and has not been used
             referral = Referral.objects.get(personal_code=referral_code)
 
-            # Debugging: Print referral details
-            print(f"Referral Found: {referral.user.first_name}, {referral.personal_code}")
+            # Ensure the referral code is not being used by the same user (logged-in user)
+            if referral.user == request.user:
+                return Response({'error': 'You cannot use your own referral code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if this referral code has already been used
+            # Check if this referral code has already been used by the current user
+            if Invitation.objects.filter(invitation_code=referral_code, invited_user=request.user, is_used=True).exists():
+                return Response({'error': 'You have already used this referral code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if this referral code has already been used (by someone else)
             if Invitation.objects.filter(invitation_code=referral_code, is_used=True).exists():
-                return Response({'error': 'This referral code has already been used.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'This referral code has already been used by someone else.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Create an invitation for the new user (invited by user A)
-            invitation = Invitation.objects.create(invited_by=referral, invitation_code=referral_code, invited_user=request.user)
-
-            # Debugging: Check invitation details
-            print(f"Invitation Created: {invitation.invited_user.first_name}, {invitation.invitation_code}")
-
-            # Mark the invitation as used (only once)
-            invitation.is_used = True
-            invitation.save()
-
-            # Increase the invited user count for the inviter (user A)
-            referral.increase_invite_count()
-
-            # Debugging: Check if the count was increased
-            print(f"Inviter's Count After Increase: {referral.invited_users_count}")
-
-            # Also increase the inviter's referral count (for the inviter's code usage)
-            inviter_referral = referral.invited_by.referral if referral.invited_by else None
-            if inviter_referral:
-                inviter_referral.invited_users_count += 1
-                inviter_referral.save()
-
-                # Debugging: Check inviter's updated count
-                print(f"Inviter's Referral Count After Increase: {inviter_referral.invited_users_count}")
-
+            invitation = Invitation.objects.create(
+                invited_by=referral,
+                invitation_code=referral_code,
+                invited_user=request.user,
+            )
+            count= Invitation.objects.filter(invited_by=referral).count()
+            # Increase the inviter's invited users count
+            referral.invited_users_count = count
+            referral.referral_use = True
+            referral.save()
             return Response({'message': 'Referral code applied successfully.'}, status=status.HTTP_200_OK)
 
         except Referral.DoesNotExist:
             return Response({'error': 'Invalid referral code.'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # Catch any unexpected exceptions
-            print(f"Error: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
         
         
 @api_view(['POST'])
@@ -252,158 +231,42 @@ def redeem_invitation(request, invitation_code):
         return Response({'message': 'Invitation redeemed successfully!'}, status=status.HTTP_200_OK)
     except Invitation.DoesNotExist:
         return Response({'error': 'Invalid invitation code.'}, status=status.HTTP_400_BAD_REQUEST)
-class InvitationView(APIView):
-    """
-    API to create an invitation using a personal referral code.
-    """
-    def post(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # Fetch the user's referral
-        try:
-            referral = Referral.objects.get(user=user)
-        except Referral.DoesNotExist:
-            return Response({"error": "Referral system not set up for this user."}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = InvitationSerializer(data=request.data, context={'invited_by': referral})
-        if serializer.is_valid():
-            invitation = serializer.save()
-            referral.users_invited += 1  # Increment users invited count
-            referral.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         
         
 class ConsultationSettingsAPIView(APIView):
-    """
-    API for managing Consultation Settings for authenticated doctors.
-    """
     permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        """
-        Create a new consultation setting for the authenticated doctor.
-        """
-        if request.user.role != "Doctor":
-            return Response({"message": "Only doctors can create consultation settings."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Fetch the authenticated doctor's profile
-        try:
-            doctor = request.user.doctor
-        except Doctor.DoesNotExist:
-            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        data = request.data.copy()
-        data["doctor"] = doctor.id
-
-        # save the consultation setting
-        serializer = ConsultationSettingsSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"message": "Consultation setting created successfully.", "data": serializer.data},
-                status=status.HTTP_201_CREATED
-            )
-
-        return Response(
-            {"message": "Failed to create consultation setting.", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
 
     def get(self, request, *args, **kwargs):
-        """
-        Retrieve all consultation settings for the authenticated doctor.
-        """
-        if request.user.role != "Doctor":
-            return Response({"message": "Only doctors can view consultation settings."}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            doctor = request.user.doctor
-        except Doctor.DoesNotExist:
-            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Retrieve consultation settings for the authenticated doctor
-        consultations = ConsultationSettings.objects.filter(doctor=doctor)
-        serializer = ConsultationSettingsSerializer(consultations, many=True)
-        return Response(
-            {"message": "Consultation settings retrieved successfully.", "data": serializer.data},
-            status=status.HTTP_200_OK
-        )
-
-
-class ConsultationSettingsDetailAPIView(APIView):
-    """
-    API for retrieving, updating, and deleting a single Consultation Setting.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, pk, doctor):
-        try:
-            return ConsultationSettings.objects.get(pk=pk, doctor=doctor)
-        except ConsultationSettings.DoesNotExist:
-            return None
-
-    def get(self, request, pk, *args, **kwargs):
-        """
-        Retrieve a single consultation setting for the authenticated doctor.
-        """
-        if request.user.role != "Doctor":
-            return Response({"message": "Only doctors can view consultation settings."}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            doctor = request.user.doctor
-        except Doctor.DoesNotExist:
-            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        consultation = self.get_object(pk, doctor)
-        if not consultation:
-            return Response(
-                {"message": "Consultation setting not found or does not belong to you."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        # Fetch the current logged-in user
+        user = request.user
         
-        serializer = ConsultationSettingsSerializer(consultation)
-        return Response(
-            {"message": "Consultation setting retrieved successfully.", "data": serializer.data},
-            status=status.HTTP_200_OK
-        )
+        # Ensure the user is a doctor
+        if not hasattr(user, 'doctor'):
+            return Response({"error": "You are not a registered doctor."}, status=status.HTTP_403_FORBIDDEN)
 
-    def put(self, request, pk, *args, **kwargs):
-        """
-        Update a single consultation setting for the authenticated doctor.
-        """
-        if request.user.role != "Doctor":
-            return Response({"message": "Only doctors can update consultation settings."}, status=status.HTTP_403_FORBIDDEN)
+        # Get all ConsultationSettings records for the logged-in doctor
+        consultation_settings = ConsultationSettings.objects.filter(doctor=user.doctor)
 
+        # Serialize the data
+        serializer = ConsultationSettingsSerializer(consultation_settings, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request, *args, **kwargs):
+        # Check if the logged-in user is a doctor
+        user = request.user
         try:
-            doctor = request.user.doctor
+            doctor = Doctor.objects.get(user=user)
         except Doctor.DoesNotExist:
-            return Response({"message": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "You are not a registered doctor."}, status=status.HTTP_403_FORBIDDEN)
 
-        consultation = self.get_object(pk, doctor)
-        if not consultation:
-            return Response(
-                {"message": "Consultation setting not found or does not belong to you."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        # Add the logged-in doctor to the data
+        request.data['doctor'] = doctor.id
 
-        data = request.data.copy()
-        
-        serializer = ConsultationSettingsSerializer(consultation, data=data, partial=True)
+        serializer = ConsultationSettingsSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(
-                {"message": "Consultation setting updated successfully.", "data": serializer.data},
-                status=status.HTTP_200_OK
-            )
-        
-        return Response(
-            {"message": "Failed to update consultation setting.", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
