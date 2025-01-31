@@ -100,3 +100,12 @@ class ConsultationSettings(models.Model):
 
     def __str__(self):
         return f"Consultation settings for {self.doctor}"
+    
+    
+    
+class UserPreference(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    timezone = models.CharField(max_length=50, default='UTC')
+    language = models.CharField(max_length=10, default='en')
+    use_system_timezone = models.BooleanField(default=True)
+    use_system_language = models.BooleanField(default=True)

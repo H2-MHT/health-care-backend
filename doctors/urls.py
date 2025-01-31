@@ -6,6 +6,7 @@ from .views import (
     GenerateReferralCodeView,
     InviteUserView,
     ConsultationSettingsAPIView,
+    UserPreferenceView,
     redeem_invitation,
     )
 
@@ -26,4 +27,7 @@ urlpatterns = [
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('preferences/<int:pk>/', AppointmentManagementAPIView.as_view(), name='appointment-preference-detail'),
+    
+    path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
+
 ]
