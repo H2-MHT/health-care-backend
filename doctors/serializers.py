@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import DoctorNotes
-from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings, UserPreference
+from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings, UserPreference, ReschedulePolicy
 class DoctorNotesSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorNotes
@@ -62,3 +62,9 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserPreference
         fields = ['timezone', 'language', 'use_system_timezone', 'use_system_language']
+        
+        
+class ReschedulePolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReschedulePolicy
+        fields = '__all__'

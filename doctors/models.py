@@ -109,3 +109,14 @@ class UserPreference(models.Model):
     language = models.CharField(max_length=10, default='en')
     use_system_timezone = models.BooleanField(default=True)
     use_system_language = models.BooleanField(default=True)
+    
+    
+class ReschedulePolicy(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    allow_reschedule = models.BooleanField(default=False)
+    max_reschedules = models.PositiveIntegerField(null=True, blank=True)
+    reschedule_days = models.PositiveIntegerField(null=True, blank=True)
+    reschedule_time_range = models.CharField(max_length=20, null=True, blank=True)
+
+    def __str__(self):
+        return f"Reschedule Policy - Allowed: {self.allow_reschedule}"

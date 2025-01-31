@@ -7,6 +7,8 @@ from .views import (
     InviteUserView,
     ConsultationSettingsAPIView,
     UserPreferenceView,
+    UpdateReschedulePolicyView,
+    AllowRescheduleView,
     redeem_invitation,
     )
 
@@ -29,5 +31,9 @@ urlpatterns = [
     path('preferences/<int:pk>/', AppointmentManagementAPIView.as_view(), name='appointment-preference-detail'),
     
     path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
+    
+    path('allow-reschedule/', AllowRescheduleView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+    path('reschedule-policies/', UpdateReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+
 
 ]
