@@ -183,7 +183,7 @@ class InviteUserView(APIView):
             return Response({'error': 'You must be logged in to use a referral code.'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            # Check if the referral code exists and has not been used
+            # Check if the referral code exists
             referral = Referral.objects.get(personal_code=referral_code)
 
             # Ensure the referral code is not being used by the same user (logged-in user)
@@ -191,30 +191,25 @@ class InviteUserView(APIView):
                 return Response({'error': 'You cannot use your own referral code.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Check if this referral code has already been used by the current user
-            if Invitation.objects.filter(invitation_code=referral_code, invited_user=request.user, is_used=True).exists():
+            if Invitation.objects.filter(invited_by=referral, invited_user=request.user).exists():
                 return Response({'error': 'You have already used this referral code.'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if this referral code has already been used (by someone else)
-            if Invitation.objects.filter(invitation_code=referral_code, is_used=True).exists():
-                return Response({'error': 'This referral code has already been used by someone else.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Create an invitation for the new user (invited by user A)
             invitation = Invitation.objects.create(
                 invited_by=referral,
-                invitation_code=referral_code,
                 invited_user=request.user,
             )
-            count= Invitation.objects.filter(invited_by=referral).count()
-            # Increase the inviter's invited users count
-            referral.invited_users_count = count
+
+            # Update the inviter's invited users count
+            referral.invited_users_count = Invitation.objects.filter(invited_by=referral).count()
             referral.referral_use = True
             referral.save()
+
             return Response({'message': 'Referral code applied successfully.'}, status=status.HTTP_200_OK)
 
         except Referral.DoesNotExist:
             return Response({'error': 'Invalid referral code.'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Catch any unexpected exceptions
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         

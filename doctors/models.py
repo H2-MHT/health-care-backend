@@ -43,7 +43,8 @@ class Referral(models.Model):
     invited_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="invited_users")
     referral_points = models.PositiveIntegerField(default=0)
     invited_users_count = models.PositiveIntegerField(default=0)
-
+    referral_use = models.BooleanField(default=False)
+    
     def __str__(self):
         return f"{self.user.first_name} - {self.personal_code}"
 
@@ -51,31 +52,11 @@ class Referral(models.Model):
         """Generate a registration link that includes the personal referral code."""
         return f"http://localhost:8000/register?referral_code={self.personal_code}"
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-
-    def increase_invite_count(self):
-        """Increase the invited users count for the inviter."""
-        if self.invited_by:
-            inviter_referral = self.invited_by.referral
-            print(f"Inviter Referral Found: {inviter_referral.user.first_name}, Current Count: {inviter_referral.invited_users_count}")
-            inviter_referral.invited_users_count += 1
-
-            # Debugging: Before saving, print the inviter's referral count
-            print(f"Before Saving - Inviter Referral Count: {inviter_referral.invited_users_count}")
-            inviter_referral.save()
-            # Debugging: After saving, print the updated count
-            print(f"After Saving - Inviter Referral Count: {inviter_referral.invited_users_count}")
-        else:
-            print("No inviter found for this referral.")  # Debugging: Check if there's an inviter
-
 
 
 class Invitation(models.Model):
     invited_by = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name='invitations')
-    invitation_code = models.CharField(max_length=7)  # Personal code of the inviter
     invited_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
-    is_used = models.BooleanField(default=False)
     
     def __str__(self):
         return f"Invitation by {self.invited_by.user.first_name}"
