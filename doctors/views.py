@@ -1,4 +1,5 @@
 from django.forms import ValidationError
+from django.http import Http404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,14 +8,15 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes, Invitation
 from users.serializers import UserSerializer
-from .models import Referral,AppointmentManagement, Doctor, ConsultationSettings, UserPreference, ReschedulePolicy
-from .serializers import ReferralSerializer, AppointmentManagementSerializer, ReschedulePolicySerializer, ConsultationSettingsSerializer, UserPreferenceSerializer
+from .models import Referral,AppointmentManagement, Doctor, ConsultationSettings, UserPreference, ReschedulePolicy,CancellationPolicy
+from .serializers import ReferralSerializer, AppointmentManagementSerializer, ReschedulePolicySerializer, ConsultationSettingsSerializer, UserPreferenceSerializer, CancellationPolicySerializer
 from django.utils.crypto import get_random_string
 import pytz
 from datetime import datetime
 from django.utils import translation
 from django.utils.translation import gettext
 from django.utils import translation
+from rest_framework.exceptions import NotFound
 
 from rest_framework.decorators import api_view
 
@@ -437,4 +439,42 @@ class UpdateReschedulePolicyView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
-    
+class CancellationPolicyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            policy = CancellationPolicy.objects.get(doctor=request.user)
+        except CancellationPolicy.DoesNotExist:
+            raise NotFound("Cancellation policy not found.")
+
+        serializer = CancellationPolicySerializer(policy)
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        serializer = CancellationPolicySerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, *args, **kwargs):
+        try:
+            policy = CancellationPolicy.objects.get(doctor=request.user)
+        except CancellationPolicy.DoesNotExist:
+            raise NotFound("Cancellation policy not found.")
+        
+        serializer = CancellationPolicySerializer(policy, data=request.data, context={'request': request}, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            policy = CancellationPolicy.objects.get(doctor=request.user)
+        except CancellationPolicy.DoesNotExist:
+            raise NotFound("Cancellation policy not found.")
+        
+        policy.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

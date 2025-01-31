@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import DoctorNotes
-from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings, UserPreference, ReschedulePolicy
+from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings, UserPreference, ReschedulePolicy, CancellationPolicy
+from datetime import datetime
+
 class DoctorNotesSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorNotes
@@ -68,3 +70,17 @@ class ReschedulePolicySerializer(serializers.ModelSerializer):
     class Meta:
         model = ReschedulePolicy
         fields = '__all__'
+        
+
+
+class CancellationPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CancellationPolicy
+        fields = ['no_fee_cancellation_period', 'fee_percentage', 'chargeable_cancellation_period']
+        # Exclude doctor from input fields, it will be set automatically in the view
+        read_only_fields = ['doctor']
+
+    def create(self, validated_data):
+        # Set the authenticated user as the doctor
+        validated_data['doctor'] = self.context['request'].user
+        return super().create(validated_data)

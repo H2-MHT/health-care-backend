@@ -9,6 +9,7 @@ from .views import (
     UserPreferenceView,
     UpdateReschedulePolicyView,
     AllowRescheduleView,
+    CancellationPolicyView,
     redeem_invitation,
     )
 
@@ -34,6 +35,7 @@ urlpatterns = [
     
     path('allow-reschedule/', AllowRescheduleView.as_view(), name='reschedule-policy-list'),  # GET all, POST
     path('reschedule-policies/', UpdateReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+    path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
 
 
 ]

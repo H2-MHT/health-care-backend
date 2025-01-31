@@ -120,3 +120,13 @@ class ReschedulePolicy(models.Model):
 
     def __str__(self):
         return f"Reschedule Policy - Allowed: {self.allow_reschedule}"
+    
+    
+class CancellationPolicy(models.Model):
+    doctor = models.OneToOneField(User, on_delete=models.CASCADE)
+    no_fee_cancellation_period = models.TimeField()
+    fee_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    chargeable_cancellation_period = models.TimeField()
+
+    def __str__(self):
+        return f"{self.doctor.email} - No Fee: {self.no_fee_cancellation_period}, {self.fee_percentage}% Fee"
