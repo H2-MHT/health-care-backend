@@ -511,6 +511,8 @@ class NoShowPolicyAPIView(APIView):
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+        if NoShowPolicy.objects.filter(user=request.user).exists():
+            return Response({"detail": "You already have an existing NoShowPolicy."}, status=status.HTTP_400_BAD_REQUEST)
         data = request.data.copy()
         data['user'] = request.user.id
 
