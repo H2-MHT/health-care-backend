@@ -130,3 +130,14 @@ class CancellationPolicy(models.Model):
 
     def __str__(self):
         return f"{self.doctor.email} - No Fee: {self.no_fee_cancellation_period}, {self.fee_percentage}% Fee"
+    
+    
+class NoShowPolicy(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="no_show_policies")
+    planned = models.CharField(max_length=50, blank=True, null=True)
+    urgent = models.CharField(max_length=50, blank=True, null=True)
+    waiting_time_planned = models.CharField(max_length=20, blank=True, null=True, help_text="Waiting time for planned cases (e.g., 15 minutes)")
+    waiting_time_urgent = models.CharField(max_length=20, blank=True, null=True, help_text="Waiting time for urgent cases (e.g., 30 minutes)")
+
+    def __str__(self):
+        return f"User: {self.user.username}, Planned: {self.waiting_time_planned or 'N/A'}, Urgent: {self.waiting_time_urgent or 'N/A'}"

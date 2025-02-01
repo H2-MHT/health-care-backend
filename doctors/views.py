@@ -1,5 +1,5 @@
 from django.forms import ValidationError
-from django.http import Http404
+from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,8 +8,26 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes, Invitation
 from users.serializers import UserSerializer
-from .models import Referral,AppointmentManagement, Doctor, ConsultationSettings, UserPreference, ReschedulePolicy,CancellationPolicy
-from .serializers import ReferralSerializer, AppointmentManagementSerializer, ReschedulePolicySerializer, ConsultationSettingsSerializer, UserPreferenceSerializer, CancellationPolicySerializer
+from .models import (
+    Referral,
+    AppointmentManagement,
+    Doctor,
+    ConsultationSettings,
+    UserPreference,
+    ReschedulePolicy,
+    CancellationPolicy,
+    NoShowPolicy,
+)
+from .serializers import(
+    ReferralSerializer,
+    AppointmentManagementSerializer,
+    ReschedulePolicySerializer,
+    ConsultationSettingsSerializer,
+    UserPreferenceSerializer,
+    CancellationPolicySerializer,
+    NoShowPolicySerializer,
+    
+)
 from django.utils.crypto import get_random_string
 import pytz
 from datetime import datetime
@@ -478,3 +496,37 @@ class CancellationPolicyView(APIView):
         
         policy.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NoShowPolicyAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+        policies = NoShowPolicy.objects.filter(user=request.user)
+        serializer = NoShowPolicySerializer(policies, many=True)
+        return Response(serializer.data)
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+        data = request.data.copy()
+        data['user'] = request.user.id
+
+        serializer = NoShowPolicySerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def put(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_401_UNAUTHORIZED)
+        policy = get_object_or_404(NoShowPolicy, user=request.user)
+
+        serializer = NoShowPolicySerializer(policy, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

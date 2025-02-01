@@ -1,6 +1,14 @@
 from rest_framework import serializers
 from .models import DoctorNotes
-from .models import Referral, Invitation, AppointmentManagement, ConsultationSettings, UserPreference, ReschedulePolicy, CancellationPolicy
+from .models import (
+    Referral, Invitation,
+    AppointmentManagement,
+    ConsultationSettings,
+    UserPreference,
+    ReschedulePolicy,
+    CancellationPolicy,
+    NoShowPolicy,
+)
 from datetime import datetime
 
 class DoctorNotesSerializer(serializers.ModelSerializer):
@@ -84,3 +92,15 @@ class CancellationPolicySerializer(serializers.ModelSerializer):
         # Set the authenticated user as the doctor
         validated_data['doctor'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class NoShowPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NoShowPolicy
+        fields = ['user', 'planned', 'urgent', 'waiting_time_planned', 'waiting_time_urgent']
+        extra_kwargs = {
+            'planned': {'required': False},
+            'urgent': {'required': False},
+            'waiting_time_planned': {'required': False},
+            'waiting_time_urgent': {'required': False},
+        }
