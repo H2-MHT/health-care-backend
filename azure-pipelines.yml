@@ -1,20 +1,43 @@
 trigger:
-- development
+  branches:
+    include:
+      - development  # Only trigger on the development branch
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
-steps:
-- checkout: self
+jobs:
+  # Job 1: Build and Install Dependencies
+  - job: BuildAndDeploy
+    steps:
+      # Step 1: Checkout code
+      - checkout: self
+      
+      # Step 2: Set up Python
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
 
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.x'
-    addToPath: true
-    
-# 3. Install dependencies
-- script: |
-    python -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-  displayName: 'Install dependencies'
+      # Step 3: Install dependencies
+      - script: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+        displayName: 'Install dependencies'
+
+  # Job 2: Deployment to Virtual Machine
+  - deployment: DeployToVM
+    environment:
+      name: 'staging'  # This is your environment name
+      resourceName: 'Healthcare-backend'  # Replace with your actual VM name or resource
+      resourceType: 'VirtualMachine'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - script: |
+                echo "Deploying to the VM"
+                # Add more steps here to deploy to your VM, such as:
+                # SSH commands to copy files, restart services, etc.
+              displayName: 'Deploy to VM'
