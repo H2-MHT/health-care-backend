@@ -8,7 +8,7 @@ pool:
 
 jobs:
   # Job 1: Build and Install Dependencies
-  - job: BuildAndDeploy
+  - job: Build
     steps:
       # Step 1: Checkout code
       - checkout: self
@@ -28,6 +28,7 @@ jobs:
 
   # Job 2: Deployment to Virtual Machine
   - deployment: DeployToVM
+    dependsOn: Build
     environment:
       name: 'staging'  # This is your environment name
       resourceName: 'Healthcare-backend'  # Replace with your actual VM name or resource
@@ -40,4 +41,5 @@ jobs:
                 echo "Deploying to the VM"
                 # Add more steps here to deploy to your VM, such as:
                 # SSH commands to copy files, restart services, etc.
+                touch /home/azureuser/nik.txt
               displayName: 'Deploy to VM'
