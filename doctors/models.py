@@ -20,7 +20,7 @@ class Doctor(models.Model):
 
 class DoctorNotes(models.Model):
     doctor = models.ForeignKey(
-        "users.User", 
+        "Doctor", 
         on_delete=models.CASCADE, 
         limit_choices_to={'role': 'Doctor'}, 
         related_name='notes_as_doctor'
