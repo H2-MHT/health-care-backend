@@ -18,7 +18,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from authify.utils import validate_google_id_token
 from users.models import User
-
+from doctors.models import Doctor
 from .serializers import (
     OTPVerificationSerializer,
     RegistrationSerializer,
@@ -146,6 +146,14 @@ class OTPVerificationView(APIView):
             # OTP is valid, verify the user's account
             user.is_verified = True
             user.save()
+
+            # Check if the user is a doctor and create a Doctor profile if needed
+            if user.role == "Doctor":
+                doctor, created = Doctor.objects.get_or_create(user=user)
+                if created:
+                    # Initialize any fields specific to the doctor
+                    doctor.is_verified = True
+                    doctor.save()
 
             # Generate JWT tokens after OTP verification
             tokens = get_tokens_for_user(user)
