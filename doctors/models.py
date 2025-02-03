@@ -30,8 +30,6 @@ class DoctorNotes(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time when the note was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
 
-    def __str__(self):
-        return f"Note by Dr. {self.doctor.first_name}"
 
 
 def generate_referral_code():
