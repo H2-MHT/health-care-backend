@@ -23,12 +23,12 @@ class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Check if the logged-in user is a doctor
-        if not hasattr(request.user, 'doctor'):
+        # Ensure only doctors can access this view
+        if request.user.role != "Doctor":
             return Response({"error": "Access restricted to doctors only."}, status=403)
-        
-        # Get the logged-in doctor's profile
-        doctor = request.user.doctor
+
+        # Get the logged-in doctor
+        doctor = request.user
 
         # Reviews Data
         total_reviews = Review.objects.filter(doctor=doctor).count()
@@ -46,9 +46,7 @@ class DashboardAPIView(APIView):
         ]
 
         # Appointments Data
-        appointments = Appointment.objects.filter(doctor=doctor).select_related(
-            "patient__user", "doctor__user", "clinic"
-        )[:10]
+        appointments = Appointment.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user", "clinic")[:10]
         appointments_data = [
             {
                 "appointment_id": appointment.id,
@@ -99,25 +97,18 @@ class DashboardAPIView(APIView):
         confirmed_data = format_appointment_data(confirmed_appointments)
 
         # Doctor Notes
-        if request.user.role == "Doctor":
-            doctor_notes = DoctorNotes.objects.filter(doctor=request.user).order_by('-created_at')
-            doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
-            doctor_notes_data = doctor_notes_serializer.data
-        else:
-            doctor_notes_data = []
+        doctor_notes = DoctorNotes.objects.filter(doctor=doctor).order_by('-created_at')
+        doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
+        doctor_notes_data = doctor_notes_serializer.data
             
         # Diagnoses Data
         diagnoses = MedicalHistory.objects.filter(patient__appointment__doctor=doctor).select_related("patient__user")[:5]
         diagnoses_data = [
             {
-                "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
+                "doctor_name": f"Dr. {doctor.first_name} {doctor.last_name}",
                 "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
                 "condition": history.condition,
-                "diagnosis_date": (
-                    history.diagnosis_date.isoformat()
-                    if history.diagnosis_date
-                    else None
-                ),
+                "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
                 "notes": history.notes,
             }
             for history in diagnoses
@@ -127,38 +118,22 @@ class DashboardAPIView(APIView):
         patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
         last_reports_data = []
         for patient in patients:
-            last_diagnosis = (
-                MedicalHistory.objects.filter(patient=patient)
-                .order_by("-diagnosis_date")
-                .first()
-            )
+            last_diagnosis = MedicalHistory.objects.filter(patient=patient).order_by("-diagnosis_date").first()
             last_reports_data.append(
                 {
                     "patient_name": f"{patient.user.first_name} {patient.user.last_name}",
                     "condition": last_diagnosis.condition if last_diagnosis else "No Diagnosis",
-                    "diagnosis_date": (
-                        last_diagnosis.diagnosis_date.strftime("%d-%m-%Y")
-                        if last_diagnosis and last_diagnosis.diagnosis_date
-                        else None
-                    ),
-                    "time": (
-                        f"{last_diagnosis.diagnosis_date.strftime('%H:%M')} - {last_diagnosis.diagnosis_date.strftime('%H:%M')}"
-                        if last_diagnosis and last_diagnosis.diagnosis_date
-                        else None
-                    ),
+                    "diagnosis_date": last_diagnosis.diagnosis_date.strftime("%d-%m-%Y") if last_diagnosis and last_diagnosis.diagnosis_date else None,
+                    "time": f"{last_diagnosis.diagnosis_date.strftime('%H:%M')} - {last_diagnosis.diagnosis_date.strftime('%H:%M')}" if last_diagnosis and last_diagnosis.diagnosis_date else None,
                     "notes": last_diagnosis.notes if last_diagnosis else "No Notes",
-                    "status": last_diagnosis.status
-                    if last_diagnosis and hasattr(last_diagnosis, "status")
-                    else "Unknown",
+                    "status": last_diagnosis.status if last_diagnosis and hasattr(last_diagnosis, "status") else "Unknown",
                 }
             )
 
         # Statistics
         total_consultations = Appointment.objects.filter(doctor=doctor).count()
         total_clients = patients.count()
-        returns_percentage = round(
-            (total_clients / total_consultations) * 100 if total_consultations else 0, 2
-        )
+        returns_percentage = round((total_clients / total_consultations) * 100 if total_consultations else 0, 2)
 
         # Final Response
         data = {
@@ -176,3 +151,5 @@ class DashboardAPIView(APIView):
         }
 
         return Response(data)
+    
+    
