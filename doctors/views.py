@@ -494,11 +494,23 @@ class CancellationPolicyView(APIView):
         return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
+        existing_policy = CancellationPolicy.objects.filter(doctor=request.user).first()
+        if existing_policy:
+            return Response(
+                {"detail": "A cancellation policy already exists for this doctor."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = CancellationPolicySerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save(doctor=request.user)  # Ensure the doctor is set explicitly
+            return Response(
+                {"message": "Cancellation policy created successfully.", "data": serializer.data},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(
+            {"detail": "Invalid data.", "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     def put(self, request, *args, **kwargs):
         try:

@@ -86,7 +86,7 @@ class ReschedulePolicySerializer(serializers.ModelSerializer):
 class CancellationPolicySerializer(serializers.ModelSerializer):
     class Meta:
         model = CancellationPolicy
-        fields = ['no_fee_cancellation_period', 'fee_percentage', 'chargeable_cancellation_period']
+        fields = ['id','no_fee_cancellation_period', 'fee_percentage', 'chargeable_cancellation_period']
         # Exclude doctor from input fields, it will be set automatically in the view
         read_only_fields = ['doctor']
 
