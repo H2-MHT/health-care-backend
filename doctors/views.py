@@ -273,47 +273,36 @@ class ConsultationSettingsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        # Fetch the current logged-in user
         user = request.user
-        
-        # Ensure the user is a doctor
         if not hasattr(user, 'doctor'):
             return Response({"error": "You are not a registered doctor."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Get all ConsultationSettings records for the logged-in doctor
         consultation_settings = ConsultationSettings.objects.filter(doctor=user.doctor)
-
-        # Serialize the data
         serializer = ConsultationSettingsSerializer(consultation_settings, many=True)
+        return Response({"message": "Consultation settings retrieved successfully", "data": serializer.data}, status=status.HTTP_200_OK)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
     def post(self, request, *args, **kwargs):
-        # Check if the logged-in user is a doctor
         user = request.user
         try:
             doctor = Doctor.objects.get(user=user)
         except Doctor.DoesNotExist:
             return Response({"error": "You are not a registered doctor."}, status=status.HTTP_403_FORBIDDEN)
-
-        # fetch the existing ConsultationSettings for the doctor
-        consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
-
-        # record exists, update it, else create a new one
-        if consultation_settings:
-            serializer = ConsultationSettingsSerializer(consultation_settings, data=request.data, partial=True)  # partial=True allows for partial updates
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)  # Return updated data
-        else:
-            #  create a new one
-            request.data['doctor'] = doctor.id
-            serializer = ConsultationSettingsSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        try:
+            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            if consultation_settings:
+                serializer = ConsultationSettingsSerializer(consultation_settings, data=request.data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    return Response({"message": "Consultation settings updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            else:
+                request.data['doctor'] = doctor.id
+                serializer = ConsultationSettingsSerializer(data=request.data)
+                if serializer.is_valid():
+                    serializer.save()
+                    return Response({"message": "Consultation settings created successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"error": "Invalid data", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+        except Exception as e:
+            return Response({"error": "Something went wrong", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # Function to get current time in a given timezone
