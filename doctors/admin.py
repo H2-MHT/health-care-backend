@@ -1,5 +1,17 @@
 from django.contrib import admin
-from .models import Doctor, DoctorNotes, Referral, Invitation, AppointmentManagement, ConsultationSettings
+from .models import(
+    Doctor,
+    DoctorNotes,
+    Referral,
+    UserPreference,
+    Invitation,
+    ReschedulePolicy,
+    AppointmentManagement,
+    ConsultationSettings,
+    NoShowPolicy,
+    CommunicationPreferences,
+    TwoFactorAuthMethod,
+)
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
     list_display = ['id','user',]
@@ -13,3 +25,8 @@ admin.site.register(Referral, ReferralAdmin)
 admin.site.register(Invitation)
 admin.site.register(AppointmentManagement)
 admin.site.register(ConsultationSettings)
+admin.site.register(ReschedulePolicy)
+admin.site.register(UserPreference)
+admin.site.register(NoShowPolicy)
+admin.site.register(CommunicationPreferences)
+admin.site.register(TwoFactorAuthMethod)

@@ -6,7 +6,13 @@ from .views import (
     GenerateReferralCodeView,
     InviteUserView,
     ConsultationSettingsAPIView,
-    ConsultationSettingsDetailAPIView,
+    UserPreferenceView,
+    UpdateReschedulePolicyView,
+    AllowRescheduleView,
+    CancellationPolicyView,
+    NoShowPolicyAPIView,
+    CommunicationPreferencesAPIView,
+    TwoFactorAuthAPIView,
     redeem_invitation,
     )
 
@@ -19,12 +25,26 @@ urlpatterns = [
     # referral and invitation 
     path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
     path('invite/', InviteUserView.as_view(), name='invite_user'),
+
     path('referral/redeem/<str:invitation_code>/', redeem_invitation, name='redeem_invitation'),
-    path('consultations/', ConsultationSettingsAPIView.as_view(), name='consultation-list'),
-    path('consultations/<int:pk>/', ConsultationSettingsDetailAPIView.as_view(), name='consultation-detail'),
+    path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
 
     
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('preferences/<int:pk>/', AppointmentManagementAPIView.as_view(), name='appointment-preference-detail'),
+    
+    path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
+    
+    path('allow-reschedule/', AllowRescheduleView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+    path('reschedule-policies/', UpdateReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+    path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
+
+    path('no-show-policy/', NoShowPolicyAPIView.as_view(), name='no_show_policy'),
+    
+    path('communication-preferences/', CommunicationPreferencesAPIView.as_view(), name='communication-preferences'),
+
+    path('2fa/', TwoFactorAuthAPIView.as_view(), name='two_factor_auth'),
+
+
 ]
