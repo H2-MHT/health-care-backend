@@ -2,6 +2,7 @@ from django.db import models
 from  users.models import User
 import random
 import string
+from django.contrib.auth import get_user_model
 
 # Create your models here.
 
@@ -141,3 +142,35 @@ class NoShowPolicy(models.Model):
 
     def __str__(self):
         return f"User: {self.user.username}, Planned: {self.waiting_time_planned or 'N/A'}, Urgent: {self.waiting_time_urgent or 'N/A'}"
+    
+        
+
+class CommunicationPreferences(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="communication_preferences")
+
+    # Notification Preferences
+    appointment_reminders = models.BooleanField(default=True)
+    patient_messages = models.BooleanField(default=True)
+    other_important_updates = models.BooleanField(default=True)
+
+    # Channel Preferences
+    email = models.BooleanField(default=True)
+    whatsapp = models.BooleanField(default=True)
+    platform_messenger = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Communication Preferences for {self.user.username}"
+    
+    
+
+class TwoFactorAuthMethod(models.Model):
+    METHOD_CHOICES = [
+        ('email', 'E-mail verification'),
+        ('security_question', 'Security question'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    method = models.CharField(max_length=50, choices=METHOD_CHOICES)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_method_display()}"

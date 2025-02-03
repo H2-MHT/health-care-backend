@@ -8,6 +8,8 @@ from .models import (
     ReschedulePolicy,
     CancellationPolicy,
     NoShowPolicy,
+    CommunicationPreferences,
+    TwoFactorAuthMethod,
 )
 from datetime import datetime
 
@@ -104,3 +106,18 @@ class NoShowPolicySerializer(serializers.ModelSerializer):
             'waiting_time_planned': {'required': False},
             'waiting_time_urgent': {'required': False},
         }
+        
+        
+class CommunicationPreferencesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommunicationPreferences
+        fields = '__all__'
+        extra_kwargs = {'user': {'read_only': True}}
+        
+        
+
+class TwoFactorAuthMethodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TwoFactorAuthMethod
+        fields = ['user', 'method']
+        read_only_fields = ['user']

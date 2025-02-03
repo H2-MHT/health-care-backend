@@ -11,6 +11,8 @@ from .views import (
     AllowRescheduleView,
     CancellationPolicyView,
     NoShowPolicyAPIView,
+    CommunicationPreferencesAPIView,
+    TwoFactorAuthAPIView,
     redeem_invitation,
     )
 
@@ -39,6 +41,10 @@ urlpatterns = [
     path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
 
     path('no-show-policy/', NoShowPolicyAPIView.as_view(), name='no_show_policy'),
+    
+    path('communication-preferences/', CommunicationPreferencesAPIView.as_view(), name='communication-preferences'),
+
+    path('2fa/', TwoFactorAuthAPIView.as_view(), name='two_factor_auth'),
 
 
 ]

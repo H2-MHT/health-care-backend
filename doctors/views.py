@@ -8,6 +8,8 @@ from users.models import User
 from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes, Invitation
 from users.serializers import UserSerializer
+from django.contrib.auth import get_user_model
+
 from .models import (
     Referral,
     AppointmentManagement,
@@ -17,6 +19,8 @@ from .models import (
     ReschedulePolicy,
     CancellationPolicy,
     NoShowPolicy,
+    CommunicationPreferences,
+    TwoFactorAuthMethod
 )
 from .serializers import(
     ReferralSerializer,
@@ -26,6 +30,8 @@ from .serializers import(
     UserPreferenceSerializer,
     CancellationPolicySerializer,
     NoShowPolicySerializer,
+    CommunicationPreferencesSerializer,
+    TwoFactorAuthMethodSerializer
     
 )
 from django.utils.crypto import get_random_string
@@ -531,4 +537,54 @@ class NoShowPolicyAPIView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+class CommunicationPreferencesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """Retrieve the current user's communication preferences"""
+        preferences, created = CommunicationPreferences.objects.get_or_create(user=request.user)
+        serializer = CommunicationPreferencesSerializer(preferences)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, *args, **kwargs):
+        """Update the current user's communication preferences"""
+        preferences, created = CommunicationPreferences.objects.get_or_create(user=request.user)
+        serializer = CommunicationPreferencesSerializer(preferences, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TwoFactorAuthAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Retrieve the 2FA method for the current logged-in user."""
+        try:
+            two_factor = TwoFactorAuthMethod.objects.get(user=request.user)
+        except TwoFactorAuthMethod.DoesNotExist:
+            return Response({"message": "No 2FA method set"}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = TwoFactorAuthMethodSerializer(two_factor)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Create or update the 2FA method for the current logged-in user."""
+        user = request.user
+
+        try:
+            #  update an existing record
+            two_factor = TwoFactorAuthMethod.objects.get(user=user)
+            serializer = TwoFactorAuthMethodSerializer(two_factor, data=request.data, partial=True)
+        except TwoFactorAuthMethod.DoesNotExist:
+            # Create a new record without needing to pass user in the data
+            serializer = TwoFactorAuthMethodSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            serializer.save(user=user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
