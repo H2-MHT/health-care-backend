@@ -100,7 +100,7 @@ class DashboardAPIView(APIView):
         confirmed_data = format_appointment_data(confirmed_appointments)
 
         # Doctor Notes
-        doctor_notes = DoctorNotes.objects.filter(doctor=doctor.user).order_by('-created_at')
+        doctor_notes = DoctorNotes.objects.filter(doctor=doctor).order_by('-created_at')
         doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
         doctor_notes_data = doctor_notes_serializer.data
             
@@ -154,5 +154,6 @@ class DashboardAPIView(APIView):
         }
 
         return Response(data)
+    
     
     
