@@ -27,8 +27,11 @@ class DashboardAPIView(APIView):
         if request.user.role != "Doctor":
             return Response({"error": "Access restricted to doctors only."}, status=403)
 
-        # Get the logged-in doctor
-        doctor = request.user
+        # Get the doctor associated with the current authenticated user
+        try:
+            doctor = Doctor.objects.get(user=request.user)
+        except Doctor.DoesNotExist:
+            return Response({"error": "Doctor profile not found."}, status=404)
 
         # Reviews Data
         total_reviews = Review.objects.filter(doctor=doctor).count()
@@ -97,7 +100,7 @@ class DashboardAPIView(APIView):
         confirmed_data = format_appointment_data(confirmed_appointments)
 
         # Doctor Notes
-        doctor_notes = DoctorNotes.objects.filter(doctor=doctor).order_by('-created_at')
+        doctor_notes = DoctorNotes.objects.filter(doctor=doctor.user).order_by('-created_at')
         doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
         doctor_notes_data = doctor_notes_serializer.data
             
@@ -105,7 +108,7 @@ class DashboardAPIView(APIView):
         diagnoses = MedicalHistory.objects.filter(patient__appointment__doctor=doctor).select_related("patient__user")[:5]
         diagnoses_data = [
             {
-                "doctor_name": f"Dr. {doctor.first_name} {doctor.last_name}",
+                "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
                 "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
                 "condition": history.condition,
                 "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
