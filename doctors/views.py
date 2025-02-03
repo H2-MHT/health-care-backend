@@ -176,8 +176,10 @@ class AppointmentManagementAPIView(APIView):
         except AppointmentManagement.DoesNotExist:
             return Response({"error": "Preference not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
 
+
+
 class GenerateReferralCodeView(APIView):
-    """Generate and return a user's referral code and registration link."""
+    """Generate and return a user's referral code, registration link, and update referral points."""
 
     def generate_referral_code(self):
         """Generate a unique referral code (7 characters)."""
@@ -185,15 +187,23 @@ class GenerateReferralCodeView(APIView):
 
     def get(self, request):
         try:
-            # Get or create the referral object for the current user
+            # Get or create referral object for the current user
             referral, created = Referral.objects.get_or_create(user=request.user)
 
             if created:
-                # Generate and assign a unique referral code
                 referral.personal_code = self.generate_referral_code()
                 referral.save()
 
-            # Serialize and return the referral data (referral code, registration link, etc.)
+            # Check if any invited user has completed their first appointment
+            invitations = Invitation.objects.filter(invited_by=referral, first_appointment=True)
+
+            for invitation in invitations:
+                if invitation.invited_user:  # Ensure invited user exists
+                    referral.referral_points += 10
+                    invitation.first_appointment = False
+                    referral.save()
+                    invitation.save()
+
             serializer = ReferralSerializer(referral)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -217,7 +227,6 @@ class InviteUserView(APIView):
             # Check if the referral code exists
             referral = Referral.objects.get(personal_code=referral_code)
 
-            # Ensure the referral code is not being used by the same user (logged-in user)
             if referral.user == request.user:
                 return Response({'error': 'You cannot use your own referral code.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -588,3 +597,6 @@ class TwoFactorAuthAPIView(APIView):
             serializer.save(user=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    

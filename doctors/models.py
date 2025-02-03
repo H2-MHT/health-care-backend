@@ -58,7 +58,7 @@ class Referral(models.Model):
 class Invitation(models.Model):
     invited_by = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name='invitations')
     invited_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
-    
+    first_appointment = models.BooleanField(default=False)
     def __str__(self):
         return f"Invitation by {self.invited_by.user.first_name}"
 
