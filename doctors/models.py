@@ -22,8 +22,6 @@ class DoctorNotes(models.Model):
     doctor = models.ForeignKey(
         "Doctor", 
         on_delete=models.CASCADE, 
-        limit_choices_to={'role': 'Doctor'}, 
-        related_name='notes_as_doctor'
     )
     title = models.CharField(max_length=255, help_text="Title of the doctor's note")
     note = models.TextField(help_text="Detailed note provided by the doctor")
