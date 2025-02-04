@@ -121,55 +121,65 @@ class OTPVerificationView(APIView):
     """
 
     def post(self, request, *args, **kwargs):
-        # Deserialize request data
         serializer = OTPVerificationSerializer(data=request.data)
-        if not serializer.is_valid():
-            logger.error(f"OTP verification failed. Errors: {serializer.errors}")
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if serializer.is_valid():
+            email = serializer.validated_data["email"]
+            otp = serializer.validated_data["otp"]
+            logger.info(f"Verifying OTP for email: {email}")
 
-        email, otp = serializer.validated_data["email"], serializer.validated_data["otp"]
-        logger.info(f"Verifying OTP for email: {email}")
+            # Retrieve user by email
+            try:
+                user = User.objects.get(email=email)
+                logger.info(f"User found: {user.email} | Role: {user.role}")
+            except User.DoesNotExist:
+                logger.error(f"User with email {email} not found.")
+                return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Retrieve user by email
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            logger.error(f"User with email {email} not found.")
-            return Response({"message": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            # Check if OTP matches
+            if user.otp != otp:
+                logger.warning(f"Invalid OTP for user {email}.")
+                return Response({"message": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate OTP
-        if user.otp != otp:
-            logger.warning(f"Invalid OTP for user {email}.")
-            return Response({"message": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            # OTP is valid, mark user as verified
+            user.is_verified = True
+            user.otp = None  # Clear OTP after verification
+            user.save()
+            logger.info(f"User {email} verified successfully.")
 
-        # OTP is valid, mark user as verified and clear OTP
-        user.is_verified, user.otp = True, None
-        user.save()  # Save only after OTP verification
-        logger.info(f"User {email} verified successfully.")
-
-        # Create Doctor profile if the user is a doctor
-        if user.role == "Doctor":
+            # **Ensure Doctor profile is created**
             self.create_doctor_profile(user)
 
-        # Generate and return JWT tokens
-        tokens = get_tokens_for_user(user)
-        logger.info(f"OTP verification successful for {email}. Tokens generated.")
+            # Generate JWT tokens after OTP verification
+            tokens = get_tokens_for_user(user)
+            logger.info(f"OTP verification successful for {email}. Tokens generated.")
 
-        return Response({"message": "OTP verified successfully!", "tokens": tokens}, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "message": "OTP verified successfully!",
+                    "tokens": tokens,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        logger.error(f"OTP verification failed. Errors: {serializer.errors}")
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def create_doctor_profile(self, user):
-        try:
-            doctor, created = Doctor.objects.get_or_create(user=user)
-            if created:
-                doctor.is_verified = True
-                doctor.save()
-                logger.info(f"Doctor profile created for user {user.email}.")
-            else:
-                logger.info(f"Doctor profile already exists for user {user.email}.")
-        except Exception as e:
-            logger.error(f"Error creating Doctor profile for user {user.email}: {str(e)}")
-            raise Exception("Error creating Doctor profile.")
-
+        if user.role == "Doctor":
+            logger.info(f"User {user.email} is a doctor. Attempting to create Doctor profile...")
+            try:
+                doctor, created = Doctor.objects.get_or_create(user=user)
+                if created:
+                    doctor.is_verified = True  # Mark doctor as verified after OTP verification
+                    doctor.save()
+                    logger.info(f"Doctor profile created for user {user.email}.")
+                else:
+                    logger.info(f"Doctor profile already exists for user {user.email}.")
+            except Exception as e:
+                logger.error(f"Error creating Doctor profile for user {user.email}: {str(e)}")
+                return Response({"message": "Error creating Doctor profile."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            logger.info(f"User {user.email} is not a doctor, skipping Doctor profile creation.")
 
 class SignInView(APIView):
     """
