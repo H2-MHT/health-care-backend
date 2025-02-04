@@ -28,7 +28,11 @@ from .serializers import (
     UserProfileSerializer,
 )
 import logging
+# from doctors.models import LoginHistory
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+logger = logging.getLogger(__name__)
 
 def get_tokens_for_user(user):
     """
@@ -109,7 +113,7 @@ class SignUpView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-logger = logging.getLogger(__name__)
+
 
 class OTPVerificationView(APIView):
     """
@@ -118,8 +122,8 @@ class OTPVerificationView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            logger.debug(f"Raw Request Body: {request}")
-            logger.debug(f"Raw Request Body: {request.body}")
+            logger.info(f"Raw Request Body: {request}")
+            logger.info(f"Raw Request Body: {request.body}")
             logger.info("Received OTP verification request.")
             logger.debug(f"Request Data: {request.data}")  # Log request data for debugging
             logger.debug(f"Raw Request Data Before Serializer: {request.data}")
