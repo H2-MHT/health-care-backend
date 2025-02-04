@@ -139,16 +139,6 @@ class OTPVerificationView(APIView):
                 logger.warning(f"Invalid OTP for user {email}.")
                 return Response({"message": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # OTP expiration check
-            if user.otp_created_at:
-                time_elapsed = (timezone.now() - user.otp_created_at).total_seconds()
-                if time_elapsed > 300:
-                    logger.warning(f"OTP expired for user {email}. Elapsed time: {time_elapsed} seconds.")
-                    return Response({"message": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                logger.error(f"OTP timestamp missing for user {email}.")
-                return Response({"message": "OTP timestamp missing. Please request a new OTP."}, status=status.HTTP_400_BAD_REQUEST)
-
             # OTP is valid, mark user as verified
             user.is_verified = True
             user.otp = None  # Clear OTP after verification
