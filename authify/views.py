@@ -117,9 +117,16 @@ class OTPVerificationView(APIView):
     """
 
     def post(self, request, *args, **kwargs):
-        logger.info("Received OTP verification request.")
-        logger.debug(f"Request Data: {request.data}")  # Log request data for debugging
-
+        try:
+            logger.debug(f"Raw Request Body: {request}")
+            logger.debug(f"Raw Request Body: {request.body}")
+            logger.info("Received OTP verification request.")
+            logger.debug(f"Request Data: {request.data}")  # Log request data for debugging
+            logger.debug(f"Raw Request Data Before Serializer: {request.data}")
+            logger.debug(f"Request Data: {request.__dict__}")
+        except Exception as e:
+            logger.error(f"Error during logging request data: {str(e)}")
+        
         serializer = OTPVerificationSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data["email"]
