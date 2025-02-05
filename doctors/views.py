@@ -306,12 +306,10 @@ class ConsultationSettingsAPIView(APIView):
 
 
 # Function to get current time in a given timezone
-def get_time_in_timezone(timezone_str):
-    try:
-        timezone = pytz.timezone(timezone_str)
-        return datetime.now(timezone).strftime('%Y-%m-%d %H:%M:%S')
-    except pytz.UnknownTimeZoneError:
-        return "Invalid timezone"
+def get_time_in_timezone(timezone):
+    """Get the current time in the specified timezone."""
+    tz = pytz.timezone(timezone)
+    return datetime.now(tz).isoformat()
 
 class UserPreferenceView(APIView):
     permission_classes = [IsAuthenticated]
@@ -320,107 +318,57 @@ class UserPreferenceView(APIView):
         # Get or create user preference
         preference, _ = UserPreference.objects.get_or_create(user=request.user)
 
-        # Get timezone from user preference (default to UTC if not set)
-        user_timezone = preference.timezone if preference.timezone else 'UTC'
+        # Convert stored language string to a list
+        user_languages = preference.language.split(",") if preference.language else ["en"]
+
+        # Get timezone
+        user_timezone = "UTC" if preference.use_system_timezone else preference.timezone
 
         # Get current time in user’s timezone
         current_time = get_time_in_timezone(user_timezone)
 
-        # Serialize user preference data
-        serializer = UserPreferenceSerializer(preference)
-
-        # Return response with current time
         return Response({
-            'user_preference': serializer.data,
-            'current_time': current_time,
-            'timezone': user_timezone
+            "message": "Data fetched successfully.",
+            "user_preference": {
+                "timezone": user_timezone,
+                "languages": user_languages,
+                "use_system_timezone": preference.use_system_timezone,
+                "use_system_language": preference.use_system_language,
+                "current_time": current_time
+            }
         })
 
     def post(self, request):
         # Get or create user preference
         preference, _ = UserPreference.objects.get_or_create(user=request.user)
 
-        # Update user preference with new data
-        serializer = UserPreferenceSerializer(preference, data=request.data, partial=True)
+        timezone = request.data.get("timezone")
+        languages = request.data.get("languages")  # list
+        use_system_timezone = request.data.get("use_system_timezone")
+        use_system_language = request.data.get("use_system_language")
 
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
-
-
-class UserPreferenceView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        # Get or create user preference
-        preference, _ = UserPreference.objects.get_or_create(user=request.user)
-
-        # Get timezone and language from user preference
-        if preference.use_system_timezone:
-            user_timezone = 'UTC'
-        else:
-            user_timezone = preference.timezone
-
-        if preference.use_system_language:
-            user_language = 'en'
-        else:
-            user_language = preference.language
-
-        # Set the language dynamically based on user preference
-        if isinstance(user_language, str):
-            translation.activate(user_language)
-
-        # Get current time in user’s timezone
-        current_time = get_time_in_timezone(user_timezone)
-
-        # Serialize user preference data
-        serializer = UserPreferenceSerializer(preference)
-
-        # Return response with current time
-        return Response({
-            'user_preference': serializer.data,
-            'current_time': current_time,
-            'timezone': user_timezone,
-            'language': user_language,
-            'message': gettext("Time fetched successfully.")  # Example of a translatable message
-        })
-
-    def post(self, request):
-        # Get or create user preference
-        preference, _ = UserPreference.objects.get_or_create(user=request.user)
-
-        # Get the data from the request to update the timezone and language
-        timezone = request.data.get('timezone')
-        language = request.data.get('language')
-        use_system_timezone = request.data.get('use_system_timezone')
-        use_system_language = request.data.get('use_system_language')
-
-        # Update the user preference with new data
+        # Update preference
         if timezone is not None:
             preference.timezone = timezone
-        if language is not None:
-            preference.language = language
+        if languages is not None:
+            if isinstance(languages, list):
+                preference.language = ",".join(languages)
         if use_system_timezone is not None:
             preference.use_system_timezone = use_system_timezone
         if use_system_language is not None:
             preference.use_system_language = use_system_language
 
-        # Save updated preference
+        # Save changes
         preference.save()
-
-        # Set the language dynamically if it has been updated
-        if language and isinstance(language, str):
-            translation.activate(language)
-
-        # Serialize user preference data
-        serializer = UserPreferenceSerializer(preference)
-
         return Response({
-            'message': gettext("Preference updated successfully."),
-            'data': serializer.data
+            "message": "Data updated successfully.",
+            "user_preference": {
+                "timezone": preference.timezone,
+                "languages": languages if languages else preference.language.split(","),
+                "use_system_timezone": preference.use_system_timezone,
+                "use_system_language": preference.use_system_language
+            }
         })
-        
         
 
 class ReschedulePolicyView(APIView):
