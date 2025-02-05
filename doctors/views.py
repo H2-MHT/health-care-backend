@@ -448,13 +448,25 @@ class CancellationPolicyView(APIView):
     def post(self, request, *args, **kwargs):
         existing_policy = CancellationPolicy.objects.filter(doctor=request.user).first()
         if existing_policy:
+            # If policy exists, update it without creating new one
+            serializer = CancellationPolicySerializer(
+                existing_policy, data=request.data, context={'request': request}, partial=True
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"message": "Cancellation policy updated successfully.", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
             return Response(
-                {"detail": "A cancellation policy already exists for this doctor."},
+                {"detail": "Invalid data.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Create a new policy if not exists
         serializer = CancellationPolicySerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save(doctor=request.user)  # Ensure the doctor is set explicitly
+            serializer.save(doctor=request.user)
             return Response(
                 {"message": "Cancellation policy created successfully.", "data": serializer.data},
                 status=status.HTTP_201_CREATED
@@ -463,27 +475,6 @@ class CancellationPolicyView(APIView):
             {"detail": "Invalid data.", "errors": serializer.errors},
             status=status.HTTP_400_BAD_REQUEST
         )
-
-    def put(self, request, *args, **kwargs):
-        try:
-            policy = CancellationPolicy.objects.get(doctor=request.user)
-        except CancellationPolicy.DoesNotExist:
-            raise NotFound("Cancellation policy not found.")
-        
-        serializer = CancellationPolicySerializer(policy, data=request.data, context={'request': request}, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, *args, **kwargs):
-        try:
-            policy = CancellationPolicy.objects.get(doctor=request.user)
-        except CancellationPolicy.DoesNotExist:
-            raise NotFound("Cancellation policy not found.")
-        
-        policy.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NoShowPolicyAPIView(APIView):
