@@ -425,34 +425,35 @@ class UserPreferenceView(APIView):
 
 class ReschedulePolicyView(APIView):
     """API to create or update a Reschedule Policy for each day."""
+    
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Update an existing entry if the day exists, or create a new."""
+        """Update an existing data or create a new one."""
         data = request.data
         user = request.user
-
         reschedule_day = data.get('reschedule_days')
-
-        # Validate the day
         valid_days = [choice[0] for choice in ReschedulePolicy.DAYS_CHOICES]
         if reschedule_day not in valid_days:
             return Response(
                 {"error": "Invalid day format. Use 'Mon', 'Tue', etc."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Check if an entry for the same user and day exists
         existing_policy = ReschedulePolicy.objects.filter(user=user, reschedule_days=reschedule_day).first()
-
         if existing_policy:
-            # Update entry
+            # Updat data for existing entry
             existing_policy.allow_reschedule = data.get('allow_reschedule', existing_policy.allow_reschedule)
             existing_policy.max_reschedules = data.get('max_reschedules', existing_policy.max_reschedules)
             existing_policy.reschedule_time_range = data.get('reschedule_time_range', existing_policy.reschedule_time_range)
             existing_policy.save()
-            return Response(ReschedulePolicySerializer(existing_policy).data, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "message": f"Reschedule policy for {reschedule_day} updated successfully.",
+                    "data": ReschedulePolicySerializer(existing_policy).data
+                },
+                status=status.HTTP_200_OK
+            )
         else:
-            # Create a new entry if it doesn't exist
             policy = ReschedulePolicy.objects.create(
                 user=user,
                 allow_reschedule=data.get('allow_reschedule', True),
@@ -460,14 +461,27 @@ class ReschedulePolicyView(APIView):
                 reschedule_days=reschedule_day,
                 reschedule_time_range=data.get('reschedule_time_range'),
             )
-            return Response(ReschedulePolicySerializer(policy).data, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    "message": f"Reschedule policy for {reschedule_day} created successfully.",
+                    "data": ReschedulePolicySerializer(policy).data
+                },
+                status=status.HTTP_201_CREATED
+            )
 
     def get(self, request):
-        """GET all reschedule policies for the logged-in user."""
+        """Fetch all reschedule policies for the logged-in user."""
         user = request.user
         policies = ReschedulePolicy.objects.filter(user=user)
         serializer = ReschedulePolicySerializer(policies, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "message": "Reschedule policies fetched successfully.",
+                "data": serializer.data
+            },
+            status=status.HTTP_200_OK
+        )
+
     
     
     
