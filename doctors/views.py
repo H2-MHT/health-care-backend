@@ -423,51 +423,52 @@ class UserPreferenceView(APIView):
         
         
 
-class AllowRescheduleView(APIView):
-    permission_classes = [IsAuthenticated]
+class ReschedulePolicyView(APIView):
+    """API to create or update a Reschedule Policy for each day."""
 
     def post(self, request):
-        # Get or create the ReschedulePolicy for the user
-        policy, created = ReschedulePolicy.objects.get_or_create(user=request.user)
+        """Update an existing entry if the day exists, or create a new."""
+        data = request.data
+        user = request.user
 
-        # Get the "allow_reschedule" value from the request body
-        allow_reschedule = request.data.get("allow_reschedule", False)
+        reschedule_day = data.get('reschedule_days')
 
-        # Set the "allow_reschedule" value from the request body
-        policy.allow_reschedule = allow_reschedule
-        policy.save()
+        # Validate the day
+        valid_days = [choice[0] for choice in ReschedulePolicy.DAYS_CHOICES]
+        if reschedule_day not in valid_days:
+            return Response(
+                {"error": "Invalid day format. Use 'Mon', 'Tue', etc."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Return success response
-        return Response({"message": "Rescheduling setting updated."}, status=status.HTTP_200_OK)
+        # Check if an entry for the same user and day exists
+        existing_policy = ReschedulePolicy.objects.filter(user=user, reschedule_days=reschedule_day).first()
+
+        if existing_policy:
+            # Update entry
+            existing_policy.allow_reschedule = data.get('allow_reschedule', existing_policy.allow_reschedule)
+            existing_policy.max_reschedules = data.get('max_reschedules', existing_policy.max_reschedules)
+            existing_policy.reschedule_time_range = data.get('reschedule_time_range', existing_policy.reschedule_time_range)
+            existing_policy.save()
+            return Response(ReschedulePolicySerializer(existing_policy).data, status=status.HTTP_200_OK)
+        else:
+            # Create a new entry if it doesn't exist
+            policy = ReschedulePolicy.objects.create(
+                user=user,
+                allow_reschedule=data.get('allow_reschedule', True),
+                max_reschedules=data.get('max_reschedules'),
+                reschedule_days=reschedule_day,
+                reschedule_time_range=data.get('reschedule_time_range'),
+            )
+            return Response(ReschedulePolicySerializer(policy).data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        """GET all reschedule policies for the logged-in user."""
+        user = request.user
+        policies = ReschedulePolicy.objects.filter(user=user)
+        serializer = ReschedulePolicySerializer(policies, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
-class UpdateReschedulePolicyView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self, user):
-        try:
-            return ReschedulePolicy.objects.get(user=user)
-        except ReschedulePolicy.DoesNotExist:
-            return None
-
-    def post(self, request):
-        # Get the user's reschedule policy
-        policy = self.get_object(request.user)
-
-        if policy is None:
-            return Response({"error": "Policy does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Check if rescheduling is allowed for the user
-        if not policy.allow_reschedule:
-            return Response({"error": "You are not allowed to update the reschedule policy."}, status=status.HTTP_403_FORBIDDEN)
-
-        # Proceed to update the reschedule policy
-        serializer = ReschedulePolicySerializer(policy, data=request.data, partial=True)
-        
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
 class CancellationPolicyView(APIView):

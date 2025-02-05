@@ -7,8 +7,7 @@ from .views import (
     InviteUserView,
     ConsultationSettingsAPIView,
     UserPreferenceView,
-    UpdateReschedulePolicyView,
-    AllowRescheduleView,
+    ReschedulePolicyView,
     CancellationPolicyView,
     NoShowPolicyAPIView,
     CommunicationPreferencesAPIView,
@@ -29,8 +28,7 @@ urlpatterns = [
     # appointment management 
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
-    path('allow-reschedule/', AllowRescheduleView.as_view(), name='reschedule-policy-list'),  # GET all, POST
-    path('reschedule-policies/', UpdateReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
+    path('reschedule-policies/', ReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
     path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
     path('no-show-policy/', NoShowPolicyAPIView.as_view(), name='no_show_policy'),
     path('communication-preferences/', CommunicationPreferencesAPIView.as_view(), name='communication-preferences'),

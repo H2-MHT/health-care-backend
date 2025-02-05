@@ -108,11 +108,23 @@ class UserPreference(models.Model):
     use_system_language = models.BooleanField(default=True)
     
     
+    
+
 class ReschedulePolicy(models.Model):
+        
+    DAYS_CHOICES = [
+        ('Mon', 'Monday'),
+        ('Tue', 'Tuesday'),
+        ('Wed', 'Wednesday'),
+        ('Thu', 'Thursday'),
+        ('Fri', 'Friday'),
+        ('Sat', 'Saturday'),
+        ('Sun', 'Sunday'),
+    ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     allow_reschedule = models.BooleanField(default=False)
     max_reschedules = models.PositiveIntegerField(null=True, blank=True)
-    reschedule_days = models.PositiveIntegerField(null=True, blank=True)
+    reschedule_days = models.CharField(max_length=50, choices=DAYS_CHOICES)
     reschedule_time_range = models.CharField(max_length=20, null=True, blank=True)
 
     def __str__(self):
