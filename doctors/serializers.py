@@ -79,8 +79,14 @@ class UserPreferenceSerializer(serializers.ModelSerializer):
 class ReschedulePolicySerializer(serializers.ModelSerializer):
     class Meta:
         model = ReschedulePolicy
-        fields = '__all__'
-        
+        fields = ['id', 'user', 'allow_reschedule', 'max_reschedules', 'reschedule_days', 'reschedule_time_range']
+
+    def validate_reschedule_days(self, value):
+        """Ensure the reschedule_days field contains a valid weekday abbreviation (Mon, Tue, etc.)."""
+        valid_days = dict(ReschedulePolicy.DAYS_CHOICES).keys()
+        if value not in valid_days:
+            raise serializers.ValidationError("Invalid day. Choose from Mon, Tue, Wed, Thu, Fri, Sat, Sun.")
+        return value
 
 
 class CancellationPolicySerializer(serializers.ModelSerializer):
@@ -121,3 +127,6 @@ class TwoFactorAuthMethodSerializer(serializers.ModelSerializer):
         model = TwoFactorAuthMethod
         fields = ['user', 'method']
         read_only_fields = ['user']
+        
+        
+        

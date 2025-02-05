@@ -27,8 +27,8 @@ class Appointment(models.Model):
     records = models.TextField(null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
 
-    def __str__(self):
-        return f"Appointment with {self.doctor} on {self.date_time}"
 
+    def __str__(self):
+        return f"Appointment {self.id}"
     def get_status(self):
         return self.status
