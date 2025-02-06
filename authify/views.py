@@ -30,9 +30,8 @@ from .serializers import (
 import logging
 # from doctors.models import LoginHistory
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("authify")
 
-logger = logging.getLogger(__name__)
 
 def get_tokens_for_user(user):
     """
