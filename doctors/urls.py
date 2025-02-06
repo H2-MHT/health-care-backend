@@ -11,7 +11,9 @@ from .views import (
     CancellationPolicyView,
     NoShowPolicyAPIView,
     CommunicationPreferencesAPIView,
-    TwoFactorAuthAPIView,
+    SelectMethodsAPIView,
+    RequestPasswordChangeAPIView,
+    VerifyOTPAndChangePasswordAPIView,
     redeem_invitation,
     )
 
@@ -32,7 +34,10 @@ urlpatterns = [
     path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
     path('no-show-policy/', NoShowPolicyAPIView.as_view(), name='no_show_policy'),
     path('communication-preferences/', CommunicationPreferencesAPIView.as_view(), name='communication-preferences'),
-    path('2fa/', TwoFactorAuthAPIView.as_view(), name='two_factor_auth'),
-
+    
+    # 2FA
+    path('select-methods/', SelectMethodsAPIView.as_view(), name='select_2fa_method'),
+    path('request-password-change/', RequestPasswordChangeAPIView.as_view(), name='request_otp'),
+    path('verify-otp-change-password/', VerifyOTPAndChangePasswordAPIView.as_view(), name='verify_otp_change_password'),
 
 ]

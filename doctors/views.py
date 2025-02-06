@@ -9,6 +9,8 @@ from .serializers import DoctorNotesSerializer
 from .models import DoctorNotes, Invitation
 from users.serializers import UserSerializer
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 from .models import (
     Referral,
@@ -20,27 +22,28 @@ from .models import (
     CancellationPolicy,
     NoShowPolicy,
     CommunicationPreferences,
-    TwoFactorAuthMethod
+    TwoFactorAuthentication,
 )
 from .serializers import(
     ReferralSerializer,
     AppointmentManagementSerializer,
     ReschedulePolicySerializer,
     ConsultationSettingsSerializer,
-    UserPreferenceSerializer,
     CancellationPolicySerializer,
     NoShowPolicySerializer,
     CommunicationPreferencesSerializer,
-    TwoFactorAuthMethodSerializer
-    
 )
 from django.utils.crypto import get_random_string
 import pytz
 from datetime import datetime
-from django.utils import translation
+from django.contrib.auth.hashers import check_password
+import random
+from django.conf import settings
+import sendgrid
+
 from django.utils.translation import gettext
-from django.utils import translation
 from rest_framework.exceptions import NotFound
+from django.contrib.auth.hashers import make_password
 
 from rest_framework.decorators import api_view
 
@@ -532,35 +535,129 @@ class CommunicationPreferencesAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class TwoFactorAuthAPIView(APIView):
+class SelectMethodsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Retrieve the 2FA method for the current logged-in user."""
-        try:
-            two_factor = TwoFactorAuthMethod.objects.get(user=request.user)
-        except TwoFactorAuthMethod.DoesNotExist:
-            return Response({"message": "No 2FA method set"}, status=status.HTTP_404_NOT_FOUND)
-        
-        serializer = TwoFactorAuthMethodSerializer(two_factor)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        """Retrieve all selected 2FA methods for the current user."""
+        user = request.user
+        print(f"Authenticated user: {user.username}, ID: {user.id}")
+
+        # Get all stored 2FA methods for the user
+        two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
+        methods = [method.method for method in two_factor_methods]
+
+        print(f"Methods for {user.username}: {methods}")
+
+        return Response({"methods": methods}, status=status.HTTP_200_OK)
 
     def post(self, request):
-        """Create or update the 2FA method for the current logged-in user."""
+        """Add new 2FA methods."""
         user = request.user
+        selected_methods = request.data.get("methods", ["email"])  # Default: email
 
+        # Ensure input is a list
+        if not isinstance(selected_methods, list):
+            return Response({"error": "Methods should be a list"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Convert list to a set for efficiency
+        selected_methods_set = set(selected_methods)
+
+        # Get all existing methods in DB for the user
+        existing_methods_set = set(TwoFactorAuthentication.objects.filter(user=user).values_list('method', flat=True))
+
+        # Find methods to add (new selections not already in DB)
+        methods_to_add = selected_methods_set - existing_methods_set
+
+        # Add new methods
+        TwoFactorAuthentication.objects.bulk_create([
+            TwoFactorAuthentication(user=user, method=method) for method in methods_to_add
+        ])
+
+        return Response({"message": "Authentication methods updated successfully"}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        """Delete a specific 2FA method."""
+        user = request.user
+        method_to_delete = request.data.get("method")
+
+        if not method_to_delete:
+            return Response({"error": "No method provided to delete"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure the method is valid
+        if method_to_delete not in ['email', 'sms', 'whatsapp']:
+            return Response({"error": "Invalid method"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the user has the method
+        two_factor_record = TwoFactorAuthentication.objects.filter(user=user, method=method_to_delete).first()
+
+        if not two_factor_record:
+            return Response({"error": "This method is not linked to the user"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Delete the specific method
+        two_factor_record.delete()
+
+        return Response({"message": f"Method '{method_to_delete}' deleted successfully"}, status=status.HTTP_200_OK)
+def send_otp(user, methods):
+    otp = str(random.randint(100000, 999999))
+    user.otp = otp
+    user.save()
+
+    # Send OTP via SendGrid email
+    if "email" in methods:
+        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+        # From email
+        from_email = Email("akash.prajapati@techqware.com")
+        # user's email
+        to_email = To(user.email)  # Get email from logged-in user
+        subject = "Password Change OTP"
+        content = Content("text/plain", f"Your OTP for password change is: {otp}")
+        mail = Mail(from_email, to_email, subject, content)
         try:
-            #  update an existing record
-            two_factor = TwoFactorAuthMethod.objects.get(user=user)
-            serializer = TwoFactorAuthMethodSerializer(two_factor, data=request.data, partial=True)
-        except TwoFactorAuthMethod.DoesNotExist:
-            # Create a new record without needing to pass user in the data
-            serializer = TwoFactorAuthMethodSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            serializer.save(user=user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            response = sg.send(mail)
+            print(f"Email sent to {user.email} with status code {response.status_code}")
+        except Exception as e:
+            print(f"Error sending email: {e}")
+    return otp
+
+class RequestPasswordChangeAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        user = request.user  # Extract the current logged-in user
+        print(user, "-----------------------------------")
+        current_password = request.data.get("current_password")
+        new_password = request.data.get("new_password")
+        confirm_new_password = request.data.get("confirm_new_password")
+        selected_methods = request.data.get("methods", ["email"])  # Default email
+        if not check_password(current_password, user.password):
+            return Response({"error": "Incorrect current password"}, status=status.HTTP_400_BAD_REQUEST)
+        if new_password != confirm_new_password:
+            return Response({"error": "New passwords do not match"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Password validation minimum 8 characters
+        if len(new_password) < 8:
+            return Response({"error": "Password must be at least 8 characters long"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Send OTP to the selected methods (currently only email)
+        send_otp(user, selected_methods)
+        return Response({"message": "OTP sent successfully to selected methods"}, status=status.HTTP_200_OK)
     
     
-    
+class VerifyOTPAndChangePasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        entered_otp = request.data.get("otp")
+        new_password = request.data.get("new_password")
+
+        # Verify OTP
+        if user.otp != entered_otp:
+            return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update the password
+        user.password = make_password(new_password)
+        user.otp = None  # Clear OTP after successful verification
+        user.save()
+
+        return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
