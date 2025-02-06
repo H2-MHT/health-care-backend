@@ -3,7 +3,7 @@ from  users.models import User
 import random
 import string
 from django.contrib.auth import get_user_model
-
+import datetime
 # Create your models here.
 
 
@@ -171,14 +171,15 @@ class CommunicationPreferences(models.Model):
     
     
 
-class TwoFactorAuthMethod(models.Model):
+class TwoFactorAuthentication(models.Model):
     METHOD_CHOICES = [
-        ('email', 'E-mail verification'),
-        ('security_question', 'Security question'),
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+        ('whatsapp', 'WhatsApp'),
     ]
     
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    method = models.CharField(max_length=50, choices=METHOD_CHOICES)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default='email')
 
     def __str__(self):
-        return f"{self.user.username} - {self.get_method_display()}"
+        return f"{self.user.first_name} - {self.method}"
