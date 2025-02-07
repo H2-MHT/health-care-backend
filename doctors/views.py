@@ -934,106 +934,58 @@ class CommunicationPreferencesAPIView(APIView):
 class SelectMethodsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        """Retrieve all selected 2FA methods for the current user."""
-        user = request.user
-        logger.info(f"Authenticated user: {user.username}, ID: {user.id}")
-
-        two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
-        methods = [method.method for method in two_factor_methods]
-
-        logger.info(f"Methods for {user.username}: {methods}")
-
-        return Response({"methods": methods}, status=status.HTTP_200_OK)
-
     def post(self, request):
-        """Add new 2FA methods."""
+        """User selects 2FA methods (email, SMS, WhatsApp)."""
         user = request.user
         selected_methods = request.data.get("methods", ["email"])  # Default: email
 
         if not isinstance(selected_methods, list):
-            return Response(
-                {"error": "Methods should be a list"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "Methods should be a list"}, status=status.HTTP_400_BAD_REQUEST)
 
-        selected_methods_set = set(selected_methods)
-        existing_methods_set = set(
-            TwoFactorAuthentication.objects.filter(user=user).values_list(
-                "method", flat=True
-            )
-        )
-        methods_to_add = selected_methods_set - existing_methods_set
+        valid_methods = {"email", "sms", "whatsapp"}
+        if not set(selected_methods).issubset(valid_methods):
+            return Response({"error": "Invalid method selected"}, status=status.HTTP_400_BAD_REQUEST)
 
-        TwoFactorAuthentication.objects.bulk_create(
-            [
-                TwoFactorAuthentication(user=user, method=method)
-                for method in methods_to_add
-            ]
-        )
+        # Save selected methods
+        TwoFactorAuthentication.objects.filter(user=user).delete()  # Remove old methods
+        TwoFactorAuthentication.objects.bulk_create([
+            TwoFactorAuthentication(user=user, method=method) for method in selected_methods
+        ])
 
-        logger.info(f"User {user.username} added 2FA methods: {methods_to_add}")
-        return Response(
-            {"message": "Authentication methods updated successfully"},
-            status=status.HTTP_200_OK,
-        )
-
-    def delete(self, request):
-        """Delete a specific 2FA method."""
+        logger.info(f"User {user.email} selected 2FA methods: {selected_methods}")
+        return Response({"message": "2FA methods updated successfully"}, status=status.HTTP_200_OK)
+    
+    def get(self, request):
+        """Retrieve all selected 2FA methods for the current user."""
         user = request.user
-        method_to_delete = request.data.get("method")
-
-        if not method_to_delete:
-            return Response(
-                {"error": "No method provided to delete"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if method_to_delete not in ["email", "sms", "whatsapp"]:
-            return Response(
-                {"error": "Invalid method"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        two_factor_record = TwoFactorAuthentication.objects.filter(
-            user=user, method=method_to_delete
-        ).first()
-
-        if not two_factor_record:
-            return Response(
-                {"error": "This method is not linked to the user"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        two_factor_record.delete()
-        logger.info(f"User {user.username} deleted 2FA method: {method_to_delete}")
-        return Response(
-            {"message": f"Method '{method_to_delete}' deleted successfully"},
-            status=status.HTTP_200_OK,
-        )
+        logger.info(f"Authenticated user: {user.email}, ID: {user.id}")
+        two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
+        methods = [method.method for method in two_factor_methods]
+        logger.info(f"Selected 2FA methods for {user.email}: {methods}")
+        return Response({"methods": methods}, status=status.HTTP_200_OK)
 
 
-def send_otp(user, methods):
+def send_otp(user):
     otp = str(random.randint(100000, 999999))
     user.otp = otp
     user.save()
 
-    if "email" in methods:
-        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
-        from_email = Email("akash.prajapati@techqware.com")
-        to_email = To(user.email)
-        subject = "Password Change OTP"
-        content = Content("text/plain", f"Your OTP for password change is: {otp}")
-        mail = Mail(from_email, to_email, subject, content)
+    sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+    from_email = Email("akash.prajapati@techqware.com")  # Update with your sender email
+    to_email = To(user.email)
+    subject = "Your OTP for Password Change"
+    content = Content("text/plain", f"Your OTP for password change is: {otp}")
+    mail = Mail(from_email, to_email, subject, content)
 
-        try:
-            response = sg.send(mail)
-            logger.info(
-                f"Email sent to {user.email} with status code {response.status_code}"
-            )
-        except Exception as e:
-            logger.error(f"Error sending email: {e}")
+    try:
+        response = sg.send(mail)
+        logger.info(f"Email sent to {user.email} with status code {response.status_code}")
+    except Exception as e:
+        logger.error(f"Error sending email: {e}")
 
     return otp
+
+
 
 
 class RequestPasswordChangeAPIView(APIView):
@@ -1041,42 +993,18 @@ class RequestPasswordChangeAPIView(APIView):
 
     def post(self, request):
         user = request.user
-        logger.info(f"Password change requested by user: {user.username}")
-
         current_password = request.data.get("current_password")
         new_password = request.data.get("new_password")
-        confirm_new_password = request.data.get("confirm_new_password")
-        selected_methods = request.data.get("methods", ["email"])  # Default email
 
         if not check_password(current_password, user.password):
-            logger.warning(
-                f"Incorrect current password attempt for user: {user.username}"
-            )
-            return Response(
-                {"error": "Incorrect current password"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": "Incorrect current password"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if new_password != confirm_new_password:
-            return Response(
-                {"error": "New passwords do not match"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Store new password in session
+        request.session["temp_password"] = new_password
 
-        if len(new_password) < 8:
-            return Response(
-                {"error": "Password must be at least 8 characters long"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Send OTP to the selected methods
-        send_otp(user, selected_methods)
-        logger.info(f"OTP sent to user {user.username} via {selected_methods}")
-
-        return Response(
-            {"message": "OTP sent successfully to selected methods"},
-            status=status.HTTP_200_OK,
-        )
+        # Send OTP via email
+        send_otp(user)
+        return Response({"message": "OTP sent successfully to your email"}, status=status.HTTP_200_OK)
 
 
 class VerifyOTPAndChangePasswordAPIView(APIView):
@@ -1085,20 +1013,26 @@ class VerifyOTPAndChangePasswordAPIView(APIView):
     def post(self, request):
         user = request.user
         entered_otp = request.data.get("otp")
-        new_password = request.data.get("new_password")
 
         if user.otp != entered_otp:
-            logger.warning(f"Invalid OTP attempt for user: {user.username}")
-            return Response(
-                {"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Retrieve password from session
+        new_password = request.session.get("temp_password")
+
+        if not new_password:
+            return Response({"error": "No new password found. Please restart the process."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update password
         user.password = make_password(new_password)
-        user.otp = None  # Clear OTP after successful verification
+        user.otp = None  # Clear OTP
         user.save()
-        logger.info(f"Password changed successfully for user: {user.username}")
+
+        # Clear stored session data
+        request.session.pop("temp_password", None)
 
         return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
+
 
 
 class UserMembershipAPIView(APIView):
