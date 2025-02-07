@@ -20,7 +20,7 @@ jobs:
             - checkout: self 
               workspaceRepo:  true
             -  script: |
-                  mv $(Build.SourcesDirectory)/s/*  /home/azureuser/testing/
+                  mv $(Build.SourcesDirectory)/*  /home/azureuser/testing/
           deploy:
             steps:
             - task: Bash@3
