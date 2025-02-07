@@ -9,7 +9,8 @@ from .models import (
     CancellationPolicy,
     NoShowPolicy,
     CommunicationPreferences,
-    TwoFactorAuthentication,
+    UserMembership,
+    MembershipPlan,
 )
 from datetime import datetime, timedelta
 from django.contrib.auth.hashers import check_password
@@ -146,4 +147,39 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
 
     
     
-    
+class MembershipPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MembershipPlan
+        fields = ['key', 'name', 'description', 'features']
+
+class UserMembershipSerializer(serializers.ModelSerializer):
+    plan = MembershipPlanSerializer(read_only=True)  # Readable plan details
+    plan_key = serializers.CharField(write_only=True)  # Accepts "basic" or "premium"
+
+    class Meta:
+        model = UserMembership
+        fields = ['user', 'plan', 'plan_key']
+
+    def create(self, validated_data):
+        user = validated_data['user']
+        plan_key = validated_data.get('plan_key', 'basic')  # Default to Basic
+
+        plan = MembershipPlan.objects.filter(key=plan_key).first()
+        if not plan:
+            raise serializers.ValidationError({"error": "Invalid plan selection"})
+
+        membership, _ = UserMembership.objects.get_or_create(user=user, defaults={'plan': plan})
+        return membership
+
+    def update(self, instance, validated_data):
+        plan_key = validated_data.get('plan_key')
+
+        if plan_key:
+            plan = MembershipPlan.objects.filter(key=plan_key).first()
+            if not plan:
+                raise serializers.ValidationError({"error": "Invalid plan selection"})
+
+            instance.plan = plan
+            instance.save()
+
+        return instance
