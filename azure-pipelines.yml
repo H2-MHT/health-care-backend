@@ -27,8 +27,9 @@ jobs:
               inputs:
                 targetType: 'inline'
                 script: |
-                  cd /home/azureuser/testing/s/
+                  cd /home/azureuser/testing/
                   python3 -m venv venv
                   source venv/bin/activate
                   pip3 install -r requirements.txt
               displayName: 'Install dependencies'
+            
