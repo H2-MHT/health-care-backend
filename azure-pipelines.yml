@@ -41,7 +41,7 @@ jobs:
                 targetType: 'inline'
                 workingDirectory: /home/azureuser/testing/
                 script: |
-                    python manage.py makemigrations
-                    python manage.py migrate
+                    python3 manage.py makemigrations
+                    python3 manage.py migrate
               displayName: 'Run Migration scripts'
             
