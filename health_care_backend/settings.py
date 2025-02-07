@@ -200,7 +200,7 @@ SIMPLE_JWT = {
 }
 
 # Implementing Logfile settings
-BASE_LOG_DIR = os.path.join(BASE_DIR, 'Application_logs')
+BASE_LOG_DIR = os.path.join(BASE_DIR, 'logs')
 
 if not os.path.exists(BASE_LOG_DIR):
     os.makedirs(BASE_LOG_DIR)
@@ -326,7 +326,6 @@ LOGGING = {
         'users': {
             'handlers': ['users'],
             'level': 'DEBUG',
-            'propagate': False,
-        },
+            'propagate': False,        },
     },
 }
