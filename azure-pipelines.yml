@@ -39,12 +39,10 @@ jobs:
       
   # Job 2: Deployment to Virtual Machine
   - deployment: DeployToVM
-    displayName: web
     environment:
       name: 'staging' 
       resourceType: VirtualMachine
-      resourceName: 'Healthcare-backend' 
-      tags: 'Healthcare-backend'
+      resourceName: 'Healthcare-backend'
     strategy:
         runOnce:
           preDeploy:
