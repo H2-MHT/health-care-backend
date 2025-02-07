@@ -9,6 +9,8 @@ pool:
 jobs:
   - deployment: DeployToVM
     displayName: web
+    workspace:
+      clean: all
     environment:
       name: 'staging' 
       resourceType: VirtualMachine
@@ -20,6 +22,7 @@ jobs:
             - checkout: self 
               workspaceRepo:  true
             -  script: |
+                  rm -rf /home/azureuser/testing/*
                   mv $(Build.SourcesDirectory)/*  /home/azureuser/testing/
           deploy:
             steps:
