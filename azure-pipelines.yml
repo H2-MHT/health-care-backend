@@ -39,6 +39,7 @@ jobs:
       
   # Job 2: Deployment to Virtual Machine
   - deployment: DeployToVM
+    dependsOn:  BuildAndDeploy
     environment:
       name: 'staging' 
       resourceType: VirtualMachine
