@@ -7,67 +7,27 @@ pool:
   vmImage: 'ubuntu-latest'
 
 jobs:
-  # Job 1: Build and Install Dependencies
-  - job: BuildAndDeploy
-    steps:
-      # Step 1: Checkout code
-      - checkout: self
-      
-      # Step 2: Set up Python
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '3.x'
-          addToPath: true
-      - task: Cache@2
-        inputs:
-            key: 'pip | "$(Agent.OS)" | requirements.txt'
-            restoreKeys: |
-              pip | "$(Agent.OS)"
-            path: $(Pipeline.Workspace)/.pip
-        displayName: Cache pip
-
-      # Step 3: Install dependencies
-      - script: |
-          python -m venv venv
-          source venv/bin/activate
-          export PIP_NO_BINARY=:all:
-          pip install --upgrade setuptools
-          pip install django gunicorn psycopg2-binary
-          pip install -r requirements.txt
-        displayName: 'Install dependencies'
-      - task: ArchiveFiles@2
-        displayName: 'Archive files'
-        inputs:
-          rootFolderOrFile: $(System.DefaultWorkingDirectory)
-          includeRootFolder: false
-          archiveType: zip
-          archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-          replaceExistingArchive: true
-
-      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        artifact: drop
-      
-  # Job 2: Deployment to Virtual Machine
   - deployment: DeployToVM
-    dependsOn:  BuildAndDeploy
+    displayName: web
     environment:
       name: 'staging' 
       resourceType: VirtualMachine
-      resourceName: 'Healthcare-backend'
+      resourceName: 'Healthcare-backend' 
+      tags: 'Healthcare-backend'
     strategy:
         runOnce:
           preDeploy:
             steps:
-            - download: current
-              artifact: drop
             - script: |
-                cp $(Pipeline.Workspace)/drop/*.zip  ~/healthcaredir
+                cd /home/azureuser/testing
+            - checkout: self 
           deploy:
             steps:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
                 script: |
-                  cd ~/healthcaredir
-                  # Make migrations, apply them, and restart the server
-                  ls 
+                  python -m venv venv
+                  source venv/bin/activate
+                  pip install -r requirements.txt
+              displayName: 'Install dependencies'
