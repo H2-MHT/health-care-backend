@@ -23,6 +23,7 @@ jobs:
       - script: |
           python -m venv venv
           source venv/bin/activate
+          pip install --upgrade setuptools
           pip install -r requirements.txt
         displayName: 'Install dependencies'
       - task: ArchiveFiles@2
