@@ -934,35 +934,42 @@ class CommunicationPreferencesAPIView(APIView):
 class SelectMethodsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        """Retrieve all selected 2FA methods for the current user."""
+        user = request.user
+        print(f"Authenticated user: {user.username}, ID: {user.id}")
+
+        # Get all stored 2FA methods for the user
+        two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
+        methods = [method.method for method in two_factor_methods]
+
+        print(f"Methods for {user.username}: {methods}")
+
+        return Response({"methods": methods}, status=status.HTTP_200_OK)
+
     def post(self, request):
-        """User selects 2FA methods (email, SMS, WhatsApp)."""
+        """Add or update 2FA methods while keeping previous selections."""
         user = request.user
         selected_methods = request.data.get("methods", ["email"])  # Default: email
 
+        # Ensure input is a list
         if not isinstance(selected_methods, list):
             return Response({"error": "Methods should be a list"}, status=status.HTTP_400_BAD_REQUEST)
 
         valid_methods = {"email", "sms", "whatsapp"}
         if not set(selected_methods).issubset(valid_methods):
-            return Response({"error": "Invalid method selected"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid methods selected"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Save selected methods
-        TwoFactorAuthentication.objects.filter(user=user).delete()  # Remove old methods
+        # Get existing methods from the database
+        existing_methods = set(TwoFactorAuthentication.objects.filter(user=user).values_list("method", flat=True))
+
+        # Add new methods
+        new_methods = set(selected_methods) - existing_methods
         TwoFactorAuthentication.objects.bulk_create([
-            TwoFactorAuthentication(user=user, method=method) for method in selected_methods
+            TwoFactorAuthentication(user=user, method=method) for method in new_methods
         ])
 
-        logger.info(f"User {user.email} selected 2FA methods: {selected_methods}")
-        return Response({"message": "2FA methods updated successfully"}, status=status.HTTP_200_OK)
-    
-    def get(self, request):
-        """Retrieve all selected 2FA methods for the current user."""
-        user = request.user
-        logger.info(f"Authenticated user: {user.email}, ID: {user.id}")
-        two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
-        methods = [method.method for method in two_factor_methods]
-        logger.info(f"Selected 2FA methods for {user.email}: {methods}")
-        return Response({"methods": methods}, status=status.HTTP_200_OK)
+        return Response({"message": "Authentication methods updated successfully"}, status=status.HTTP_200_OK)
 
 
 def send_otp(user):
