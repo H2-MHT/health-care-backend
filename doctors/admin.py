@@ -10,7 +10,7 @@ from .models import(
     ConsultationSettings,
     NoShowPolicy,
     CommunicationPreferences,
-    TwoFactorAuthMethod,
+    TwoFactorAuthentication,
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -29,4 +29,4 @@ admin.site.register(ReschedulePolicy)
 admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
-admin.site.register(TwoFactorAuthMethod)
+admin.site.register(TwoFactorAuthentication)

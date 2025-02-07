@@ -9,9 +9,12 @@ from .models import (
     CancellationPolicy,
     NoShowPolicy,
     CommunicationPreferences,
-    TwoFactorAuthMethod,
+    TwoFactorAuthentication,
 )
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.contrib.auth.hashers import check_password
+from users.models import User
+from django.utils.timezone import now
 
 class DoctorNotesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,11 +125,25 @@ class CommunicationPreferencesSerializer(serializers.ModelSerializer):
         
         
 
-class TwoFactorAuthMethodSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TwoFactorAuthMethod
-        fields = ['user', 'method']
-        read_only_fields = ['user']
-        
-        
-        
+# Serializer for Selecting 2FA Methods
+class PasswordChangeRequestSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not check_password(value, user.password):
+            raise serializers.ValidationError("Incorrect old password.")
+        return value
+
+class PasswordChangeConfirmSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True)
+    otp = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long.")
+        return value
+
+    
+    
+    
