@@ -17,15 +17,16 @@ jobs:
         runOnce:
           preDeploy:
             steps:
-            - script: |
-                cd /home/azureuser/testing
             - checkout: self 
+              path: /home/azureuser/testing
+              workspaceRepo: false
           deploy:
             steps:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
                 script: |
+                  cd /home/azureuser/testing
                   python3 -m venv venv
                   source venv/bin/activate
                   pip3 install -r requirements.txt
