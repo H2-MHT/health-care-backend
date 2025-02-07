@@ -1,6 +1,3 @@
-from datetime import datetime
-
-from django.db.models import Avg, Count
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,6 +12,7 @@ from datetime import timedelta
 from appointments.models import Appointment
 from doctors.models import DoctorNotes
 from doctors.serializers import DoctorNotesSerializer
+from django.utils import timezone
 
 # Create your views here.
 
@@ -56,13 +54,31 @@ class DashboardAPIView(APIView):
                 "patient_id": appointment.patient.id,
                 "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
                 "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
-                "clinic": appointment.clinic.name,
+                "clinic": appointment.clinic.name if appointment.clinic else "N/A",
                 "date_time": appointment.date_time.isoformat(),
                 "status": appointment.status,
             }
             for appointment in appointments
         ]
-        
+
+        # Upcoming Requests (Future Appointments)
+        upcoming_requests = Appointment.objects.filter(
+            doctor=doctor,
+            date_time__gte=timezone.now()  # Future appointments
+        ).select_related("patient__user", "doctor__user", "clinic")[:10]
+
+        upcoming_requests_data = [
+            {
+                "appointment_id": appt.id,
+                "patient_name": f"{appt.patient.user.first_name} {appt.patient.user.last_name}",
+                "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
+                "clinic": appt.clinic.name if appt.clinic else "N/A",
+                "date_time": appt.date_time.isoformat(),
+                "status": appt.status,
+            }
+            for appt in upcoming_requests
+        ]
+
         # Archived and Confirmed Appointments
         archived_appointments = Appointment.objects.filter(doctor=doctor, status="Archived").values(
             "patient__user__first_name",
@@ -143,6 +159,7 @@ class DashboardAPIView(APIView):
             "total_reviews": total_reviews,
             "reviews": reviews_data,
             "appointments": appointments_data,
+            "upcoming_requests": upcoming_requests_data,
             "doctor_notes": doctor_notes_data,
             "patient_diagnoses": diagnoses_data,
             "archived_data": archived_data,
