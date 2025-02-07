@@ -3,7 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 import random
-from datetime import timedelta
+from django.utils.timezone import now
+
 
 class CustomUserManager(BaseUserManager):
     """
@@ -46,6 +47,7 @@ class User(AbstractUser):
     ROLE_CHOICES = [
         ("Patient", "Patient"),
         ("Doctor", "Doctor"),
+        ("Clinic", "Clinic"),
         ("SuperAdmin", "Super Admin"),
     ]
     GENDER_CHOICES = [
@@ -74,6 +76,7 @@ class User(AbstractUser):
     )
     bio = models.TextField(null=True, blank=True)
     otp = models.CharField(max_length=6, null=True, blank=True)
+    temp_password = models.CharField(max_length=128, null=True, blank=True)
 
     # Address Information
     country = models.CharField(max_length=255, null=True, blank=True)
@@ -97,6 +100,7 @@ class User(AbstractUser):
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
+    last_activity = models.DateTimeField(blank=True, null=True)
 
     # Set email as the unique identifier
     USERNAME_FIELD = "email"
@@ -115,6 +119,10 @@ class User(AbstractUser):
 
 def user_fileq(instance, filename):
     return "{0}-{1}".format(instance.type, filename)
+
+def update_activity(self):
+        self.last_activity = now()
+        self.save(update_fields=['last_activity'])
 
 
 class UserFile(models.Model):

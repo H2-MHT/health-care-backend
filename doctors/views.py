@@ -1006,8 +1006,9 @@ class RequestPasswordChangeAPIView(APIView):
         if not check_password(current_password, user.password):
             return Response({"error": "Incorrect current password"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Store new password in session
-        request.session["temp_password"] = new_password
+        # Store new password in the database instead of session
+        user.temp_password = new_password
+        user.save()
 
         # Send OTP via email
         send_otp(user)
@@ -1024,19 +1025,17 @@ class VerifyOTPAndChangePasswordAPIView(APIView):
         if user.otp != entered_otp:
             return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Retrieve password from session
-        new_password = request.session.get("temp_password")
+        # Retrieve new password from the database
+        new_password = user.temp_password
 
         if not new_password:
             return Response({"error": "No new password found. Please restart the process."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Update password
+        # Update the user's password
         user.password = make_password(new_password)
         user.otp = None  # Clear OTP
+        user.temp_password = None  # Clear temp password
         user.save()
-
-        # Clear stored session data
-        request.session.pop("temp_password", None)
 
         return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
 
