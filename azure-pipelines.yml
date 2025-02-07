@@ -22,20 +22,35 @@ jobs:
             - checkout: self 
               workspaceRepo:  true
             -  script: |
-                  rm -rf /home/azureuser/testing/*
-                  mv $(Build.SourcesDirectory)/*  /home/azureuser/testing/
+                  mkdir /home/azureuser/$(Build.BuildId)
+                  mv $(Build.SourcesDirectory)/*  /home/azureuser/$(Build.BuildId)
           deploy:
             steps:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
-                workingDirectory: /home/azureuser/testing/
+                workingDirectory: /home/azureuser/testing
                 script: |
+                    cp .env /home/azureuser/$(Build.BuildId)/
+              displayName: 'copy .env to new folder'
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/$(Build.BuildId)
+                script: |
+                  if [ ! -d "venv" ]; then
+                    python3 -m venv venv
+                  fi
                   python3 -m venv venv
                   source venv/bin/activate
-                  pip3 install -r requirements.txt
-                  python3 manage.py makemigrations
-                  python3 manage.py migrate
                   pip3 install django gunicorn psycopg2-binary
+                  pip3 install -r requirements.txt
+                  python3 manage.py makemigrations 
+                  python3 manage.py migrate
               displayName: 'Install dependencies and Run Migration scripts'
-            
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                script: |
+                  ln -snf /home/azureuser/$(Build.BuildId) /home/azureuser/testing
+              displayName: 'link testing'
