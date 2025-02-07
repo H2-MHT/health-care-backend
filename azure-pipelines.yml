@@ -29,10 +29,19 @@ jobs:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
+                workingDirectory: /home/azureuser/testing/
                 script: |
-                  cd /home/azureuser/testing/
                   python3 -m venv venv
                   source venv/bin/activate
                   pip3 install -r requirements.txt
               displayName: 'Install dependencies'
+            
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/testing/
+                script: |
+                    python manage.py makemigrations
+                    python manage.py migrate
+              displayName: 'Run Migration scripts'
             
