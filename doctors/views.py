@@ -34,14 +34,12 @@ from .models import (
     ReschedulePolicy,
     TwoFactorAuthentication,
     UserPreference,
-    UserMembership,
-    MembershipPlan,
+    Membership,
 )
 from .serializers import (
     AppointmentManagementSerializer,
     CancellationPolicySerializer,
     CommunicationPreferencesSerializer,
-    UserMembershipSerializer,
     DoctorNotesSerializer,
     ReferralSerializer,
     NoShowPolicySerializer,
@@ -1040,52 +1038,33 @@ class VerifyOTPAndChangePasswordAPIView(APIView):
         return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
 
 
-
-class UserMembershipAPIView(APIView):
+class MembershipAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Retrieve the user's membership plan."""
+        """Retrieve current user's membership plan (Requires authentication)"""
         try:
-            membership = UserMembership.objects.get(user=request.user)
-            serializer = UserMembershipSerializer(membership)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except UserMembership.DoesNotExist:
-            return Response({"error": "User has no membership plan"}, status=status.HTTP_404_NOT_FOUND)
+            membership = Membership.objects.get(user=request.user)
+            return Response({"membership_type": membership.membership_type})
+        except Membership.DoesNotExist:
+            return Response({"message": "No membership found"}, status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request):
-        """Assign a membership to a user (Basic by default)."""
-        if UserMembership.objects.filter(user=request.user).exists():
-            return Response({"error": "User already has a membership"}, status=status.HTTP_400_BAD_REQUEST)
+        """Select a membership plan (Requires authentication)"""
+        membership_type = request.data.get("membership_type")
 
-        plan_key = request.data.get("plan_key", "basic")  # Default to Basic
+        if membership_type not in ["basic", "premium"]:
+            return Response(
+                {"error": "Invalid membership type. Choose 'basic' or 'premium'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        try:
-            plan = MembershipPlan.objects.get(key=plan_key)
-            membership = UserMembership.objects.create(user=request.user, plan=plan)
-            serializer = UserMembershipSerializer(membership)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except MembershipPlan.DoesNotExist:
-            return Response({"error": "Invalid plan selected"}, status=status.HTTP_400_BAD_REQUEST)
+        # Create or update the user's membership
+        membership, created = Membership.objects.update_or_create(
+            user=request.user, defaults={"membership_type": membership_type}
+        )
 
-    def put(self, request):
-        """Allows user to update their membership plan."""
-        try:
-            membership = UserMembership.objects.get(user=request.user)
-            plan_key = request.data.get("plan_key")
-
-            if not plan_key:
-                return Response({"error": "Plan key is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            plan = MembershipPlan.objects.get(key=plan_key)
-            membership.plan = plan
-            membership.save()
-
-            serializer = UserMembershipSerializer(membership)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except UserMembership.DoesNotExist:
-            return Response({"error": "User has no membership plan"}, status=status.HTTP_404_NOT_FOUND)
-        except MembershipPlan.DoesNotExist:
-            return Response({"error": "Invalid plan selected"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
+        return Response(
+            {"message": f"Successfully subscribed to {membership.membership_type} membership!"},
+            status=status.HTTP_201_CREATED
+        )
