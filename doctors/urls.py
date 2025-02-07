@@ -14,7 +14,7 @@ from .views import (
     SelectMethodsAPIView,
     RequestPasswordChangeAPIView,
     VerifyOTPAndChangePasswordAPIView,
-    UserMembershipAPIView,
+    MembershipAPIView,
     redeem_invitation,
     )
 
@@ -42,5 +42,5 @@ urlpatterns = [
     path('verify-otp-change-password/', VerifyOTPAndChangePasswordAPIView.as_view(), name='verify_otp_change_password'),
 
     # Subsciption plan
-    path('membership-plan/', UserMembershipAPIView.as_view(), name='subscription-plan'),
+    path('select-membership/', MembershipAPIView.as_view(), name='select-membership'),
 ]
