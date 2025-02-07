@@ -41,6 +41,7 @@ jobs:
                 targetType: 'inline'
                 workingDirectory: /home/azureuser/testing/
                 script: |
+                    pip3 install django gunicorn psycopg2-binary
                     python3 manage.py makemigrations
                     python3 manage.py migrate
               displayName: 'Run Migration scripts'
