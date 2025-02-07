@@ -19,7 +19,7 @@ jobs:
             steps:
             - checkout: self 
               path: /home/azureuser/testing
-              workspaceRepo: false
+              workspaceRepo:  true
           deploy:
             steps:
             - task: Bash@3
