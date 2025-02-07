@@ -18,7 +18,6 @@ jobs:
           preDeploy:
             steps:
             - checkout: self 
-              path: $(Build.SourcesDirectory)/$(Build.Repository.Name)
               workspaceRepo:  true
           deploy:
             steps:
@@ -26,7 +25,7 @@ jobs:
               inputs:
                 targetType: 'inline'
                 script: |
-                  mv $(Pipeline.Workspace) /home/azureuser/testing
+                  mv $(Build.SourcesDirectory)/  /home/azureuser/testing
                   cd /home/azureuser/testing
                   python3 -m venv venv
                   source venv/bin/activate
