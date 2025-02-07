@@ -18,6 +18,13 @@ jobs:
         inputs:
           versionSpec: '3.x'
           addToPath: true
+      - task: Cache@2
+        inputs:
+            key: 'pip | "$(Agent.OS)" | requirements.txt'
+            restoreKeys: |
+              pip | "$(Agent.OS)"
+            path: $(Pipeline.Workspace)/.pip
+        displayName: Cache pip
 
       # Step 3: Install dependencies
       - script: |
