@@ -199,20 +199,133 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
 }
 
+# Implementing Logfile settings
+BASE_LOG_DIR = os.path.join(BASE_DIR, 'logs')
+
+if not os.path.exists(BASE_LOG_DIR):
+    os.makedirs(BASE_LOG_DIR)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
-        'console': {
+        'appointments': {
             'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'appointments.log'),
+            'formatter': 'verbose',
+        },
+        'authify': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'authify.log'),
+            'formatter': 'verbose',
+        },
+        'clinics': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'clinics.log'),
+            'formatter': 'verbose',
+        },
+        'consultations': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'consultations.log'),
+            'formatter': 'verbose',
+        },
+        'dashboard': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'dashboard.log'),
+            'formatter': 'verbose',
+        },
+        'doctors': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'doctors.log'),
+            'formatter': 'verbose',
+        },
+        'patients': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'patients.log'),
+            'formatter': 'verbose',
+        },
+        'payments': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'payments.log'),
+            'formatter': 'verbose',
+        },
+        'reviews': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'reviews.log'),
+            'formatter': 'verbose',
+        },
+        'users': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'users.log'),
+            'formatter': 'verbose',
         },
     },
     'loggers': {
-        'django': {
-            'handlers': ['console'],
+        'appointments': {
+            'handlers': ['appointments'],
             'level': 'DEBUG',
-            'propagate': True,
+            'propagate': False,
         },
+        'authify': {
+            'handlers': ['authify'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'clinics': {
+            'handlers': ['clinics'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'consultations': {
+            'handlers': ['consultations'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+
+        'dashboard': {
+            'handlers': ['dashboard'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'doctors': {
+            'handlers': ['doctors'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'patients': {
+            'handlers': ['patients'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'payments': {
+            'handlers': ['payments'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'reviews': {
+            'handlers': ['reviews'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['users'],
+            'level': 'DEBUG',
+            'propagate': False,        },
     },
 }

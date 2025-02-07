@@ -58,6 +58,7 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True, null=False)
     password = models.CharField(max_length=128, null=False)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
 
     # Personal Information
