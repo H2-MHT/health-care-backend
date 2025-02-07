@@ -8,7 +8,7 @@ pool:
 
 jobs:
   # Job 1: Build and Install Dependencies
-  - job: Build
+  - job: BuildAndDeploy
     steps:
       # Step 1: Checkout code
       - checkout: self
@@ -16,30 +16,49 @@ jobs:
       # Step 2: Set up Python
       - task: UsePythonVersion@0
         inputs:
-          versionSpec: '3.9'
+          versionSpec: '3.x'
           addToPath: true
 
       # Step 3: Install dependencies
       - script: |
           python -m venv venv
           source venv/bin/activate
-          python -m pip install  -r requirements.txt
+          pip install -r requirements.txt
         displayName: 'Install dependencies'
+      - task: ArchiveFiles@2
+        displayName: 'Archive files'
+        inputs:
+          rootFolderOrFile: $(System.DefaultWorkingDirectory)
+          includeRootFolder: false
+          archiveType: zip
+          archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+          replaceExistingArchive: true
 
+      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        artifact: drop
+      
   # Job 2: Deployment to Virtual Machine
   - deployment: DeployToVM
-    dependsOn: Build
+    displayName: web
     environment:
-      name: 'staging'  # This is your environment name
-      resourceName: 'Healthcare-backend'  # Replace with your actual VM name or resource
-      resourceType: 'VirtualMachine'
+      name: 'staging' 
+      resourceType: VirtualMachine
+      resourceName: 'Healthcare-backend' 
+      tags: 'Healthcare-backend'
     strategy:
-      runOnce:
-        deploy:
-          steps:
+        runOnce:
+          preDeploy:
+            steps:
+            - download: current
+              artifact: drop
             - script: |
-                echo "Deploying to the VM"
-                # Add more steps here to deploy to your VM, such as:
-                # SSH commands to copy files, restart services, etc.
-                touch /home/azureuser/nik.txt
-              displayName: 'Deploy to VM'
+                cp $(Pipeline.Workspace)/drop/*.zip  ~/healthcaredir
+          deploy:
+            steps:
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                script: |
+                  cd ~/healthcaredir
+                  # Make migrations, apply them, and restart the server
+                  ls 
