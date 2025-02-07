@@ -19,13 +19,14 @@ jobs:
             steps:
             - checkout: self 
               workspaceRepo:  true
+            -  script: |
+                  mv $(Build.SourcesDirectory)/health-care-backend/*  /home/azureuser/testing/
           deploy:
             steps:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
                 script: |
-                  mv $(Build.SourcesDirectory)/  /home/azureuser/testing/
                   cd /home/azureuser/testing/s/
                   python3 -m venv venv
                   source venv/bin/activate
