@@ -34,15 +34,8 @@ jobs:
                   python3 -m venv venv
                   source venv/bin/activate
                   pip3 install -r requirements.txt
-              displayName: 'Install dependencies'
-            
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                workingDirectory: /home/azureuser/testing/
-                script: |
-                    pip3 install django gunicorn psycopg2-binary
-                    python3 manage.py makemigrations
-                    python3 manage.py migrate
-              displayName: 'Run Migration scripts'
+                  python3 manage.py makemigrations
+                  python3 manage.py migrate
+                  pip3 install django gunicorn psycopg2-binary
+              displayName: 'Install dependencies and Run Migration scripts'
             
