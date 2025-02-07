@@ -18,6 +18,7 @@ jobs:
           preDeploy:
             steps:
             - checkout: self 
+              path: $(Build.SourcesDirectory)/$(Build.Repository.Name)
               workspaceRepo:  true
           deploy:
             steps:
