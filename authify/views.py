@@ -2,6 +2,7 @@ import logging
 import random
 import re
 from datetime import timedelta
+from django.utils import timezone
 
 from django.conf import settings
 from django.utils.timezone import now
@@ -16,7 +17,10 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from social_core.backends.apple import AppleIdAuth
 from social_django.utils import load_strategy
-
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import AuthenticationFailed
+from datetime import timedelta
+from django.contrib.auth import authenticate, login
 from authify.utils import validate_google_id_token
 from doctors.models import Doctor
 from users.models import User
@@ -29,6 +33,13 @@ from .serializers import (
     UserProfileSerializer,
     UserProfileUpdateSerializer,
 )
+import logging
+
+from django.dispatch import receiver
+from django.utils.timezone import now
+
+
+# from doctors.models import LoginHistory
 
 logger = logging.getLogger(__name__)
 
@@ -379,79 +390,112 @@ class VerifyEmailAndGenerateTokensView(APIView):
 
 class ChangePasswordView(APIView):
     """
-    API view for changing the password after email verification.
+    API view to handle password change with OTP verification.
     """
 
     permission_classes = [IsAuthenticated]
 
+    def send_otp_email(self, email, otp):
+        """
+        Send OTP via SendGrid.
+        """
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject="Your OTP Code",
+            plain_text_content=f"Your OTP code is {otp}",
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+
     def post(self, request, *args, **kwargs):
         """
-        Change the password for the authenticated user.
+        User provides old password & new password, OTP is sent to email.
         """
-        current_password = request.data.get("current_password")
-        new_password = request.data.get("new_password")
         user = request.user
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
 
-        logger.info(f"Password change request received for user: {user.email}")
-
-        # Validate the provided data
-        if not current_password or not new_password:
-            logger.warning(f"User {user.email} provided incomplete password data.")
+        # Validate password
+        if not old_password or not new_password:
             return Response(
-                {"message": "Current password and new password are required."},
+                {"message": "Old password and new password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Password strength validation
+        # Validate old password
+        if not user.check_password(old_password):
+            return Response(
+                {"message": "Old password is incorrect."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate password strength
         if len(new_password) < 8:
-            logger.warning(
-                f"User {user.email} provided a weak password (less than 8 characters)."
-            )
-            return Response(
-                {"message": "New password must be at least 8 characters long."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not re.search(r"[A-Za-z]", new_password):
-            logger.warning(f"User {user.email} provided a password without letters.")
-            return Response(
-                {"message": "New password must contain at least one letter."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not re.search(r"[0-9]", new_password):
-            logger.warning(f"User {user.email} provided a password without numbers.")
-            return Response(
-                {"message": "New password must contain at least one number."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if not re.search(r"[@$!%*?&]", new_password):
-            logger.warning(
-                f"User {user.email} provided a password without special characters."
-            )
-            return Response(
-                {
-                    "message": "New password must contain at least one special character (e.g., @$!%*?&)."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"message": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
+        if not re.search(r'[A-Za-z]', new_password):
+            return Response({"message": "Password must contain at least one letter."}, status=status.HTTP_400_BAD_REQUEST)
+        if not re.search(r'[0-9]', new_password):
+            return Response({"message": "Password must contain at least one number."}, status=status.HTTP_400_BAD_REQUEST)
+        if not re.search(r'[@$!%*?&]', new_password):
+            return Response({"message": "Password must contain at least one special character."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if the current password matches
-        if not user.check_password(current_password):
-            logger.error(f"User {user.email} provided an incorrect current password.")
-            return Response(
-                {"message": "Current password is incorrect."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Generate and store OTP
+        otp_code = str(random.randint(100000, 999999))  # Generate 6-digit OTP
+        user.otp = otp_code  # Store OTP in User model
+        user.otp_created_at = timezone.now()  # Save timestamp
+        user.temp_new_password = new_password  # Temporarily store new password
+        user.save()
 
-        # Change the user's password
-        user.set_password(new_password)
+        # Send OTP via email
+        send_result = self.send_otp_email(user.email, otp_code)
+        if isinstance(send_result, str):  # If email sending fails
+            return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
+    from django.contrib.auth import authenticate, login
+
+    def put(self, request, *args, **kwargs):
+        """
+        User enters OTP, If valid, update the password immediately.
+        """
+        user = request.user
+        otp = request.data.get("otp")
+
+        if not otp:
+            return Response({"message": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if OTP is expired (valid for 10 minutes)
+        if user.otp_created_at is None:
+            return Response({"message": "OTP not generated yet. Please request a new OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp_expiry_time = user.otp_created_at + timedelta(minutes=10)
+        if timezone.now() > otp_expiry_time:
+            return Response({"message": "OTP has expired. Request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify OTP
+        if user.otp != otp:
+            return Response({"message": "Invalid OTP. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update password immediately
+        user.set_password(request.data.get("new_password"))
+        user.otp = None
+        user.otp_created_at = None
         user.save()
         logger.info(f"Password changed successfully for user: {user.email}")
 
-        return Response(
-            {"message": "Password changed successfully."},
-            status=status.HTTP_200_OK,
-        )
-
+        # Authenticate and log the user in after updating the password
+        user = authenticate(request, email=user.email, password=request.data.get("new_password"))
+        if user is not None:
+            login(request, user)  # Log the user in if authenticated successfully
+            return Response({"message": "Password updated and user logged in successfully."}, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "Invalid email or password."}, status=status.HTTP_400_BAD_REQUEST)
 
 class AccountDeactivateDeleteView(APIView):
     """

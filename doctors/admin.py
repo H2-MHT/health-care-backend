@@ -11,6 +11,7 @@ from .models import(
     NoShowPolicy,
     CommunicationPreferences,
     TwoFactorAuthentication,
+    MembershipPlan,
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -30,3 +31,4 @@ admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
 admin.site.register(TwoFactorAuthentication)
+admin.site.register(MembershipPlan)
