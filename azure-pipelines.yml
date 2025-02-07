@@ -13,7 +13,6 @@ jobs:
       name: 'staging' 
       resourceType: VirtualMachine
       resourceName: 'Healthcare-backend' 
-      tags: 'Healthcare-backend'
     strategy:
         runOnce:
           preDeploy:
