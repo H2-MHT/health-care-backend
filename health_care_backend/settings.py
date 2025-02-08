@@ -88,6 +88,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'health_care_backend.middleware.ActivityMiddleware'
 ]
 
 ROOT_URLCONF = 'health_care_backend.urls'
