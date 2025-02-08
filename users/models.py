@@ -1,7 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.db import models
-
+from clinics.models import Language
 import random
 from django.utils.timezone import now
 
@@ -65,7 +65,7 @@ class User(AbstractUser):
 
     # Personal Information
     first_name = models.CharField(max_length=150, null=False, blank=False)
-    last_name = models.CharField(max_length=150, null=False, blank=False)
+    last_name = models.CharField(max_length=150, null=True, blank=True)
     dob = models.DateField(null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GENDER_CHOICES, null=True, blank=True
@@ -87,8 +87,8 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20, choices=ROLE_CHOICES, default="Patient", null=False
     )
-    languages = models.TextField(null=True, blank=True)
-    work_place = models.CharField(max_length=255, null=True, blank=True)
+    languages = models.ManyToManyField(Language)
+    work_place = models.ForeignKey("clinics.Clinic", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinic_work")
     expertise = models.TextField(null=True, blank=True)
     professional_stat = models.TextField(null=True, blank=True)
     working_time = models.CharField(max_length=255, null=True, blank=True)
@@ -116,13 +116,16 @@ class User(AbstractUser):
         self.otp = str(random.randint(100000, 999999))
         self.save()
         return self.otp
+    
+    def update_activity(self):
+        self.last_activity = now()
+        self.save(update_fields=['last_activity'])
+
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()    
 
 def user_fileq(instance, filename):
     return "{0}-{1}".format(instance.type, filename)
-
-def update_activity(self):
-        self.last_activity = now()
-        self.save(update_fields=['last_activity'])
 
 
 class UserFile(models.Model):

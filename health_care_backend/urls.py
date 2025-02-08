@@ -34,6 +34,8 @@ urlpatterns = [
     # Include the urls from the payments app
     path('payment/', include('payments.urls')),
     # Include the urls from the user details
-    path('user/', include('users.urls'))
+    path('user/', include('users.urls')),
+    # Include the urls from the clinic details
+    path('clinics/', include('clinics.urls'))
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

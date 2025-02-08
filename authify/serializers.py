@@ -1,12 +1,13 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-
+import json
 from users.models import User
 
 
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
+    languages = serializers.CharField(max_length=255, write_only=True, required=False)
 
     class Meta:
         model = User
@@ -41,8 +42,20 @@ class RegistrationSerializer(serializers.ModelSerializer):
         validated_data.pop(
             "confirm_password"
         )  # Remove confirm_password field before saving
+
+        languages = validated_data.pop('languages', [])
+        # Handle services_provided
+
+        if isinstance(languages, str):
+            try:
+                languages = json.loads(languages)
+            except json.JSONDecodeError:
+                languages = []  
+
         user = User(**validated_data)
         user.set_password(validated_data["password"])  # Hash the password
+        if languages:
+            user.languages.set(languages)
         user.save()
         return user
 
@@ -117,6 +130,17 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+
+        languages = validated_data.pop('languages', [])
+        # Handle services_provided
+
+        if isinstance(languages, str):
+            try:
+                languages = json.loads(languages)
+            except json.JSONDecodeError:
+                languages = [] 
+        if languages:
+            instance.languages.set(languages)        
         instance.save()
         return instance
 
