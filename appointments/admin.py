@@ -16,7 +16,7 @@ class AppointmentAdmin(admin.ModelAdmin):
     get_doctor_name.short_description = "Doctor"
 
     def get_clinic_name(self, obj):
-        return obj.clinic.name if obj.clinic else "No Clinic"
+        return obj.clinic.user.first_name if obj.clinic and obj.clinic.user else "No Clinic"
     get_clinic_name.short_description = "Clinic"
 
 admin.site.register(Appointment, AppointmentAdmin)

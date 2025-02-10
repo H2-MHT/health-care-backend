@@ -5,9 +5,10 @@ from rest_framework.response import Response
 from clinics.models import *
 from clinics.serializers import *
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from django.db.models import Count, Avg
+from django.db.models import Count, Avg, Q
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
+from appointments.models import Appointment
 
 # Create your views here.
 
@@ -266,3 +267,113 @@ class ActiveDoctorsAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicAppointmentStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        # Get 'today' from request params (format: YYYY-MM-DD)
+        today_param = request.GET.get("date", None)
+        try:
+            today = (
+                datetime.strptime(today_param, "%Y-%m-%d").date()
+                if today_param
+                else datetime.now().date()
+            )
+        except ValueError:
+            return Response(
+                {"error": "Invalid date format. Use YYYY-MM-DD."}, status=400
+            )
+
+        week_start = today - timedelta(
+            days=today.weekday()
+        )  # Start of this week (Monday)
+        week_end = week_start + timedelta(days=6)  # Sunday
+        month_start = today.replace(day=1)  # Start of this month
+
+        # Single query: Aggregate appointment counts
+        counts = (
+            Appointment.objects.select_related("clinic")
+            .filter(clinic__user=request.user, date_time__date__gte=month_start)
+            .values("status")
+            .annotate(
+                today=Count("id", filter=Q(date_time__date=today)),
+                week=Count(
+                    "id",
+                    filter=Q(
+                        date_time__date__gte=week_start, date_time__date__lte=week_end
+                    ),
+                ),
+                month=Count("id"),
+            )
+        )
+
+        # Directly construct response dict using dictionary comprehension
+        result = {
+            "booked": next(
+                (c for c in counts if c["status"] == "Pending"),
+                {"today": 0, "week": 0, "month": 0},
+            ),
+            "declined": next(
+                (c for c in counts if c["status"] == "Cancelled"),
+                {"today": 0, "week": 0, "month": 0},
+            ),
+            "completed": next(
+                (c for c in counts if c["status"] == "Completed"),
+                {"today": 0, "week": 0, "month": 0},
+            ),
+        }
+
+        return Response(result)
+
+
+class ClinicAppointmentActivityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        reference_year = int(request.GET.get("year", datetime.today().year))
+
+        counts = (
+            Appointment.objects.select_related("clinic")
+            .filter(clinic__user=request.user, date_time__year=reference_year)
+            .values("date_time__month", "status")
+            .annotate(count=Count("id"))
+        )
+
+        # Define month names
+        month_names = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
+
+        # Initialize response
+        monthly_data = {
+            month: {"booked": 0, "completed": 0, "declined": 0} for month in month_names
+        }
+
+        # Populate the data
+        for entry in counts:
+            month = month_names[entry["date_time__month"] - 1]
+            status = entry["status"]
+            count = entry["count"]
+
+            if status == "Pending":
+                monthly_data[month]["booked"] = count
+            elif status == "Completed":
+                monthly_data[month]["completed"] = count
+            elif status == "Cancelled":
+                monthly_data[month]["declined"] = count
+
+        return Response(monthly_data)
