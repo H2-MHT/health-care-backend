@@ -85,7 +85,7 @@ class DashboardAPIView(APIView):
             "patient__user__last_name",
             "doctor__user__first_name",
             "doctor__user__last_name",
-            "clinic__name",
+            "clinic__user__first_name",
             "date_time",
             "status"
         )
@@ -95,7 +95,7 @@ class DashboardAPIView(APIView):
             "patient__user__last_name",
             "doctor__user__first_name",
             "doctor__user__last_name",
-            "clinic__name",
+            "clinic__user__first_name",
             "date_time",
             "status"
         )
