@@ -53,14 +53,15 @@ jobs:
                 workingDirectory: /home/azureuser/$(Build.BuildId)
                 script: |
                   # Make migrations
-                  source venv/bin/activate
-                   python3 manage.py makemigrations
+                   source venv/bin/activate
                    python3 manage.py migrate --fake
+
               displayName: 'Make Migrations'
               
             - task: Bash@3
               inputs:
                 targetType: 'inline'
                 script: |
-                  ln -snf /home/azureuser/$(Build.BuildId) /home/azureuser/testing
-              displayName: 'link testing'
+                  cp -r --no-dereference --preserve=links  /home/azureuser/$(Build.BuildId) /home/azureuser/stable
+                  systemctl restart gunicorn.socket gunicorn.service
+              displayName: 'restarting'
