@@ -187,7 +187,8 @@ class OTPVerificationView(APIView):
         logger.error(f"OTP verification failed. Errors: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def create_doctor_profile(self, user):
+    @staticmethod
+    def create_doctor_profile(user):
         if user.role == "Doctor":
             logger.info(
                 f"User {user.email} is a doctor. Attempting to create Doctor profile..."
@@ -372,6 +373,9 @@ class VerifyEmailAndGenerateTokensView(APIView):
         user.otp = None
         user.save()
         logger.info(f"OTP verified successfully for {email}.")
+
+        # **Ensure Doctor profile is created**
+        OTPVerificationView.create_doctor_profile(user)
 
         # Generate access and refresh tokens
         refresh = RefreshToken.for_user(user)
