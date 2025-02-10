@@ -96,7 +96,7 @@ ROOT_URLCONF = 'health_care_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': ['templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -161,6 +161,9 @@ USE_TZ = True
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 STATIC_URL = '/static/'
+
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # media files
@@ -327,6 +330,7 @@ LOGGING = {
         'users': {
             'handlers': ['users'],
             'level': 'DEBUG',
-            'propagate': False,        },
+            'propagate': False,
+        },
     },
 }
