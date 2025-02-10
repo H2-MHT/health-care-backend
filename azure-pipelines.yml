@@ -29,7 +29,7 @@ jobs:
             - task: Bash@3
               inputs:
                 targetType: 'inline'
-                workingDirectory: /home/azureuser/testing
+                workingDirectory: /home/azureuser/stable
                 script: |
                     cp .env /home/azureuser/$(Build.BuildId)/
               displayName: 'copy .env to new folder'
