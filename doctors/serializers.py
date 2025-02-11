@@ -22,9 +22,10 @@ class DoctorNotesSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'doctor']
 
     def create(self, validated_data):
-        # Automatically set the doctor to the logged-in user
-        request = self.context.get('request')
-        validated_data['doctor'] = request.user
+        request = self.context.get("request")
+        if not hasattr(request.user, "doctor"):  # Ensure the user is a doctor
+            raise serializers.ValidationError({"error": "Only doctors can create notes."})
+        validated_data["doctor"] = request.user.doctor  # Assign the related Doctor instance
         return super().create(validated_data)
     
     
