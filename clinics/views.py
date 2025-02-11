@@ -11,6 +11,9 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from appointments.models import Appointment
 from users.serializers import UserSerializer
+from django.conf import settings
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 # Create your views here.
 
@@ -494,3 +497,76 @@ class ClinicDoctorsAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClinicReportRemoveDoctorAPIView(APIView):
+    def post(self, request):
+        """
+        Allows a clinic to report a doctor.
+        """
+        doctor_id = request.data.get("doctor_id")
+        reason = request.data.get("reason")
+
+        if not doctor_id or not reason:
+            return Response(
+                {"error": "Doctor ID and reason are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            doctor = User.objects.get(id=doctor_id, role="Doctor")
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Doctor not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Send report email via SendGrid
+        self.send_report_email(request.user, doctor, reason)
+
+        return Response(
+            {"message": "Doctor reported successfully."}, status=status.HTTP_201_CREATED
+        )
+
+    def delete(self, request, doctor_id):
+        try:
+            doctor = User.objects.get(
+                id=doctor_id, work_place__user=request.user, role="Doctor"
+            )
+            doctor.work_place = None
+            doctor.save()
+            return Response(
+                {"message": "Doctor removed successfully"},
+                status=status.HTTP_204_NO_CONTENT,
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Doctor not found in this clinic."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def send_report_email(self, clinic, doctor, reason):
+        """
+        Sends a report email via SendGrid.
+        """
+        subject = f"Clinic Report: {doctor.get_full_name()} Reported by {clinic.get_full_name()}"
+
+        content = f"""
+        <h3>Doctor Report Details</h3>
+        <p><strong>Clinic Name:</strong> {clinic.get_full_name()}</p>
+        <p><strong>Clinic Email:</strong> {clinic.email}</p>
+        <p><strong>Doctor Reported:</strong> {doctor.get_full_name()} ({doctor.email})</p>
+        <p><strong>Reason for Report:</strong> {reason}</p>
+        """
+
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=settings.REPORT_ADMIN_EMAIL,
+            subject=subject,
+            html_content=content,
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            print("Error sending email:", e)
