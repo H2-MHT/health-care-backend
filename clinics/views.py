@@ -9,7 +9,7 @@ from django.db.models import Count, Avg, Q
 from django.utils import timezone
 from datetime import timedelta, datetime
 from appointments.models import Appointment
-
+from users.serializers import UserSerializer
 # Create your views here.
 
 
@@ -66,7 +66,10 @@ class ClinicRegisterAPIView(APIView):
             )
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                clinic_user = UserSerializer(serializer.instance.user)
+                response_data = serializer.data
+                response_data["user"] = clinic_user.data 
+                return Response(response_data, status=status.HTTP_201_CREATED)
             else:
                 return Response(
                     {"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST

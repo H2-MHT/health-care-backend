@@ -170,7 +170,8 @@ class OTPVerificationView(APIView):
             logger.info(f"User {email} verified successfully.")
 
             # **Ensure Doctor profile is created**
-            self.create_doctor_profile(user)
+            if user.role == "Doctor":
+                self.create_doctor_profile(user)
 
             # Generate JWT tokens after OTP verification
             tokens = get_tokens_for_user(user)
@@ -327,69 +328,6 @@ class ForgotPasswordView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
-class VerifyEmailAndGenerateTokensView(APIView):
-    """
-    API view to verify email using OTP and generate access and refresh tokens.
-    """
-
-    def post(self, request, *args, **kwargs):
-        """
-        Verify OTP and email, then generate access and refresh tokens.
-        """
-        email = request.data.get("email", "").lower().strip()
-        otp = request.data.get("otp")
-
-        logger.info(f"Received OTP verification request for email: {email}")
-
-        # Validate input fields
-        if not all([email, otp]):
-            logger.warning("Missing email or OTP in request.")
-            return Response(
-                {"message": "Email and OTP are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Get the user
-        try:
-            user = User.objects.get(email=email)
-            logger.info(f"User found: {user.email} | Role: {user.role}")
-        except User.DoesNotExist:
-            logger.error(f"User not found for email: {email}")
-            return Response(
-                {"message": "Invalid email or OTP."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Check if OTP matches
-        if user.otp != otp:
-            logger.warning(f"Invalid OTP attempt for user {email}.")
-            return Response(
-                {"message": "Invalid email or OTP."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Clear OTP after successful verification
-        user.otp = None
-        user.save()
-        logger.info(f"OTP verified successfully for {email}.")
-
-        # **Ensure Doctor profile is created**
-        OTPVerificationView.create_doctor_profile(user)
-
-        # Generate access and refresh tokens
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
-        logger.info(f"Tokens generated successfully for {email}.")
-
-        return Response(
-            {
-                "message": "Email verified successfully.",
-                "access_token": access_token,
-                "refresh_token": str(refresh),
-            },
-            status=status.HTTP_200_OK,
-        )
 
 
 class ChangePasswordView(APIView):
