@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import json
 from users.models import User
-
+from clinics.models import Language
 
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -126,21 +126,20 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     professional_stat = serializers.CharField(required=False)
     working_time = serializers.CharField(required=False)
     profile_picture = serializers.ImageField(required=False, validators=[validate_profile_picture])
+    languages = serializers.CharField(required=False)
 
     def update(self, instance, validated_data):
+        languages_str = validated_data.pop("languages", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-
-        languages = validated_data.pop('languages', [])
-        # Handle services_provided
-
-        if isinstance(languages, str):
+        if languages_str:
             try:
-                languages = json.loads(languages)
-            except json.JSONDecodeError:
-                languages = [] 
-        if languages:
-            instance.languages.set(languages)        
+                language_ids = json.loads(languages_str)  # Convert string to list
+                if not isinstance(language_ids, list) or not all(isinstance(i, int) for i in language_ids):
+                    raise ValueError("Invalid format. 'languages' must be a list of integers.")
+                instance.languages.set(Language.objects.filter(id__in=language_ids))
+            except (json.JSONDecodeError, ValueError):
+                raise serializers.ValidationError({"languages": "Invalid format. Provide a valid JSON list of integers."})
         instance.save()
         return instance
 

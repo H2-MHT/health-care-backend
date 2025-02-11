@@ -793,7 +793,7 @@ class UpdateUserProfileAPIView(APIView):
                 "bio": user.bio,
                 "country": user.country,
                 "city": user.city,
-                "languages": user.languages,
+                "languages": list(user.languages.values_list("title", flat=True)),  # Convert to list of names
                 "work_place": user.work_place,
                 "expertise": user.expertise,
                 "professional_stat": user.professional_stat,
