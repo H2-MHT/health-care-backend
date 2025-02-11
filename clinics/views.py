@@ -106,8 +106,18 @@ class ClinicInfoAPIView(APIView):
             )  # Allow partial updates
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                    "message": "Clinic information successfully updated",
+                    "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                    )
+            return Response(
+                {
+                    "error": "Invalid data provided.", "details": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+        )
         except Clinic.DoesNotExist:
             return Response(
                 {"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND
