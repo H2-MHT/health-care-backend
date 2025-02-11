@@ -171,3 +171,24 @@ class ActiveDoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "first_name", "last_name", "profile_picture", "last_activity"]
+
+
+class ClinicDoctorSerializer(serializers.ModelSerializer):
+    experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+    specialty = serializers.CharField(source="doctor.specialty", read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "profile_picture",
+            "bio",
+            "expertise",
+            "languages",
+            "country",
+            "experience_years",
+            "specialty",
+        ]
+     
