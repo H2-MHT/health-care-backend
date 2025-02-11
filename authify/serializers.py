@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import json
 from users.models import User
-from clinics.models import Language
+
 
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -43,14 +43,14 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "confirm_password"
         )  # Remove confirm_password field before saving
 
-        languages = validated_data.pop('languages', [])
+        languages = validated_data.pop("languages", [])
         # Handle services_provided
 
         if isinstance(languages, str):
             try:
                 languages = json.loads(languages)
             except json.JSONDecodeError:
-                languages = []  
+                languages = []
 
         user = User(**validated_data)
         user.set_password(validated_data["password"])  # Hash the password
@@ -108,40 +108,9 @@ class SocialLoginSerializer(serializers.Serializer):
 def validate_profile_picture(value):
     if value.size > 2 * 1024 * 1024:  # Limit size to 2 MB
         raise serializers.ValidationError("Profile picture must be smaller than 2 MB.")
-    if not value.name.lower().endswith(('.png', '.jpg', '.jpeg')):
+    if not value.name.lower().endswith((".png", ".jpg", ".jpeg")):
         raise serializers.ValidationError("Profile picture must be a PNG or JPG file.")
     return value
-class UserProfileUpdateSerializer(serializers.Serializer):
-    first_name = serializers.CharField(required=False)
-    last_name = serializers.CharField(required=False)
-    dob = serializers.DateField(required=False)
-    gender = serializers.ChoiceField(choices=["Male", "Female", "Other"], required=False)
-    phone_number = serializers.CharField(required=False)
-    bio = serializers.CharField(required=False)
-    country = serializers.CharField(required=False)
-    city = serializers.CharField(required=False)
-    languages = serializers.CharField(required=False)
-    work_place = serializers.CharField(required=False)
-    expertise = serializers.CharField(required=False)
-    professional_stat = serializers.CharField(required=False)
-    working_time = serializers.CharField(required=False)
-    profile_picture = serializers.ImageField(required=False, validators=[validate_profile_picture])
-    languages = serializers.CharField(required=False)
-
-    def update(self, instance, validated_data):
-        languages_str = validated_data.pop("languages", None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        if languages_str:
-            try:
-                language_ids = json.loads(languages_str)  # Convert string to list
-                if not isinstance(language_ids, list) or not all(isinstance(i, int) for i in language_ids):
-                    raise ValueError("Invalid format. 'languages' must be a list of integers.")
-                instance.languages.set(Language.objects.filter(id__in=language_ids))
-            except (json.JSONDecodeError, ValueError):
-                raise serializers.ValidationError({"languages": "Invalid format. Provide a valid JSON list of integers."})
-        instance.save()
-        return instance
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -166,5 +135,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "working_time",
             "profile_picture",
         ]
-    
-    
+
+
+class UserProfileUpdateSerializer(UserProfileSerializer):
+    profile_picture = serializers.ImageField(
+        required=False, validators=[validate_profile_picture]
+    )
+    languages = serializers.CharField(required=False)
+
+    def update(self, instance, validated_data):
+
+        languages = validated_data.pop('languages', [])
+        if isinstance(languages, str):
+            try:
+                languages = json.loads(languages)
+            except json.JSONDecodeError:
+                languages = []
+
+        # Update other fields dynamically
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if languages:
+            instance.languages.set(languages)
+
+        instance.save()
+        return instance
