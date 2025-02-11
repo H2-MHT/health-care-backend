@@ -54,10 +54,10 @@ jobs:
                   # Make migrations
                    source venv/bin/activate
                    echo "starting migration "
-                   python3 manage.py migrate --fake
+                   python3 manage.py migrate
                    echo "migration completed "
                    python3 manage.py collectstatic --noinput
-              displayName: 'Make Migrations'
+              displayName: 'Migrates'
               
             - task: Bash@3
               inputs:
