@@ -6,10 +6,12 @@ from clinics.models import *
 from clinics.serializers import *
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Avg, Q
+from django.db.models.functions import ExtractDay, ExtractMonth, ExtractYear
 from django.utils import timezone
 from datetime import timedelta, datetime
 from appointments.models import Appointment
 from users.serializers import UserSerializer
+
 # Create your views here.
 
 
@@ -68,7 +70,7 @@ class ClinicRegisterAPIView(APIView):
                 serializer.save()
                 clinic_user = UserSerializer(serializer.instance.user)
                 response_data = serializer.data
-                response_data["user"] = clinic_user.data 
+                response_data["user"] = clinic_user.data
                 return Response(response_data, status=status.HTTP_201_CREATED)
             else:
                 return Response(
@@ -276,7 +278,6 @@ class ClinicAppointmentStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-
         # Get 'today' from request params (format: YYYY-MM-DD)
         today_param = request.GET.get("date", None)
         try:
@@ -290,16 +291,23 @@ class ClinicAppointmentStatsView(APIView):
                 {"error": "Invalid date format. Use YYYY-MM-DD."}, status=400
             )
 
-        week_start = today - timedelta(
-            days=today.weekday()
-        )  # Start of this week (Monday)
-        week_end = week_start + timedelta(days=6)  # Sunday
-        month_start = today.replace(day=1)  # Start of this month
+        # Define start dates
+        week_start = today.replace(day=1)  # Start of the current month
+        week_end = today  # Until today
+        month_start = today.replace(day=1)  # First day of this month
 
-        # Single query: Aggregate appointment counts
+        # Default appointment data (set all counts to 0)
+        appointment_data = {
+            "booked": {"today": 0, "week": 0, "month": 0},
+            "declined": {"today": 0, "week": 0, "month": 0},
+            "completed": {"today": 0, "week": 0, "month": 0},
+        }
+
+        # Query database efficiently
         counts = (
-            Appointment.objects.select_related("clinic")
-            .filter(clinic__user=request.user, date_time__date__gte=month_start)
+            Appointment.objects.filter(
+                clinic__user=request.user, date_time__date__gte=month_start
+            )
             .values("status")
             .annotate(
                 today=Count("id", filter=Q(date_time__date=today)),
@@ -313,20 +321,34 @@ class ClinicAppointmentStatsView(APIView):
             )
         )
 
-        # Directly construct response dict using dictionary comprehension
+        # Status mapping from model to API response keys
+        status_map = {
+            "Pending": "booked",
+            "Cancelled": "declined",
+            "Completed": "completed",
+        }
+
+        # Update appointment data with actual counts
+        for c in counts:
+            key = status_map.get(c["status"])
+            if key:
+                appointment_data[key] = {
+                    "today": c["today"],
+                    "week": c["week"],
+                    "month": c["month"],
+                }
+
+        # Format the final response
         result = {
-            "booked": next(
-                (c for c in counts if c["status"] == "Pending"),
-                {"today": 0, "week": 0, "month": 0},
-            ),
-            "declined": next(
-                (c for c in counts if c["status"] == "Cancelled"),
-                {"today": 0, "week": 0, "month": 0},
-            ),
-            "completed": next(
-                (c for c in counts if c["status"] == "Completed"),
-                {"today": 0, "week": 0, "month": 0},
-            ),
+            "booked_today_appointment": appointment_data["booked"]["today"],
+            "booked_weekly_appointment": appointment_data["booked"]["week"],
+            "booked_monthly_appointment": appointment_data["booked"]["month"],
+            "declined_today_appointment": appointment_data["declined"]["today"],
+            "declined_weekly_appointment": appointment_data["declined"]["week"],
+            "declined_monthly_appointment": appointment_data["declined"]["month"],
+            "completed_today_appointment": appointment_data["completed"]["today"],
+            "completed_weekly_appointment": appointment_data["completed"]["week"],
+            "completed_monthly_appointment": appointment_data["completed"]["month"],
         }
 
         return Response(result)
@@ -335,48 +357,140 @@ class ClinicAppointmentStatsView(APIView):
 class ClinicAppointmentActivityView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
-        reference_year = int(request.GET.get("year", datetime.today().year))
-
-        counts = (
-            Appointment.objects.select_related("clinic")
-            .filter(clinic__user=request.user, date_time__year=reference_year)
-            .values("date_time__month", "status")
-            .annotate(count=Count("id"))
+    def get(self, request):
+        date_param = request.query_params.get(
+            "date", datetime.now().date().strftime("%Y-%m-%d")
         )
+        activity_type = request.query_params.get("type", "month").lower()
 
-        # Define month names
-        month_names = [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-        ]
+        try:
+            selected_date = datetime.strptime(date_param, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "Invalid date format. Use YYYY-MM-DD."}, status=400
+            )
 
-        # Initialize response
-        monthly_data = {
-            month: {"booked": 0, "completed": 0, "declined": 0} for month in month_names
-        }
+        # Default response structure
+        data = {}
 
-        # Populate the data
-        for entry in counts:
-            month = month_names[entry["date_time__month"] - 1]
-            status = entry["status"]
-            count = entry["count"]
+        if activity_type == "day":
+            start_date = selected_date - timedelta(
+                days=4
+            )  # Last 5 days including today
+            end_date = selected_date
+            date_format = "%Y-%m-%d"
 
-            if status == "Pending":
-                monthly_data[month]["booked"] = count
-            elif status == "Completed":
-                monthly_data[month]["completed"] = count
-            elif status == "Cancelled":
-                monthly_data[month]["declined"] = count
+            # Initialize default data for last 5 days
+            for i in range(5):
+                day_key = (start_date + timedelta(days=i)).strftime(date_format)
+                data[day_key] = {"name": f"0{i+1}", "red": 0, "green": 0, "blue": 0}
 
-        return Response(monthly_data)
+            # Query database
+            appointments = (
+                Appointment.objects.filter(
+                    date_time__date__range=[start_date, end_date]
+                )
+                .values("date_time__date", "status")
+                .annotate(count=Count("id"))
+            )
+
+            # Populate actual data
+            for entry in appointments:
+                date_key = entry["date_time__date"].strftime(date_format)
+                print(date_key, entry)
+                if entry["status"] == "Cancelled":
+                    data[date_key]["red"] += entry["count"]
+                elif entry["status"] == "Completed":
+                    data[date_key]["green"] += entry["count"]
+                elif entry["status"] == "Confirmed":
+                    data[date_key]["blue"] += entry["count"]
+
+        elif activity_type == "week":
+            start_date = selected_date.replace(day=1)  # First day of the month
+            end_date = start_date.replace(
+                month=start_date.month % 12 + 1, day=1
+            ) - timedelta(
+                days=1
+            )  # Last day of the month
+
+            # Initialize default weeks
+            for i in range(1, 5):
+                week_key = f"Week {i}"
+                data[week_key] = {"name": week_key, "red": 0, "green": 0, "blue": 0}
+
+            # Query database
+            appointments = (
+                Appointment.objects.filter(
+                    date_time__date__range=[start_date, end_date]
+                )
+                .annotate(day=ExtractDay("date_time"))
+                .values("day", "status")
+                .annotate(count=Count("id"))
+            )
+
+            # Populate actual data
+            for entry in appointments:
+                week_number = (entry["day"] - 1) // 7 + 1  # Custom week calculation
+                week_key = f"Week {week_number}"
+
+                if entry["status"] == "Cancelled":
+                    data[week_key]["red"] += entry["count"]
+                elif entry["status"] == "Completed":
+                    data[week_key]["green"] += entry["count"]
+                elif entry["status"] == "Confirmed":
+                    data[week_key]["blue"] += entry["count"]
+
+        elif activity_type == "month":
+            start_date = selected_date.replace(month=1, day=1)  # Start of the year
+            end_date = selected_date.replace(month=12, day=31)  # End of the year
+
+            # Initialize default months
+            for month in range(1, 13):
+                month_key = datetime(2000, month, 1).strftime("%b")
+                data[month_key] = {"name": month_key, "red": 0, "green": 0, "blue": 0}
+
+            # Query database
+            appointments = (
+                Appointment.objects.filter(
+                    date_time__date__range=[start_date, end_date]
+                )
+                .annotate(month=ExtractMonth("date_time"))
+                .values("month", "status")
+                .annotate(count=Count("id"))
+            )
+
+            # Populate actual data
+            for entry in appointments:
+                month_key = datetime(2000, entry["month"], 1).strftime("%b")
+                if entry["status"] == "Cancelled":
+                    data[month_key]["red"] += entry["count"]
+                elif entry["status"] == "Completed":
+                    data[month_key]["green"] += entry["count"]
+                elif entry["status"] == "Confirmed":
+                    data[month_key]["blue"] += entry["count"]
+
+        else:
+            return Response(
+                {"error": "Invalid type. Use 'day', 'week', or 'month'."}, status=400
+            )
+
+        return Response(list(data.values()))
+
+
+class ClinicDoctorsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = request.user
+            # Get all doctors of the clinic
+            all_doctors = User.objects.filter(role="Doctor", work_place__user=user)
+            serializer = ClinicDoctorSerializer(all_doctors, many=True)
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
