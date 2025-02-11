@@ -14,4 +14,5 @@ urlpatterns = [
     path("active-doctors/", ActiveDoctorsAPIView.as_view()),
     path("appointments/stats/", ClinicAppointmentStatsView.as_view()),
     path("appointments/activity/", ClinicAppointmentActivityView.as_view()),
+    path("doctors/", ClinicDoctorsAPIView.as_view()),
 ]
