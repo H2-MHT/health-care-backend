@@ -41,6 +41,7 @@ class ClinicRegisterSerializer(serializers.ModelSerializer):
             user.working_time = working_time
         if languages:
             user.languages.set(languages)  # Ensures Many-to-Many assignment
+        user.is_verified = True
         user.save()
 
         # Create the Clinic instance
@@ -50,9 +51,11 @@ class ClinicRegisterSerializer(serializers.ModelSerializer):
 
 
 class ClinicSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source='user.first_name', read_only=True)
     class Meta:
         model = Clinic
         fields = '__all__'
+        extra_fields = ('name',)
 
 class LanguageSerializer(serializers.ModelSerializer):
     class Meta:
