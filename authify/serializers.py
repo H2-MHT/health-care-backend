@@ -161,3 +161,9 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
 
         instance.save()
         return instance
+    
+    def to_representation(self, instance):
+        """Customize GET response for languages"""
+        data = super().to_representation(instance)
+        data['languages'] = list(instance.languages.values_list("id", flat=True))
+        return data

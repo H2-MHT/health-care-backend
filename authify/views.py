@@ -782,28 +782,10 @@ class UpdateUserProfileAPIView(APIView):
         )
 
         if serializer.is_valid():
-            user = serializer.save()
+            serializer.save()
             logger.info("User profile updated successfully: %s", request.user.email)
-            user_data = {
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "dob": user.dob,
-                "gender": user.gender,
-                "phone_number": user.phone_number,
-                "bio": user.bio,
-                "country": user.country,
-                "city": user.city,
-                "languages": list(user.languages.values_list("title", flat=True)),  # Convert to list of names
-                "work_place": user.work_place,
-                "expertise": user.expertise,
-                "professional_stat": user.professional_stat,
-                "working_time": user.working_time,
-                "profile_picture": (
-                    user.profile_picture.url if user.profile_picture else None
-                ),
-            }
             return Response(
-                {"message": "Profile updated successfully.", "data": user_data},
+                {"message": "Profile updated successfully.", "data": serializer.data},
                 status=status.HTTP_200_OK,
             )
 
