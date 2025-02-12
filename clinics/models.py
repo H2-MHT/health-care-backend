@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Avg
 # Create your models here.
 
 
@@ -51,6 +52,23 @@ class ClinicReview(models.Model):
 
     def __str__(self):
         return f"Review by {self.doctor} for Clinic {self.clinic}"
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.update_clinic_user_rating()
+
+    def update_clinic_user_rating(self):
+        """ Update the doctor's User model rating and review count """
+        if self.clinic and self.clinic.user:
+            clinic_user = self.clinic.user
+            clinic_reviews = ClinicReview.objects.filter(clinic=self.clinic, rating__isnull=False)
+
+            avg_rating = clinic_reviews.aggregate(Avg("rating"))["rating__avg"] or 0
+            review_count = clinic_reviews.count()
+
+            clinic_user.rating = avg_rating
+            clinic_user.reviews = review_count
+            clinic_user.save()
 
 
 class ClinicReviewReply(models.Model):

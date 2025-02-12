@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from rest_framework import status, permissions
 from doctors.models import Doctor
 from appointments.models import Appointment
+from rest_framework.generics import get_object_or_404
+from patients.models import Patient
 # Create your views here.
 
 class AddReviewPIView(APIView):
@@ -61,18 +63,32 @@ class AddReviewPIView(APIView):
 # view all reviews
     def get(self, request):
         user = self.request.user
+        doctor_id = request.query_params.get("doctor_id")
+        patient_id = request.query_params.get("patient_id")
+
+        # Fetch reviews by doctor_id if provided
+        if doctor_id:
+            doctor = get_object_or_404(Doctor, id=doctor_id)
+            reviews = Review.objects.filter(doctor=doctor)
+            serializer = ReviewSerializer(reviews, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Fetch reviews by patient_id if provided
+        if patient_id:
+            patient = get_object_or_404(Patient, id=patient_id)
+            reviews = Review.objects.filter(patient=patient)
+            serializer = ReviewSerializer(reviews, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         # If the user is a doctor, fetch all reviews for the doctor
-        if hasattr(user, 'doctor'):
+        if hasattr(user, "doctor"):
             doctor = user.doctor
-            # print(doctor,"--------------->>>>> doctor")
-            # Fetch all reviews for the doctor, including those created by other patients
             reviews = Review.objects.filter(doctor=doctor)
             serializer = ReviewSerializer(reviews, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         # If the user is a patient, fetch all reviews created by the patient
-        elif hasattr(user, 'patient'):
+        elif hasattr(user, "patient"):
             patient = user.patient
             reviews = Review.objects.filter(patient=patient)
             serializer = ReviewSerializer(reviews, many=True)

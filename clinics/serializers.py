@@ -2,7 +2,7 @@ from rest_framework import serializers
 from clinics.models import *
 from users.models import User
 import json
-
+from appointments.serializers import AppointmentSerializer
 
 class ClinicRegisterSerializer(serializers.ModelSerializer):
     working_time = serializers.CharField(max_length=255, write_only=True)
@@ -175,8 +175,10 @@ class ActiveDoctorSerializer(serializers.ModelSerializer):
 
 class ClinicDoctorSerializer(serializers.ModelSerializer):
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+    doctor_id = serializers.IntegerField(source="doctor.id", read_only=True)
     specialty = serializers.CharField(source="doctor.specialty", read_only=True)
-
+    languages = LanguageSerializer(many=True, read_only=True)
+    
     class Meta:
         model = User
         fields = [
@@ -190,5 +192,38 @@ class ClinicDoctorSerializer(serializers.ModelSerializer):
             "country",
             "experience_years",
             "specialty",
+            "doctor_id",
+            "rating",
+            "reviews"
         ]
-     
+
+
+class CalendarAppointmentSerializer(AppointmentSerializer):
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        # Safely retrieve patient details
+        patient_user = getattr(instance.patient, "user", None)
+        patient_profile_picture = (
+            patient_user.profile_picture.url if patient_user and patient_user.profile_picture else None
+        )
+        data["patient"] = {
+            "id": instance.patient.id,
+            "name": patient_user.get_full_name() if patient_user else "Unknown",
+            "profile_picture": patient_profile_picture
+        }
+
+        # Safely retrieve doctor details
+        doctor_user = getattr(instance.doctor, "user", None)
+        doctor_profile_picture = (
+            doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
+        )
+        data["doctor"] = {
+            "id": instance.doctor.id,
+            "name": doctor_user.get_full_name() if doctor_user else "Unknown",
+            "profile_picture": doctor_profile_picture
+        }
+
+        return data
+
+
