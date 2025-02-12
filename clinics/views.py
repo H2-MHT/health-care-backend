@@ -14,6 +14,8 @@ from users.serializers import UserSerializer
 from django.conf import settings
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from django.utils.timezone import make_aware
+from doctors.models import Doctor
 
 # Create your views here.
 
@@ -108,16 +110,15 @@ class ClinicInfoAPIView(APIView):
                 serializer.save()
                 return Response(
                     {
-                    "message": "Clinic information successfully updated",
-                    "data": serializer.data
+                        "message": "Clinic information successfully updated",
+                        "data": serializer.data,
                     },
-                    status=status.HTTP_200_OK
-                    )
+                    status=status.HTTP_200_OK,
+                )
             return Response(
-                {
-                    "error": "Invalid data provided.", "details": serializer.errors},
+                {"error": "Invalid data provided.", "details": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
-        )
+            )
         except Clinic.DoesNotExist:
             return Response(
                 {"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND
@@ -134,16 +135,23 @@ class ClinicReviewListCreateAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         """List all clinic reviews"""
-        reviews = ClinicReview.objects.all()
+        reviews = ClinicReview.objects.filter(clinic__user=request.user)
         serializer = ClinicReviewSerializer(reviews, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
         """Create a new clinic review"""
         serializer = ClinicReviewSerializer(data=request.data)
+        try:
+            doctor = Doctor.objects.get(user=request.user)
+        except Doctor.DoesNotExist:
+            return Response(
+                {"error": "Your have not permisson to review, only doctors allowed!."}, status=status.HTTP_404_NOT_FOUND
+            )
+        
         if serializer.is_valid():
             serializer.save(
-                doctor=request.user.doctor
+                doctor=doctor
             )  # Associate review with the logged-in doctor
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -240,15 +248,9 @@ class ClinicReviewStatsAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         try:
-            stats = ClinicReview.objects.filter(clinic__user=request.user).aggregate(
-                total_reviews=Count("id"), average_score=Avg("rating")
-            )
+            user = request.user
 
-            if stats["total_reviews"] == 0:
-                return Response(
-                    {"error": "No reviews found for this clinic"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+            stats = {"total_reviews": user.reviews, "average_score": user.rating}
 
             return Response(stats, status=status.HTTP_200_OK)
 
@@ -580,3 +582,65 @@ class ClinicReportRemoveDoctorAPIView(APIView):
             sg.send(message)
         except Exception as e:
             print("Error sending email:", e)
+
+
+class ClinicCalendarAppointmentsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Filters appointments based on:
+        - date: Specific date from request params (default: today)
+        - type: day, week, or month
+        """
+        try:
+            queryset = Appointment.objects.filter(clinic__user=request.user)
+            date_param = request.query_params.get("date", None)
+            view_type = request.query_params.get("type", "month")
+
+            # Convert date string to a datetime object
+            if date_param:
+                try:
+                    current_date = make_aware(
+                        datetime.strptime(date_param, "%Y-%m-%d")
+                    ).date()
+                except ValueError:
+                    return queryset.none()
+            else:
+                current_date = datetime.today().date()
+
+            # Apply filters based on type
+            if view_type == "day":
+                queryset = queryset.filter(date_time__date=current_date)
+
+            elif view_type == "week":
+                start_of_week = current_date - timedelta(
+                    days=current_date.weekday()
+                )  # Monday
+                end_of_week = start_of_week + timedelta(days=6)  # Sunday
+                queryset = queryset.filter(
+                    date_time__date__range=[start_of_week, end_of_week]
+                )
+
+            elif view_type == "month":
+                start_of_month = current_date.replace(day=1)
+                next_month = start_of_month + timedelta(
+                    days=32
+                )  # Jump ahead to next month
+                end_of_month = next_month.replace(day=1) - timedelta(
+                    days=1
+                )  # Last day of this month
+                queryset = queryset.filter(
+                    date_time__date__range=[start_of_month, end_of_month]
+                )
+
+            serializer = CalendarAppointmentSerializer(
+                queryset.order_by("date_time"), many=True
+            )
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

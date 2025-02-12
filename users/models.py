@@ -101,6 +101,8 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
     last_activity = models.DateTimeField(blank=True, null=True)
+    rating = models.PositiveSmallIntegerField(default=0)
+    reviews = models.PositiveBigIntegerField(default=0)
 
     # Set email as the unique identifier
     USERNAME_FIELD = "email"
