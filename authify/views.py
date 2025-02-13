@@ -165,7 +165,7 @@ class OTPVerificationView(APIView):
 
             # OTP is valid, mark user as verified
             user.is_verified = True
-            user.otp = None  # Clear OTP after verification
+            user.otp = ""  # Clear OTP after verification
             user.save()
             logger.info(f"User {email} verified successfully.")
 
