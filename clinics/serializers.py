@@ -71,22 +71,14 @@ class ServicesProvidedSerializer(serializers.ModelSerializer):
 
 class ClinicInfoSerializer(serializers.ModelSerializer):
     # User fields
-    bio = serializers.CharField(source='user.bio', required=False, allow_null=True)
-    country = serializers.CharField(source='user.country', required=False, allow_null=True)
-    city = serializers.CharField(source='user.city', required=False, allow_null=True)
-    phone_number = serializers.CharField(source='user.phone_number', required=False, allow_null=True)
-    email = serializers.EmailField(source='user.email', required=True)  # Email is required for uniqueness
-    working_time = serializers.CharField(source='user.working_time', required=False, allow_null=True)
-    expertise = serializers.CharField(source='user.expertise', required=False, allow_null=True)
+    bio = serializers.CharField(source='user.bio', required=False)
+    country = serializers.CharField(source='user.country', required=False)
+    city = serializers.CharField(source='user.city', required=False)
+    phone_number = serializers.CharField(source='user.phone_number', required=False)
+    email = serializers.EmailField(source='user.email', required=True)
+    working_time = serializers.CharField(source='user.working_time', required=False)
+    expertise = serializers.CharField(source='user.expertise', required=False)
     languages = serializers.CharField(max_length=255, required=False)
-
-    # Clinic fields
-    organisation_name = serializers.CharField(required=False, allow_null=True)
-    license_number = serializers.CharField(required=False, allow_null=True)
-    clinic_type = serializers.ChoiceField(choices=CLINIC_TYPE_CHOICES, required=False)
-    public_name = serializers.CharField(required=False, allow_null=True)
-    clinic_logo = serializers.ImageField(required=False, allow_null=True)
-    website = serializers.URLField(required=False, allow_null=True)
 
     class Meta:
         model = Clinic
