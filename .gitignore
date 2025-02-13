@@ -18,7 +18,6 @@ venv.bak/
 *.pot
 *.pyc
 db.sqlite3
-/static/
 media/
 
 # IDEs and Editors
