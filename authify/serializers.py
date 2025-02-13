@@ -31,6 +31,8 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "working_time",
             "profile_picture",
             "phone_number",
+            "rating",
+            "reviews"
         ]
 
     def validate(self, data):

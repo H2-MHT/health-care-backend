@@ -65,33 +65,33 @@ class User(AbstractUser):
 
     # Personal Information
     first_name = models.CharField(max_length=150, null=False, blank=False)
-    last_name = models.CharField(max_length=150, null=True, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
     dob = models.DateField(null=True, blank=True)
     gender = models.CharField(
-        max_length=10, choices=GENDER_CHOICES, null=True, blank=True
+        max_length=10, choices=GENDER_CHOICES, blank=True
     )
-    phone_number = models.CharField(max_length=20, null=True, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
     profile_picture = models.ImageField(
         upload_to="profile_pictures/", null=True, blank=True
     )
-    bio = models.TextField(null=True, blank=True)
-    otp = models.CharField(max_length=6, null=True, blank=True)
-    temp_password = models.CharField(max_length=128, null=True, blank=True)
+    bio = models.TextField(blank=True)
+    otp = models.CharField(max_length=6, blank=True)
+    temp_password = models.CharField(max_length=128, blank=True)
 
     # Address Information
-    country = models.CharField(max_length=255, null=True, blank=True)
-    city = models.CharField(max_length=255, null=True, blank=True)
-    residence = models.CharField(max_length=255, null=True, blank=True)
+    country = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=255, blank=True)
+    residence = models.CharField(max_length=255, blank=True)
 
     # Professional Information
     role = models.CharField(
         max_length=20, choices=ROLE_CHOICES, default="Patient", null=False
     )
-    languages = models.ManyToManyField(Language)
+    languages = models.ManyToManyField(Language, blank=True)
     work_place = models.ForeignKey("clinics.Clinic", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinic_work")
-    expertise = models.TextField(null=True, blank=True)
-    professional_stat = models.TextField(null=True, blank=True)
-    working_time = models.CharField(max_length=255, null=True, blank=True)
+    expertise = models.TextField(blank=True)
+    professional_stat = models.TextField(blank=True)
+    working_time = models.CharField(max_length=255, blank=True)
     # Agreement
     terms_and_condition = models.BooleanField(
         validators=[validate_terms], default=False
@@ -101,8 +101,8 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
     last_activity = models.DateTimeField(blank=True, null=True)
-    rating = models.PositiveSmallIntegerField(default=0)
-    reviews = models.PositiveBigIntegerField(default=0)
+    rating = models.PositiveSmallIntegerField(null=True, default=0)
+    reviews = models.PositiveBigIntegerField(null=True, default=0)
 
     # Set email as the unique identifier
     USERNAME_FIELD = "email"
