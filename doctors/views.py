@@ -113,7 +113,7 @@ class DoctorNotesCreateAPIView(APIView):
 
         note_id = kwargs.get("pk")
         try:
-            note = DoctorNotes.objects.get(id=note_id, doctor=request.user)
+            note = DoctorNotes.objects.get(id=note_id, doctor__user=request.user)
         except DoctorNotes.DoesNotExist:
             logger.warning(
                 "Doctor note update failed - Note not found for user: %s",
