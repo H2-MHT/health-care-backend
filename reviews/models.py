@@ -1,5 +1,6 @@
 from django.db import models
 from users.models import User
+from django.db.models import Avg, Count
 
 # Create your models here.
 
@@ -13,8 +14,23 @@ class Review(models.Model):
     recommend = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
-    # def __str__(self):
-    #     return f"{self.patient.user.first_name} - {self.doctor.user.first_name} - {self.rating}"
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.update_doctor_user_rating()
+
+    def update_doctor_user_rating(self):
+        """ Update the doctor's User model rating and review count """
+        if self.doctor and self.doctor.user:
+            doctor_user = self.doctor.user
+            doctor_reviews = Review.objects.filter(doctor=self.doctor, rating__isnull=False)
+
+            avg_rating = doctor_reviews.aggregate(Avg("rating"))["rating__avg"] or 0
+            review_count = doctor_reviews.count()
+
+            doctor_user.rating = avg_rating
+            doctor_user.reviews = review_count
+            doctor_user.save()
+
     def __str__(self):
         return f"Review by {self.patient} for Doctor {self.doctor}"
     
