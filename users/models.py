@@ -66,7 +66,7 @@ class User(AbstractUser):
     # Personal Information
     first_name = models.CharField(max_length=150, null=False, blank=False)
     last_name = models.CharField(max_length=150, blank=True, default="")
-    dob = models.DateField(null=True, blank=True, default="")
+    dob = models.DateField(null=True, blank=True)
     gender = models.CharField(
         max_length=10, choices=GENDER_CHOICES, blank=True, default="Other"
     )
@@ -74,7 +74,7 @@ class User(AbstractUser):
     profile_picture = models.ImageField(
         upload_to="profile_pictures/", null=True, blank=True
     )
-    bio = models.TextField(blank=True)
+    bio = models.TextField(blank=True, default="")
     otp = models.CharField(max_length=6, blank=True, default="")
     temp_password = models.CharField(max_length=128, blank=True, default="")
 
