@@ -64,7 +64,7 @@ jobs:
                 targetType: 'inline'
                 script: |
                   echo "copying latest code to stable repo "
-                  cp -r --no-dereference --preserve=links  /home/azureuser/$(Build.BuildId) /home/azureuser/stable
+                  cp -r --no-dereference --preserve=links  /home/azureuser/$(Build.BuildId)/* /home/azureuser/stable
                   echo "restarting gunicorn"
                   systemctl restart gunicorn.socket gunicorn.service
               displayName: 'restarting'
