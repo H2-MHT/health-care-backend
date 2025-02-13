@@ -114,6 +114,8 @@ def validate_profile_picture(value):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -134,6 +136,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "professional_stat",
             "working_time",
             "profile_picture",
+            "years",
         ]
 
 

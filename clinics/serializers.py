@@ -176,7 +176,7 @@ class ActiveDoctorSerializer(serializers.ModelSerializer):
 class ClinicDoctorSerializer(serializers.ModelSerializer):
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
     specialty = serializers.CharField(source="doctor.specialty", read_only=True)
-
+    qualifications = serializers.CharField(source="doctor.qualifications", read_only=True)
     class Meta:
         model = User
         fields = [
@@ -190,5 +190,6 @@ class ClinicDoctorSerializer(serializers.ModelSerializer):
             "country",
             "experience_years",
             "specialty",
+            "qualifications"
         ]
      
