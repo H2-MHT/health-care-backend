@@ -26,9 +26,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = 'd84*5d9^_qv--%8in$l1&2$%(rbbfywi=zfc9v5jv!w(r%5x#x'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['*', '209.38.123.166']
+ALLOWED_HOSTS = ['*', '209.38.123.166', '20.0.160.6']
 
 # Application definition
 
@@ -167,6 +167,21 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # media files
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        "OPTIONS": {
+            'overwrite_files': False,
+            'expiration_secs': 86400
+        },
+    },
+}
+
+AZURE_ACCOUNT_NAME = os.getenv("AZURE_ACCOUNT_NAME")
+AZURE_ACCOUNT_KEY = os.getenv("AZURE_ACCOUNT_KEY")
+AZURE_CONTAINER = os.getenv("AZURE_CONTAINER")
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
