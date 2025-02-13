@@ -65,23 +65,23 @@ class User(AbstractUser):
 
     # Personal Information
     first_name = models.CharField(max_length=150, null=False, blank=False)
-    last_name = models.CharField(max_length=150, blank=True)
-    dob = models.DateField(null=True, blank=True)
+    last_name = models.CharField(max_length=150, blank=True, default="")
+    dob = models.DateField(null=True, blank=True, default="")
     gender = models.CharField(
-        max_length=10, choices=GENDER_CHOICES, blank=True
+        max_length=10, choices=GENDER_CHOICES, blank=True, default="Other"
     )
-    phone_number = models.CharField(max_length=20, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True, default="")
     profile_picture = models.ImageField(
         upload_to="profile_pictures/", null=True, blank=True
     )
     bio = models.TextField(blank=True)
-    otp = models.CharField(max_length=6, blank=True)
-    temp_password = models.CharField(max_length=128, blank=True)
+    otp = models.CharField(max_length=6, blank=True, default="")
+    temp_password = models.CharField(max_length=128, blank=True, default="")
 
     # Address Information
-    country = models.CharField(max_length=255, blank=True)
-    city = models.CharField(max_length=255, blank=True)
-    residence = models.CharField(max_length=255, blank=True)
+    country = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=255, blank=True, default="")
+    residence = models.CharField(max_length=255, blank=True, default="")
 
     # Professional Information
     role = models.CharField(
@@ -89,9 +89,9 @@ class User(AbstractUser):
     )
     languages = models.ManyToManyField(Language, blank=True)
     work_place = models.ForeignKey("clinics.Clinic", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinic_work")
-    expertise = models.TextField(blank=True)
-    professional_stat = models.TextField(blank=True)
-    working_time = models.CharField(max_length=255, blank=True)
+    expertise = models.TextField(blank=True, default="")
+    professional_stat = models.TextField(blank=True, default="")
+    working_time = models.CharField(max_length=255, blank=True, default="")
     # Agreement
     terms_and_condition = models.BooleanField(
         validators=[validate_terms], default=False
