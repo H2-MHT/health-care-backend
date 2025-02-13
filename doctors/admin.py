@@ -18,7 +18,7 @@ class DoctorAdmin(admin.ModelAdmin):
     list_display = ['id','user',]
 
 class ReferralAdmin(admin.ModelAdmin):
-    list_display = ['id','personal_code','invited_by','referral_points', 'invited_users_count']
+    list_display = ['id','personal_code','referral_points', 'invited_users_count']
     
 admin.site.register(Doctor, DoctorAdmin)
 admin.site.register(DoctorNotes)

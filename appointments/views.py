@@ -7,7 +7,7 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 from .serializers import RescheduleAppointmentSerializer
 from rest_framework.response import Response
-
+from doctors.models import Invitation
 class RescheduleAppointmentView(APIView):
     def patch(self, request, pk):
         try:
@@ -112,7 +112,15 @@ def update_appointment_status(request):
             appointment.date = new_date if new_date else appointment.date
             appointment.time = new_time if new_time else appointment.time
             appointment.save()
-
+            if appointment.status == "Completed":
+                count = Appointment.objects.filter(doctor = appointment.doctor, status="Completed").count()
+                if count == 1:
+                    invitation = Invitation.objects.filter(invited_user=appointment.doctor.user).first() 
+                    if invitation and not invitation.first_appointment:
+                        invitation.invited_by.referral_points += 1
+                        invitation.invited_by.save()
+                        invitation.first_appointment = True
+                        invitation.save()
             return JsonResponse({
                 "message": "Appointment status updated successfully.",
                 "appointment_id": appointment.id,
