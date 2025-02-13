@@ -344,22 +344,7 @@ class GenerateReferralCodeView(APIView):
                     "Generated new referral code for user: %s", request.user.email
                 )
 
-            # Update referral points for completed first appointments
-            with transaction.atomic():
-                updated_count = Invitation.objects.filter(
-                    invited_by=referral,
-                    first_appointment=True,
-                    invited_user__isnull=False,
-                ).update(first_appointment=False)
-                if updated_count > 0:
-                    referral.referral_points += updated_count * 10
-                    referral.save()
-                    logger.info(
-                        "Updated referral points for user: %s (added %d points)",
-                        request.user.email,
-                        updated_count * 10,
-                    )
-
+            # Return referral data
             serializer = ReferralSerializer(referral)
             return Response(
                 {
@@ -443,7 +428,6 @@ class InviteUserView(APIView):
                 referral.invited_users_count = Invitation.objects.filter(
                     invited_by=referral
                 ).count()
-                referral.referral_use = True
                 referral.save()
 
                 logger.info(

@@ -8,7 +8,11 @@ from django.templatetags.static import static
 import os
 from datetime import datetime
 from weasyprint import HTML
-from django.http import JsonResponse
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.http import HttpResponse
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -47,7 +51,52 @@ def generate_pdf(template_path, context_dict, request):
     logging.debug("PDF content ready.")
     return pdf_content, temp_pdf_name
 
+class PrescriptionPDFView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        try:
+            template_path = 'prescription.html'
+            context = {
+                    'prescription_id': '27346733-022',
+                    'created_date': '6 March, 2020',
+                    'due_date': '7 March, 2020',
+                    'doctor_name': 'Dr. Ava Willson',
+                    'doctor_email': 'starfleet@abagal.com',
+                    'doctor_phone': '(+254) 243-124-392',
+                    'hospital_name': 'Hospital St.Katarina',
+                    'hospital_address': '9029 Arcane, Jupiter 2',
+                    'patient_name': 'Din Djarin',
+                    'patient_email': 'dindjarin@gmail.com',
+                    'patient_address': '9029 Salt Lake, Mandalor',
+                    'patient_phone': '(+254) 724-453-233',
+                    'diagnosis': 'ave dolurum kircbe',
+                    'notes': 'akdncurfj ksk fycn wjkd sa chfnra,',
+                    'medicines': [
+                        {'name': 'Medical consultation', 'description': 'details of description', 'quantity': '1 ml',
+                        'time': 'Morning', 'times_per_day': '2', 'duration': '6 days'},
+                        {'name': 'Paracetamol', 'description': 'Pain reliever', 'quantity': '500 mg', 'time': 'Evening',
+                        'times_per_day': '3', 'duration': '5 days'}
+                    ],
+                    'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
+                }
+            pdf_content, temp_pdf_name = generate_pdf(template_path, context, request)
+            # Return PDF response
+            response = HttpResponse(pdf_content, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename={temp_pdf_name}'
+            return response
 
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+    def post(self,request):
+        try:
+            send = send_prescription_email(request)
+            return Response(send, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        
 def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request):
     """
     Generate a PDF and send it via SendGrid email with the attachment.
@@ -118,4 +167,4 @@ def send_prescription_email(request):
 
     send_pdf_via_sendgrid(template_path, context, recipient_email, request)
 
-    return JsonResponse({"status": "Email sent successfully via SendGrid!"})
+    return {"status": "Email sent successfully via SendGrid!"}
