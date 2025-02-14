@@ -38,6 +38,8 @@ urlpatterns = [
     # Include the urls from the clinic details
     path('clinics/', include('clinics.urls')),
     # Include the urls from the consultations app
-    path('consultation/', include('consultations.urls'))
+    path('consultation/', include('consultations.urls')),
+    # Include urls from the patient app
+    path('patient/', include('patients.urls'))
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
