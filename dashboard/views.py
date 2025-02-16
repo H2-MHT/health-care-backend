@@ -56,7 +56,7 @@ class DashboardAPIView(APIView):
                     "patient_id": appointment.patient.id,
                     "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
                     "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
-                    "clinic": appointment.clinic.name if appointment.clinic else "N/A",
+                    "clinic": appointment.clinic.user.first_name if appointment.clinic and appointment.clinic.user else "N/A",
                     "date_time": appointment.date_time.isoformat(),
                     "status": appointment.status,
                 }
@@ -74,7 +74,7 @@ class DashboardAPIView(APIView):
                     "appointment_id": appt.id,
                     "patient_name": f"{appt.patient.user.first_name} {appt.patient.user.last_name}",
                     "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
-                    "clinic": appt.clinic.name if appt.clinic else "N/A",
+                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
                     "date_time": appt.date_time.isoformat(),
                     "status": appt.status,
                 }
@@ -107,7 +107,7 @@ class DashboardAPIView(APIView):
                     {
                         "patient_name": f"{appt['patient__user__first_name']} {appt['patient__user__last_name']}",
                         "doctor_name": f"{appt['doctor__user__first_name']} {appt['doctor__user__last_name']}",
-                        "clinic": appt["clinic__name"],
+                        "clinic": appt["clinic__user__first_name"],
                         "date": appt["date_time"].isoformat(),
                         "status": appt["status"],
                     }
