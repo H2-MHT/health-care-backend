@@ -7,7 +7,6 @@ from clinics.serializers import *
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Avg, Q
 from django.db.models.functions import ExtractDay, ExtractMonth, ExtractYear
-from django.utils import timezone
 from datetime import timedelta, datetime
 from appointments.models import Appointment
 from users.serializers import UserSerializer
@@ -16,6 +15,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from django.utils.timezone import make_aware
 from doctors.models import Doctor
+from django.utils import timezone
 
 # Create your views here.
 
@@ -269,7 +269,7 @@ class ActiveDoctorsAPIView(APIView):
             total_doctors = all_doctors.count()
 
             # Get only active doctors (last activity within 30 minutes)
-            thirty_minutes_ago = timezone.now() - timedelta(minutes=30)
+            thirty_minutes_ago = timezone.localtime().now() - timedelta(minutes=30)
             active_doctors = all_doctors.filter(last_activity__gte=thirty_minutes_ago)
             active_doctors_count = active_doctors.count()
 
@@ -338,7 +338,7 @@ class ClinicAppointmentStatsView(APIView):
 
         # Status mapping from model to API response keys
         status_map = {
-            "Pending": "booked",
+            "Confirmed": "booked",
             "Cancelled": "declined",
             "Completed": "completed",
         }
@@ -389,71 +389,80 @@ class ClinicAppointmentActivityView(APIView):
         data = {}
 
         if activity_type == "day":
-            start_date = selected_date - timedelta(
-                days=4
-            )  # Last 5 days including today
-            end_date = selected_date
+            start_date = selected_date - timedelta(days=selected_date.weekday())  # Start of the week (Monday)
+            end_date = start_date + timedelta(days=6)  # End of the week (Sunday)
             date_format = "%Y-%m-%d"
 
-            # Initialize default data for last 5 days
-            for i in range(5):
-                day_key = (start_date + timedelta(days=i)).strftime(date_format)
-                data[day_key] = {"name": f"0{i+1}", "red": 0, "green": 0, "blue": 0}
+            # Initialize default data for the entire week
+            days_range = (end_date - start_date).days + 1  # Ensure full week
 
-            # Query database
+            for i in range(days_range):
+                day_key = (start_date + timedelta(days=i)).strftime(date_format)
+                data[day_key] = {
+                    "name": (start_date + timedelta(days=i)).strftime("%d"),  # Day name
+                    "Declined": 0,
+                    "Completed": 0,
+                    "Booked": 0,
+                }
+
+            # Query database for appointments within the week
             appointments = (
-                Appointment.objects.filter(
-                    date_time__date__range=[start_date, end_date]
-                )
+                Appointment.objects.filter(date_time__date__range=[start_date, end_date])
                 .values("date_time__date", "status")
                 .annotate(count=Count("id"))
             )
 
-            # Populate actual data
+            # Populate actual data with appointment counts
             for entry in appointments:
                 date_key = entry["date_time__date"].strftime(date_format)
-                print(date_key, entry)
                 if entry["status"] == "Cancelled":
-                    data[date_key]["red"] += entry["count"]
+                    data[date_key]["Declined"] += entry["count"]
                 elif entry["status"] == "Completed":
-                    data[date_key]["green"] += entry["count"]
+                    data[date_key]["Completed"] += entry["count"]
                 elif entry["status"] == "Confirmed":
-                    data[date_key]["blue"] += entry["count"]
+                    data[date_key]["Booked"] += entry["count"]
 
         elif activity_type == "week":
             start_date = selected_date.replace(day=1)  # First day of the month
-            end_date = start_date.replace(
-                month=start_date.month % 12 + 1, day=1
-            ) - timedelta(
-                days=1
-            )  # Last day of the month
+            next_month = start_date.month % 12 + 1
+            next_month_year = start_date.year + (1 if next_month == 1 else 0)
+            end_date = start_date.replace(month=next_month, year=next_month_year, day=1) - timedelta(days=1)  # Last day of the month
+            date_format = "%Y-%m-%d"
+
+            # Calculate total weeks dynamically
+            total_days = (end_date - start_date).days + 1
+            total_weeks = (total_days + 6) // 7  # Ensure full weeks
 
             # Initialize default weeks
-            for i in range(1, 5):
+            for i in range(1, total_weeks + 1):
                 week_key = f"Week {i}"
-                data[week_key] = {"name": week_key, "red": 0, "green": 0, "blue": 0}
+                data[week_key] = {
+                    "name": week_key,
+                    "Declined": 0,
+                    "Completed": 0,
+                    "Booked": 0,
+                }
 
-            # Query database
+            # Query database for appointments within the month
             appointments = (
-                Appointment.objects.filter(
-                    date_time__date__range=[start_date, end_date]
-                )
+                Appointment.objects.filter(date_time__date__range=[start_date, end_date])
                 .annotate(day=ExtractDay("date_time"))
                 .values("day", "status")
                 .annotate(count=Count("id"))
             )
 
-            # Populate actual data
+            # Populate actual data with appointment counts
             for entry in appointments:
-                week_number = (entry["day"] - 1) // 7 + 1  # Custom week calculation
+                print(entry['day'])
+                week_number = (entry["day"] - 1) // 7 + 1  # Determine week number dynamically
                 week_key = f"Week {week_number}"
 
                 if entry["status"] == "Cancelled":
-                    data[week_key]["red"] += entry["count"]
+                    data[week_key]["Declined"] += entry["count"]
                 elif entry["status"] == "Completed":
-                    data[week_key]["green"] += entry["count"]
+                    data[week_key]["Completed"] += entry["count"]
                 elif entry["status"] == "Confirmed":
-                    data[week_key]["blue"] += entry["count"]
+                    data[week_key]["Booked"] += entry["count"]
 
         elif activity_type == "month":
             start_date = selected_date.replace(month=1, day=1)  # Start of the year
@@ -462,7 +471,7 @@ class ClinicAppointmentActivityView(APIView):
             # Initialize default months
             for month in range(1, 13):
                 month_key = datetime(2000, month, 1).strftime("%b")
-                data[month_key] = {"name": month_key, "red": 0, "green": 0, "blue": 0}
+                data[month_key] = {"name": month_key, "Declined": 0, "Completed": 0, "Booked": 0}
 
             # Query database
             appointments = (
@@ -478,11 +487,11 @@ class ClinicAppointmentActivityView(APIView):
             for entry in appointments:
                 month_key = datetime(2000, entry["month"], 1).strftime("%b")
                 if entry["status"] == "Cancelled":
-                    data[month_key]["red"] += entry["count"]
+                    data[month_key]["Declined"] += entry["count"]
                 elif entry["status"] == "Completed":
-                    data[month_key]["green"] += entry["count"]
+                    data[month_key]["Completed"] += entry["count"]
                 elif entry["status"] == "Confirmed":
-                    data[month_key]["blue"] += entry["count"]
+                    data[month_key]["Booked"] += entry["count"]
 
         else:
             return Response(
