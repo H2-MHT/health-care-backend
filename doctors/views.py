@@ -65,6 +65,25 @@ logger = logging.getLogger(__name__)
 
 class DoctorNotesCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        """Retrieve doctor notes for the currently logged-in doctor."""
+        logger.info("Doctor %s is retrieving their notes.", request.user.email)
+
+        if request.user.role != "Doctor":
+            logger.warning("Unauthorized attempt to access notes by user: %s", request.user.email)
+            return Response(
+                {"error": "Only doctors can view their notes."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        notes = DoctorNotes.objects.filter(doctor__user=request.user)
+        serializer = DoctorNotesSerializer(notes, many=True)
+        
+        return Response(
+            {"message": "Doctor notes retrieved successfully.", "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )
 
     def post(self, request, *args, **kwargs):
         logger.info("Doctor %s is attempting to create a note.", request.user.email)
@@ -163,7 +182,7 @@ class DoctorNotesCreateAPIView(APIView):
 
         note_id = kwargs.get("pk")
         try:
-            note = DoctorNotes.objects.get(id=note_id, doctor=request.user)
+            note = DoctorNotes.objects.get(id=note_id, doctor=request.user.doctor)
         except DoctorNotes.DoesNotExist:
             logger.warning(
                 "Doctor note deletion failed - Note not found for user: %s",
