@@ -13,9 +13,9 @@ from users.serializers import UserSerializer
 from django.conf import settings
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
-from django.utils.timezone import make_aware
 from doctors.models import Doctor
 from django.utils import timezone
+from django.utils.timezone import now
 
 # Create your views here.
 
@@ -603,53 +603,27 @@ class ClinicCalendarAppointmentsAPIView(APIView):
         - type: day, week, or month
         """
         try:
-            queryset = Appointment.objects.filter(clinic__user=request.user)
-            date_param = request.query_params.get("date", None)
-            view_type = request.query_params.get("type", "month")
+            # Use timezone-aware current date
+            today = now().date()
+            start = request.query_params.get("start_date", today.isoformat())
+            end = request.query_params.get("end_date", (today + timedelta(days=1)).isoformat())
 
-            # Convert date string to a datetime object
-            if date_param:
-                try:
-                    current_date = make_aware(
-                        datetime.strptime(date_param, "%Y-%m-%d")
-                    ).date()
-                except ValueError:
-                    return queryset.none()
-            else:
-                current_date = datetime.today().date()
-
-            # Apply filters based on type
-            if view_type == "day":
-                queryset = queryset.filter(date_time__date=current_date)
-
-            elif view_type == "week":
-                start_of_week = current_date - timedelta(
-                    days=current_date.weekday()
-                )  # Monday
-                end_of_week = start_of_week + timedelta(days=6)  # Sunday
-                queryset = queryset.filter(
-                    date_time__date__range=[start_of_week, end_of_week]
-                )
-
-            elif view_type == "month":
-                start_of_month = current_date.replace(day=1)
-                next_month = start_of_month + timedelta(
-                    days=32
-                )  # Jump ahead to next month
-                end_of_month = next_month.replace(day=1) - timedelta(
-                    days=1
-                )  # Last day of this month
-                queryset = queryset.filter(
-                    date_time__date__range=[start_of_month, end_of_month]
-                )
-
-            serializer = CalendarAppointmentSerializer(
-                queryset.order_by("date_time"), many=True
+            # Validate and convert string dates to date objects
+            try:
+                start_date = datetime.strptime(start, "%Y-%m-%d").date()
+                end_date = datetime.strptime(end, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Query appointments within the given date range
+            queryset = Appointment.objects.filter(
+                clinic__user=request.user,
+                date_time__date__range=[start_date, end_date]
             )
 
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK,
-            )
+            serializer = CalendarAppointmentSerializer(queryset.order_by("date_time"), many=True)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
