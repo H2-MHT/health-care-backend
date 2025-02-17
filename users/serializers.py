@@ -28,11 +28,10 @@ class EducationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Education
         fields = [
-            'id', 'school', 'degree', 'field_of_study', 'start_month', 'start_year', 
-            'end_month', 'end_year', 'grade', 'activities_and_societies', 'description', 
-            'skills', 'media'
+            'id', 'school', 'degree', 'field_of_study', 'start_month_year', 'end_month_year',
+            'grade', 'activities_and_societies', 'description', 'skills', 'media'
         ]
-
+    
     def create(self, validated_data):
         media = validated_data.pop('media', None)
         # Create Education instance

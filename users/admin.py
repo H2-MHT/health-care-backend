@@ -15,7 +15,7 @@ class UserAdmin(admin.ModelAdmin):
 
     
 class EducationAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'degree', 'start_month', 'start_year', 'end_month', 'end_year', 'grade')
+    list_display = ('id', 'user', 'degree', 'start_month_year', 'end_month_year', 'grade')
 
 admin.site.register(Media)
 admin.site.register(Skill)
