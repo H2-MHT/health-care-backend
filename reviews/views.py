@@ -62,43 +62,50 @@ class AddReviewPIView(APIView):
     
 # view all reviews
     def get(self, request):
-        user = self.request.user
-        doctor_id = request.query_params.get("doctor_id")
-        patient_id = request.query_params.get("patient_id")
+        try:
+            user = self.request.user
+            doctor_id = request.query_params.get("doctor_id")
+            patient_id = request.query_params.get("patient_id")
 
-        # Fetch reviews by doctor_id if provided
-        if doctor_id:
-            doctor = get_object_or_404(Doctor, id=doctor_id)
-            reviews = Review.objects.filter(doctor=doctor)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            # Fetch reviews by doctor_id if provided
+            if doctor_id:
+                doctor = get_object_or_404(Doctor, id=doctor_id)
+                reviews = Review.objects.filter(doctor=doctor)
+                serializer = ReviewSerializer(reviews, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # Fetch reviews by patient_id if provided
-        if patient_id:
-            patient = get_object_or_404(Patient, id=patient_id)
-            reviews = Review.objects.filter(patient=patient)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            # Fetch reviews by patient_id if provided
+            if patient_id:
+                patient = get_object_or_404(Patient, id=patient_id)
+                reviews = Review.objects.filter(patient=patient)
+                serializer = ReviewSerializer(reviews, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # If the user is a doctor, fetch all reviews for the doctor
-        if hasattr(user, "doctor"):
-            doctor = user.doctor
-            reviews = Review.objects.filter(doctor=doctor)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            # If the user is a doctor, fetch all reviews for the doctor
+            if hasattr(user, "doctor"):
+                doctor = user.doctor
+                reviews = Review.objects.filter(doctor=doctor)
+                serializer = ReviewSerializer(reviews, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # If the user is a patient, fetch all reviews created by the patient
-        elif hasattr(user, "patient"):
-            patient = user.patient
-            reviews = Review.objects.filter(patient=patient)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            # If the user is a patient, fetch all reviews created by the patient
+            elif hasattr(user, "patient"):
+                patient = user.patient
+                reviews = Review.objects.filter(patient=patient)
+                serializer = ReviewSerializer(reviews, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # If the user is neither a doctor nor a patient
-        return Response(
-            {"detail": "Only doctors or patients can view reviews."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+            # If the user is neither a doctor nor a patient
+            return Response(
+                {"detail": "Only doctors or patients can view reviews."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )   
+    
 
 class ReplyAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -110,76 +117,100 @@ class ReplyAPIView(APIView):
             return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
         user = request.user
         # Check if the user is the review owner (patient) or the associated doctor
-        if hasattr(user, 'patient'):
-            patient = user.patient
-            # Check if the patient is the review owner
-            if review.patient != patient:
+        try:
+            # Check if the user is the review owner (patient) or the associated doctor
+            if hasattr(user, 'patient'):
+                patient = user.patient
+                # Check if the patient is the review owner
+                if review.patient != patient:
+                    return Response(
+                        {"detail": "Only the review owner or the associated doctor can reply."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            elif hasattr(user, 'doctor'):
+                doctor = user.doctor
+                # Check if the doctor associated with the review is replying
+                if review.doctor != doctor:
+                    return Response(
+                        {"detail": "Only the review owner or the associated doctor can reply."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            else:
                 return Response(
-                    {"detail": "Only the review owner or the associated doctor can reply."},
+                    {"detail": "Only patients or doctors can reply."},
                     status=status.HTTP_403_FORBIDDEN
                 )
-        elif hasattr(user, 'doctor'):
-            doctor = user.doctor
-            # Check if the doctor associated with the review is replying
-            if review.doctor != doctor:
-                return Response(
-                    {"detail": "Only the review owner or the associated doctor can reply."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        else:
+
+            # Reply for the review
+            serializer = ReplySerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                reply = serializer.save(review=review, user=user)  # Save the reply under the review
+                # Add the reply to the review's response
+                review_data = ReviewSerializer(review).data
+                review_data['replies'] = ReplySerializer(review.replies.all(), many=True).data
+                # Return the review with the associated replies and user names
+                return Response(review_data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
             return Response(
-                {"detail": "Only patients or doctors can reply."},
-                status=status.HTTP_403_FORBIDDEN
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        # Reply for the review
-        serializer = ReplySerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            reply = serializer.save(review=review, user=user)  # Save the reply under the review
-            # Add the reply to the review's response
-            review_data = ReviewSerializer(review).data
-            review_data['replies'] = ReplySerializer(review.replies.all(), many=True).data
-            # Return the review with the associated replies and user names
-            return Response(review_data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
     # GET method to fetch reviews with replies and user details
     
     def get(self, request, *args, **kwargs):
-        # Fetch all reviews
-        reviews = Review.objects.all()
-
-        # Serialize reviews and their replies
-        reviews_data = []
-        for review in reviews:
-            review_data = ReviewSerializer(review).data
-            replies_data = ReplySerializer(review.replies.all(), many=True).data
-
-            # Add replies to each review's data
-            review_data['replies'] = replies_data
-            reviews_data.append(review_data)
-
-        return Response(reviews_data, status=status.HTTP_200_OK)
+        try:
+            # Fetch all reviews
+            reviews = Review.objects.all()
+            # Serialize reviews and their replies
+            reviews_data = []
+            for review in reviews:
+                review_data = ReviewSerializer(review).data
+                replies_data = ReplySerializer(review.replies.all(), many=True).data
+                # Add replies to each review's data
+                review_data['replies'] = replies_data
+                reviews_data.append(review_data)
+            return Response(reviews_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
     
     
 class DoctorReviewsAPIView(generics.ListAPIView):
     serializer_class = ReviewSerializer
 
     def get_queryset(self):
-        # using the Doctor id from the URL
-        doctor_id = self.kwargs.get('doctor_id')
-        # Filter reviews related to the specific doctor
-        return Review.objects.filter(doctor_id=doctor_id)
-
+        try:
+            # using the Doctor id from the URL
+            doctor_id = self.kwargs.get('doctor_id')
+            # Filter reviews related to the specific doctor
+            return Review.objects.filter(doctor_id=doctor_id)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
     def list(self, request, *args, **kwargs):
-        # Get the queryset (reviews related to the specified doctor)
-        queryset = self.get_queryset()
-        total_reviews = queryset.count()
-        # Serialize the data
-        serializer = self.get_serializer(queryset, many=True)
-        response_data = {
-            'total_reviews': total_reviews,
-            'reviews': serializer.data
-        }
-
-        return Response(response_data)
+        try:
+            # Get the queryset (reviews related to the specified doctor)
+            queryset = self.get_queryset()
+            total_reviews = queryset.count()
+            # Serialize the data
+            serializer = self.get_serializer(queryset, many=True)
+            response_data = {
+                'total_reviews': total_reviews,
+                'reviews': serializer.data
+            }
+            return Response(response_data)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+            
+            
