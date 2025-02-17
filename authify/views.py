@@ -774,27 +774,35 @@ class UpdateUserProfileAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def patch(self, request):
-        logger.info(
-            "Received request to update user profile for user: %s", request.user.email
-        )
-        serializer = UserProfileUpdateSerializer(
-            instance=request.user, data=request.data, partial=True
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-            logger.info("User profile updated successfully: %s", request.user.email)
-            return Response(
-                {"message": "Profile updated successfully.", "data": serializer.data},
-                status=status.HTTP_200_OK,
+        try:
+            
+            logger.info(
+                "Received request to update user profile for user: %s", request.user.email
+            )
+            serializer = UserProfileUpdateSerializer(
+                instance=request.user, data=request.data, partial=True
             )
 
-        logger.warning(
-            "Profile update failed for user: %s, errors: %s",
-            request.user.email,
-            serializer.errors,
-        )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info("User profile updated successfully: %s", request.user.email)
+                return Response(
+                    {"message": "Profile updated successfully.", "data": serializer.data},
+                    status=status.HTTP_200_OK,
+                )
+
+            logger.warning(
+                "Profile update failed for user: %s, errors: %s",
+                request.user.email,
+                serializer.errors,
+            )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class GetUserProfileAPIView(APIView):
