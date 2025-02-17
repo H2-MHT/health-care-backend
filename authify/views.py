@@ -99,40 +99,46 @@ class SignUpView(APIView):
             return str(e)
 
     def post(self, request, *args, **kwargs):
-        logger.info("User sign-up request received.")
-        serializer = RegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            logger.info(f"User registered successfully: {user.email}")
+        try:
+            logger.info("User sign-up request received.")
+            serializer = RegistrationSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
+                logger.info(f"User registered successfully: {user.email}")
 
-            # Generate OTP
-            otp = self.generate_otp()
+                # Generate OTP
+                otp = self.generate_otp()
 
-            # Send OTP to user's email
-            email_response = self.send_otp_email(user.email, otp)
+                # Send OTP to user's email
+                email_response = self.send_otp_email(user.email, otp)
 
-            if isinstance(email_response, str):
-                logger.error(f"Failed to send OTP to {user.email}: {email_response}")
+                if isinstance(email_response, str):
+                    logger.error(f"Failed to send OTP to {user.email}: {email_response}")
+                    return Response(
+                        {"message": f"Failed to send OTP: {email_response}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+                # Store OTP in the database for verification later
+                user.otp = otp
+                user.save()
+                logger.info(f"OTP stored for user {user.email}")
+
                 return Response(
-                    {"message": f"Failed to send OTP: {email_response}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    {
+                        "message": "User registered successfully. OTP sent to your email.",
+                        "user": serializer.data,
+                    },
+                    status=status.HTTP_201_CREATED,
                 )
-
-            # Store OTP in the database for verification later
-            user.otp = otp
-            user.save()
-            logger.info(f"OTP stored for user {user.email}")
-
+            logger.error(f"User registration failed: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
-                {
-                    "message": "User registered successfully. OTP sent to your email.",
-                    "user": serializer.data,
-                },
-                status=status.HTTP_201_CREATED,
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        logger.error(f"User registration failed: {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class OTPVerificationView(APIView):
     """
@@ -140,54 +146,62 @@ class OTPVerificationView(APIView):
     """
 
     def post(self, request, *args, **kwargs):
-        serializer = OTPVerificationSerializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data["email"]
-            otp = serializer.validated_data["otp"]
-            logger.info(f"Verifying OTP for email: {email}")
+        try:
+            serializer = OTPVerificationSerializer(data=request.data)
+            if serializer.is_valid():
+                email = serializer.validated_data["email"]
+                otp = serializer.validated_data["otp"]
+                logger.info(f"Verifying OTP for email: {email}")
 
-            # Retrieve user by email
-            try:
-                user = User.objects.get(email=email)
-                logger.info(f"User found: {user.email} | Role: {user.role}")
-            except User.DoesNotExist:
-                logger.error(f"User with email {email} not found.")
+                # Retrieve user by email
+                try:
+                    user = User.objects.get(email=email)
+                    logger.info(f"User found: {user.email} | Role: {user.role}")
+                except User.DoesNotExist:
+                    logger.error(f"User with email {email} not found.")
+                    return Response(
+                        {"message": "User not found."}, status=status.HTTP_404_NOT_FOUND
+                    )
+
+                # Check if OTP matches
+                if user.otp != otp:
+                    logger.warning(f"Invalid OTP for user {email}.")
+                    return Response(
+                        {"message": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # OTP is valid, mark user as verified
+                user.is_verified = True
+                user.otp = ""  # Clear OTP after verification
+                user.save()
+                logger.info(f"User {email} verified successfully.")
+
+                # **Ensure Doctor profile is created**
+                if user.role == "Doctor":
+                    self.create_doctor_profile(user)
+
+                # Generate JWT tokens after OTP verification
+                tokens = get_tokens_for_user(user)
+                logger.info(f"OTP verification successful for {email}. Tokens generated.")
+
                 return Response(
-                    {"message": "User not found."}, status=status.HTTP_404_NOT_FOUND
+                    {
+                        "message": "OTP verified successfully!",
+                        "tokens": tokens,
+                    },
+                    status=status.HTTP_200_OK,
                 )
 
-            # Check if OTP matches
-            if user.otp != otp:
-                logger.warning(f"Invalid OTP for user {email}.")
-                return Response(
-                    {"message": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # OTP is valid, mark user as verified
-            user.is_verified = True
-            user.otp = ""  # Clear OTP after verification
-            user.save()
-            logger.info(f"User {email} verified successfully.")
-
-            # **Ensure Doctor profile is created**
-            if user.role == "Doctor":
-                self.create_doctor_profile(user)
-
-            # Generate JWT tokens after OTP verification
-            tokens = get_tokens_for_user(user)
-            logger.info(f"OTP verification successful for {email}. Tokens generated.")
-
+            logger.error(f"OTP verification failed. Errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
-                {
-                    "message": "OTP verified successfully!",
-                    "tokens": tokens,
-                },
-                status=status.HTTP_200_OK,
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        logger.error(f"OTP verification failed. Errors: {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+            
+            
     @staticmethod
     def create_doctor_profile(user):
         if user.role == "Doctor":
@@ -224,35 +238,41 @@ class SignInView(APIView):
     """
 
     def post(self, request, *args, **kwargs):
-        logger.info("Sign-in attempt")
-        serializer = SignInSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.validated_data["user"]
-            logger.info(f"User {user.email} authenticated successfully.")
+        try:
+            logger.info("Sign-in attempt")
+            serializer = SignInSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.validated_data["user"]
+                logger.info(f"User {user.email} authenticated successfully.")
 
-            # Generate JWT tokens
-            tokens = get_tokens_for_user(user)
-            logger.info(f"Tokens generated for user {user.email}.")
+                # Generate JWT tokens
+                tokens = get_tokens_for_user(user)
+                logger.info(f"Tokens generated for user {user.email}.")
 
-            return Response(
-                {
-                    "message": "Login successful.",
-                    "user": {
-                        "id": user.id,
-                        "email": user.email,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "role": user.role,
-                        "is_verified": user.is_verified,
+                return Response(
+                    {
+                        "message": "Login successful.",
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name,
+                            "role": user.role,
+                            "is_verified": user.is_verified,
+                        },
+                        "tokens": tokens,
                     },
-                    "tokens": tokens,
-                },
-                status=status.HTTP_200_OK,
+                    status=status.HTTP_200_OK,
+                )
+
+            logger.warning("Sign-in failed. Invalid credentials.")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        logger.warning("Sign-in failed. Invalid credentials.")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class ForgotPasswordView(APIView):
     """
@@ -359,85 +379,98 @@ class ChangePasswordView(APIView):
         """
         User provides old password & new password, OTP is sent to email.
         """
-        user = request.user
-        old_password = request.data.get("old_password")
-        new_password = request.data.get("new_password")
+        try:
+            user = request.user
+            old_password = request.data.get("old_password")
+            new_password = request.data.get("new_password")
 
-        # Validate password
-        if not old_password or not new_password:
+            # Validate password
+            if not old_password or not new_password:
+                return Response(
+                    {"message": "Old password and new password are required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Validate old password
+            if not user.check_password(old_password):
+                return Response(
+                    {"message": "Old password is incorrect."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Validate password strength
+            if len(new_password) < 8:
+                return Response({"message": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
+            if not re.search(r'[A-Za-z]', new_password):
+                return Response({"message": "Password must contain at least one letter."}, status=status.HTTP_400_BAD_REQUEST)
+            if not re.search(r'[0-9]', new_password):
+                return Response({"message": "Password must contain at least one number."}, status=status.HTTP_400_BAD_REQUEST)
+            if not re.search(r'[@$!%*?&]', new_password):
+                return Response({"message": "Password must contain at least one special character."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate and store OTP
+            otp_code = str(random.randint(100000, 999999))  # Generate 6-digit OTP
+            user.otp = otp_code  # Store OTP in User model
+            user.otp_created_at = timezone.now()  # Save timestamp
+            user.temp_new_password = new_password  # Temporarily store new password
+            user.save()
+
+            # Send OTP via email
+            send_result = self.send_otp_email(user.email, otp_code)
+            if isinstance(send_result, str):  # If email sending fails
+                return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
-                {"message": "Old password and new password are required."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        # Validate old password
-        if not user.check_password(old_password):
-            return Response(
-                {"message": "Old password is incorrect."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Validate password strength
-        if len(new_password) < 8:
-            return Response({"message": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
-        if not re.search(r'[A-Za-z]', new_password):
-            return Response({"message": "Password must contain at least one letter."}, status=status.HTTP_400_BAD_REQUEST)
-        if not re.search(r'[0-9]', new_password):
-            return Response({"message": "Password must contain at least one number."}, status=status.HTTP_400_BAD_REQUEST)
-        if not re.search(r'[@$!%*?&]', new_password):
-            return Response({"message": "Password must contain at least one special character."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Generate and store OTP
-        otp_code = str(random.randint(100000, 999999))  # Generate 6-digit OTP
-        user.otp = otp_code  # Store OTP in User model
-        user.otp_created_at = timezone.now()  # Save timestamp
-        user.temp_new_password = new_password  # Temporarily store new password
-        user.save()
-
-        # Send OTP via email
-        send_result = self.send_otp_email(user.email, otp_code)
-        if isinstance(send_result, str):  # If email sending fails
-            return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
-    from django.contrib.auth import authenticate, login
 
     def put(self, request, *args, **kwargs):
         """
         User enters OTP, If valid, update the password immediately.
         """
-        user = request.user
-        otp = request.data.get("otp")
+        try:
+            user = request.user
+            otp = request.data.get("otp")
 
-        if not otp:
-            return Response({"message": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST)
+            if not otp:
+                return Response({"message": "OTP is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if OTP is expired (valid for 10 minutes)
-        if user.otp_created_at is None:
-            return Response({"message": "OTP not generated yet. Please request a new OTP."}, status=status.HTTP_400_BAD_REQUEST)
+            # Check if OTP is expired (valid for 10 minutes)
+            if user.otp_created_at is None:
+                return Response({"message": "OTP not generated yet. Please request a new OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-        otp_expiry_time = user.otp_created_at + timedelta(minutes=10)
-        if timezone.now() > otp_expiry_time:
-            return Response({"message": "OTP has expired. Request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+            otp_expiry_time = user.otp_created_at + timedelta(minutes=10)
+            if timezone.now() > otp_expiry_time:
+                return Response({"message": "OTP has expired. Request a new one."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify OTP
-        if user.otp != otp:
-            return Response({"message": "Invalid OTP. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
+            # Verify OTP
+            if user.otp != otp:
+                return Response({"message": "Invalid OTP. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Update password immediately
-        user.set_password(request.data.get("new_password"))
-        user.otp = None
-        user.otp_created_at = None
-        user.save()
-        logger.info(f"Password changed successfully for user: {user.email}")
+            # Update password immediately
+            user.set_password(request.data.get("new_password"))
+            user.otp = None
+            user.otp_created_at = None
+            user.save()
+            logger.info(f"Password changed successfully for user: {user.email}")
 
-        # Authenticate and log the user in after updating the password
-        user = authenticate(request, email=user.email, password=request.data.get("new_password"))
-        if user is not None:
-            login(request, user)  # Log the user in if authenticated successfully
-            return Response({"message": "Password updated and user logged in successfully."}, status=status.HTTP_200_OK)
-        else:
-            return Response({"message": "Invalid email or password."}, status=status.HTTP_400_BAD_REQUEST)
+            # Authenticate and log the user in after updating the password
+            user = authenticate(request, email=user.email, password=request.data.get("new_password"))
+            if user is not None:
+                login(request, user)  # Log the user in if authenticated successfully
+                return Response({"message": "Password updated and user logged in successfully."}, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": "Invalid email or password."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class AccountDeactivateDeleteView(APIView):
     """
@@ -450,18 +483,25 @@ class AccountDeactivateDeleteView(APIView):
         """
         Deactivate the authenticated user's account.
         """
-        user = request.user
-        logger.info(f"User {user.email} requested account deactivation.")
+        try:
+            user = request.user
+            logger.info(f"User {user.email} requested account deactivation.")
 
-        # Deactivate the account
-        user.is_active = False
-        user.save()
+            # Deactivate the account
+            user.is_active = False
+            user.save()
 
-        logger.info(f"User {user.email} account deactivated successfully.")
-        return Response(
-            {"message": "Account deactivated successfully."},
-            status=status.HTTP_200_OK,
-        )
+            logger.info(f"User {user.email} account deactivated successfully.")
+            return Response(
+                {"message": "Account deactivated successfully."},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def delete(self, request, *args, **kwargs):
         """
@@ -576,56 +616,60 @@ class ResendOTPView(APIView):
         """
         Handle resend OTP request.
         """
-        email = request.data.get("email")
-
-        if not email:
-            return Response(
-                {"message": "Email is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Check if user exists with the provided email
         try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            logger.warning(f"OTP resend requested for non-existing email: {email}")
+            email = request.data.get("email")
+            if not email:
+                return Response(
+                    {"message": "Email is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Check if user exists with the provided email
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                logger.warning(f"OTP resend requested for non-existing email: {email}")
+                return Response(
+                    {
+                        "message": "If the email exists, a new OTP will be sent."
+                    },  # Generic response to avoid email enumeration
+                    status=status.HTTP_200_OK,
+                )
+            # Check if the user has requested an OTP recently (within 2 minutes)
+            if user.otp_created_at and now() - user.otp_created_at < timedelta(minutes=2):
+                return Response(
+                    {"message": "Please wait a few minutes before requesting a new OTP."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,  # Rate limiting status code
+                )
+
+            # Generate and send a new OTP
+            new_otp = self.generate_otp()
+            email_response = self.send_otp_email(email, new_otp)
+
+            if email_response is None:
+                return Response(
+                    {"message": "Failed to resend OTP. Please try again later."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            # Update the user's OTP and set the timestamp
+            user.otp = new_otp
+            user.otp_created_at = now()
+            user.save()
+
+            logger.info(f"OTP resent successfully to {email}")
+
             return Response(
                 {
-                    "message": "If the email exists, a new OTP will be sent."
-                },  # Generic response to avoid email enumeration
+                    "message": "If the email exists, a new OTP has been sent successfully."
+                },  # Consistent response
                 status=status.HTTP_200_OK,
             )
-
-        # Check if the user has requested an OTP recently (within 2 minutes)
-        if user.otp_created_at and now() - user.otp_created_at < timedelta(minutes=2):
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
-                {"message": "Please wait a few minutes before requesting a new OTP."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,  # Rate limiting status code
-            )
-
-        # Generate and send a new OTP
-        new_otp = self.generate_otp()
-        email_response = self.send_otp_email(email, new_otp)
-
-        if email_response is None:
-            return Response(
-                {"message": "Failed to resend OTP. Please try again later."},
+                {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        # Update the user's OTP and set the timestamp
-        user.otp = new_otp
-        user.otp_created_at = now()
-        user.save()
-
-        logger.info(f"OTP resent successfully to {email}")
-
-        return Response(
-            {
-                "message": "If the email exists, a new OTP has been sent successfully."
-            },  # Consistent response
-            status=status.HTTP_200_OK,
-        )
 
 
 class GoogleLoginView(APIView):
@@ -865,3 +909,4 @@ class GetUserProfileAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+

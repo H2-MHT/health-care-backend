@@ -1,5 +1,3 @@
-from django.shortcuts import render
-
 # Create your views here.
 
 from rest_framework.views import APIView
@@ -170,71 +168,84 @@ class AddAccountDetailAPIView(APIView):
     """
     permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
-        # Ensure the user is a doctor
-        if not hasattr(request.user, 'doctor'):
-            return Response(
-                {"error": "Only doctors can add account details."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # Check if the account already exists
-        account_number = request.data.get('account_number')
-        account = AccountDetail.objects.filter(user=request.user, account_number=account_number).first()
-        
-        if account:
-            # Create a transaction record for the existing account
-            transaction=Transaction.objects.create(
-                account=account,
-                transaction_type="1",
-                amount=request.data.get('amount'),
-            )
-            transaction_serializer = TransactionSerializer(transaction)
-            return Response(
-                {
-                    "message": "Transaction recorded successfully.",
-                    "data": transaction_serializer.data
+        try:
+            # Ensure the user is a doctor
+            if not hasattr(request.user, 'doctor'):
+                return Response(
+                    {"error": "Only doctors can add account details."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            # Check if the account already exists
+            account_number = request.data.get('account_number')
+            account = AccountDetail.objects.filter(user=request.user, account_number=account_number).first()
+            
+            if account:
+                # Create a transaction record for the existing account
+                transaction=Transaction.objects.create(
+                    account=account,
+                    transaction_type="1",
+                    amount=request.data.get('amount'),
+                )
+                transaction_serializer = TransactionSerializer(transaction)
+                return Response(
+                    {
+                        "message": "Transaction recorded successfully.",
+                        "data": transaction_serializer.data
+                        },
+                    status=status.HTTP_200_OK
+                )
+            
+            # Create a new account if it doesn't exist
+            serializer = AccountDetailSerializer(data=request.data)
+            if serializer.is_valid():
+                account = serializer.save(user=request.user)
+                # Optionally create a transaction for the new account
+                Transaction.objects.create(
+                    account=account,
+                    transaction_type="1",
+                    amount=request.data.get('amount'),
+                )
+                return Response(
+                    {
+                        "message": "Account detail added successfully.", 
+                        "data": serializer.data
                     },
-                status=status.HTTP_200_OK
-            )
-        
-        # Create a new account if it doesn't exist
-        serializer = AccountDetailSerializer(data=request.data)
-        if serializer.is_valid():
-            account = serializer.save(user=request.user)
-            # Optionally create a transaction for the new account
-            Transaction.objects.create(
-                account=account,
-                transaction_type="1",
-                amount=request.data.get('amount'),
-            )
+                    status=status.HTTP_200_OK
+                )
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
             return Response(
-                {
-                    "message": "Account detail added successfully.", 
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     def get(self, request, *args, **kwargs):
         """
         Fetch all account details for the current logged-in doctor.
         """
-        # Check if the user is a doctor
-        if not hasattr(request.user, 'doctor'):
-            return Response(
-                {"error": "Only doctors can view their account details."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        try:
+            # Check if the user is a doctor
+            if not hasattr(request.user, 'doctor'):
+                return Response(
+                    {"error": "Only doctors can view their account details."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
-        # Fetch all account details for the logged-in doctor
-        accounts = AccountDetail.objects.filter(user=request.user)
-        serializer = AccountDetailSerializer(accounts, many=True)
-        return Response(
-            {
-                "message": "Account details fetched successfully.",
-                "data": serializer.data
-            },
-            status=status.HTTP_200_OK
-        )
+            # Fetch all account details for the logged-in doctor
+            accounts = AccountDetail.objects.filter(user=request.user)
+            serializer = AccountDetailSerializer(accounts, many=True)
+            return Response(
+                {
+                    "message": "Account details fetched successfully.",
+                    "data": serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+            
+            

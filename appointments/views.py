@@ -12,35 +12,27 @@ class RescheduleAppointmentView(APIView):
     def patch(self, request, pk):
         try:
             appointment = Appointment.objects.get(pk=pk)
-
             if request.user.role != "Doctor":
                 return Response({"error": "You must be logged in as a doctor to reschedule appointments."}, status=status.HTTP_403_FORBIDDEN)
-
             if appointment.doctor.user != request.user:
                 return Response({"error": "You are not the doctor for this appointment."}, status=status.HTTP_403_FORBIDDEN)
-
             serializer = RescheduleAppointmentSerializer(data=request.data)
             if serializer.is_valid():
                 new_date_time = serializer.validated_data['new_date_time']
                 appointment.date_time = new_date_time
                 appointment.status = "Confirmed"
                 appointment.save()
-
                 # Format day and time for response
                 updated_day = new_date_time.strftime("%d-%m-%Y")
                 updated_time = new_date_time.strftime("%H:%M")
-
                 patient_name = f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}"
-
                 return Response({
                     "message": "Appointment rescheduled successfully.",
                     "patient_name": patient_name,
                     "updated_day": updated_day,
                     "updated_time": updated_time
                 }, status=status.HTTP_200_OK)
-
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         except Appointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
