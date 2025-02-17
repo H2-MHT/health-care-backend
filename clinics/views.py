@@ -407,7 +407,7 @@ class ClinicAppointmentActivityView(APIView):
 
             # Query database for appointments within the week
             appointments = (
-                Appointment.objects.filter(date_time__date__range=[start_date, end_date])
+                Appointment.objects.filter(clinic__user=request.user, date_time__date__range=[start_date, end_date])
                 .values("date_time__date", "status")
                 .annotate(count=Count("id"))
             )
@@ -445,7 +445,7 @@ class ClinicAppointmentActivityView(APIView):
 
             # Query database for appointments within the month
             appointments = (
-                Appointment.objects.filter(date_time__date__range=[start_date, end_date])
+                Appointment.objects.filter(clinic__user=request.user, date_time__date__range=[start_date, end_date])
                 .annotate(day=ExtractDay("date_time"))
                 .values("day", "status")
                 .annotate(count=Count("id"))
@@ -453,7 +453,6 @@ class ClinicAppointmentActivityView(APIView):
 
             # Populate actual data with appointment counts
             for entry in appointments:
-                print(entry['day'])
                 week_number = (entry["day"] - 1) // 7 + 1  # Determine week number dynamically
                 week_key = f"Week {week_number}"
 
@@ -476,6 +475,7 @@ class ClinicAppointmentActivityView(APIView):
             # Query database
             appointments = (
                 Appointment.objects.filter(
+                    clinic__user=request.user,
                     date_time__date__range=[start_date, end_date]
                 )
                 .annotate(month=ExtractMonth("date_time"))
