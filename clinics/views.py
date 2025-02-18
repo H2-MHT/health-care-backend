@@ -607,6 +607,7 @@ class ClinicCalendarAppointmentsAPIView(APIView):
             today = now().date()
             start = request.query_params.get("start_date", today.isoformat())
             end = request.query_params.get("end_date", (today + timedelta(days=1)).isoformat())
+            role = request.query_params.get("role", None)
 
             # Validate and convert string dates to date objects
             try:
@@ -614,12 +615,20 @@ class ClinicCalendarAppointmentsAPIView(APIView):
                 end_date = datetime.strptime(end, "%Y-%m-%d").date()
             except ValueError:
                 return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Query appointments within the given date range
-            queryset = Appointment.objects.filter(
-                clinic__user=request.user,
-                date_time__date__range=[start_date, end_date]
-            )
+            if role:
+                # Query appointments within the given date range
+                filter_data = Q()
+                if role == 'Clinic':
+                    filter_data &= Q(clinic__user=request.user)
+                elif role == 'Doctor':
+                    filter_data &= Q(doctor__user=request.user)
+                elif role == 'Patient':
+                    filter_data &= Q(patient__user=request.user)
+
+                filter_data &= Q(date_time__date__range=[start_date, end_date])
+                queryset = Appointment.objects.filter(filter_data)
+            else:
+                return Response({"error": "Role type required in params."}, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = CalendarAppointmentSerializer(queryset.order_by("date_time"), many=True)
 
