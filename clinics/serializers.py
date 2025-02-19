@@ -171,6 +171,7 @@ class ClinicDoctorSerializer(serializers.ModelSerializer):
     specialty = serializers.CharField(source="doctor.specialty", read_only=True)
     languages = LanguageSerializer(many=True, read_only=True)
     qualifications = serializers.CharField(source="doctor.qualifications", read_only=True)
+    clinic_name = serializers.CharField(source="work_place.user.first_name", read_only=True)
     class Meta:
         model = User
         fields = [
@@ -188,6 +189,7 @@ class ClinicDoctorSerializer(serializers.ModelSerializer):
             "rating",
             "reviews",
             "qualifications",
+            "clinic_name"
         ]
 
 
