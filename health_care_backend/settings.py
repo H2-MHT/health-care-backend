@@ -348,4 +348,5 @@ LOGGING = {
 CORS_ALLOWED_ORIGINS = [
     "http://20.77.64.229",
     "http://localhost:3000",
+    "http://20.77.64.229",
 ]
