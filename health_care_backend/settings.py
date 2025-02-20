@@ -54,7 +54,6 @@ INSTALLED_APPS = [
     'dashboard'
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -344,3 +343,9 @@ LOGGING = {
         },
     },
 }
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://20.77.64.229",
+    "http://localhost:3000",
+]
