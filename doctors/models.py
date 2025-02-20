@@ -167,21 +167,6 @@ class CommunicationPreferences(models.Model):
         return f"Communication Preferences for {self.user.username}"
     
     
-
-class TwoFactorMethod(models.Model):
-    name = models.CharField(max_length=100)
-    is_active = models.BooleanField(default=True)
-    def __str__(self):
-        return self.name
-    
-    
-class TwoFactorAuthentication(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    method = models.ForeignKey(TwoFactorMethod, on_delete=models.SET_NULL, null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.user.first_name} - {self.method}"
-    
     
 class Membership(models.Model):
     MEMBERSHIP_CHOICES = [

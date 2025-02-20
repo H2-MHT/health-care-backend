@@ -32,8 +32,6 @@ from .models import (
     NoShowPolicy,
     Referral,
     ReschedulePolicy,
-    TwoFactorMethod,
-    TwoFactorAuthentication,
     UserPreference,
     Membership,
 )
@@ -1029,111 +1027,6 @@ class CommunicationPreferencesAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
-class SelectMethodsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        try:
-            """Retrieve all selected 2FA methods for the current user."""
-            user = request.user
-            print(f"Authenticated user: {user.email}, ID: {user.id}")
-
-            # Get all stored 2FA methods for the user
-            two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
-            methods = [method.method.name for method in two_factor_methods if method.method]
-
-            print(f"Methods for {user.email}: {methods}")
-
-            return Response({"methods": methods}, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def post(self, request):
-        try:
-            user = request.user
-            method_id = request.data.get("methods")
-
-            # Validate input
-            if not method_id or not isinstance(method_id, (int, str)):
-                return Response({"error": "Invalid method ID format"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Convert to integer (if needed)
-            try:
-                method_id = int(method_id)
-            except ValueError:
-                return Response({"error": "Method ID must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Get valid method instance
-            try:
-                method = TwoFactorMethod.objects.get(id=method_id, is_active=True)
-            except TwoFactorMethod.DoesNotExist:
-                return Response({"error": "Invalid method ID"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if method already exists for the user
-            if TwoFactorAuthentication.objects.filter(user=user, method=method).exists():
-                return Response({"message": "Method already added"}, status=status.HTTP_200_OK)
-
-            # Add new method
-            TwoFactorAuthentication.objects.create(user=user, method=method)
-
-            return Response({"message": "Authentication method updated successfully"}, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            logger.exception("Unexpected error updating authentication methods: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def delete(self, request):
-        try:
-            user = request.user
-            method_id = request.data.get("methods")  # method ID
-
-            # Validate input
-            if not method_id or not isinstance(method_id, (int, str)):
-                return Response({"error": "Invalid method ID format"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Convert to integer (if needed)
-            try:
-                method_id = int(method_id)
-            except ValueError:
-                return Response({"error": "Method ID must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if the method exists for the user
-            deleted_count, _ = TwoFactorAuthentication.objects.filter(user=user, method_id=method_id).delete()
-
-            if deleted_count == 0:
-                return Response({"error": "Method not found or already deleted"}, status=status.HTTP_404_NOT_FOUND)
-            return Response({"message": "Authentication method deleted successfully"}, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            logger.exception("Unexpected error deleting authentication method: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-class AvailableMethodsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        try:
-            """Retrieve all available 2FA methods."""
-            methods = TwoFactorMethod.objects.filter(is_active=True).values("id", "name")
-            return Response({"methods": list(methods)}, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            logger.exception("Unexpected error fetching available methods: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
 def send_otp(user):
     otp = str(random.randint(100000, 999999))
