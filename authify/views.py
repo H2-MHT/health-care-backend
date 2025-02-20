@@ -835,19 +835,15 @@ class UpdateUserProfileAPIView(APIView):
                     status=status.HTTP_200_OK,
                 )
 
-            logger.warning(
-                "Profile update failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
+            logger.warning("Profile update failed for user: %s, errors: %s", request.user.email, serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
 
 class GetUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 import json
+from doctors.models import Doctor
 from users.models import User
 
 
@@ -116,7 +117,7 @@ def validate_profile_picture(value):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+    experience_years = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = User
@@ -138,8 +139,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "professional_stat",
             "working_time",
             "profile_picture",
-            "years",
+            "experience_years"
         ]
+        
+    def to_representation(self, instance):
+        """Customize GET response for languages"""
+        data = super().to_representation(instance)
+        exp = Doctor.objects.filter(user=instance).first()
+        if exp:
+            data['experience_years'] = exp.experience_years
+        return data
 
 
 class UserProfileUpdateSerializer(UserProfileSerializer):
@@ -149,13 +158,21 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
     languages = serializers.CharField(required=False)
 
     def update(self, instance, validated_data):
-
         languages = validated_data.pop('languages', [])
         if isinstance(languages, str):
             try:
                 languages = json.loads(languages)
             except json.JSONDecodeError:
                 languages = []
+
+        # Update experience_years explicitly
+        if instance.role == "Doctor":
+            experience_years = validated_data.pop('experience_years', None)
+            if experience_years is not None:
+                doc = Doctor.objects.filter(user=instance).first()
+                if doc:
+                    doc.experience_years = experience_years
+                    doc.save()
 
         # Update other fields dynamically
         for attr, value in validated_data.items():
@@ -164,6 +181,7 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         if languages:
             instance.languages.set(languages)
 
+        # Save the main instance (UserProfile)
         instance.save()
         return instance
     
