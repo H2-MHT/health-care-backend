@@ -344,9 +344,23 @@ LOGGING = {
     },
 }
 
-
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://20.77.64.229",
-    "http://localhost:3000",
-    "http://20.77.64.229",
+    'http://localhost:3000',
+    'http://20.77.64.229',
+]
+
+CORS_ALLOW_METHODS = (
+    "GET",
+    "OPTIONS",
+    "POST",
+    "HEAD",
+    "PUT",
+    "DELETE",
+    "PATCH",
+)
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://20.77.64.229',
 ]
