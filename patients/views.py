@@ -4,7 +4,99 @@ from .serializers import PatientUserSerializer
 from rest_framework.permissions import IsAuthenticated
 from appointments.models import Appointment
 from rest_framework import status
+from .models import Patient
+from django.utils import timezone
+
 # Create your views here.
+
+
+class PatientDashboardAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Ensure only patients can access this view
+            if request.user.role != "Patient":
+                return Response({"error": "Access restricted to patients only."}, status=403)
+
+            # Fetch the patient profile
+            try:
+                patient = Patient.objects.get(user=request.user)
+            except Patient.DoesNotExist:
+                return Response({"error": "Patient profile not found."}, status=404)
+
+            # Get patient details
+            patient_data = {
+                "patient_id": patient.id,
+                "patient_name": f"{request.user.first_name} {request.user.last_name}",
+            }
+
+            # Completed Appointments (Confirmed & Completed)
+            completed_appointments = Appointment.objects.filter(
+                patient=patient, status__in=["Confirmed", "Completed"]
+            ).select_related("doctor__user", "clinic")
+
+            completed_data = [
+                {
+                    "appointment_id": appt.id,
+                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
+                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
+                    "date_time": appt.date_time.isoformat(),
+                    "status": appt.status,
+                    "records": appt.records,
+                    "notes": appt.notes,
+                }
+                for appt in completed_appointments
+            ]
+
+            # Upcoming Requests (Future Pending Appointments)
+            upcoming_appointments = Appointment.objects.filter(
+                patient=patient,
+                date_time__gte=timezone.now(),  # Future appointments
+                status="Pending"
+            ).select_related("doctor__user", "clinic")
+
+            upcoming_data = [
+                {
+                    "appointment_id": appt.id,
+                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
+                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
+                    "date_time": appt.date_time.isoformat(),
+                    "status": appt.status,
+                }
+                for appt in upcoming_appointments
+            ]
+
+            # Archived Appointments
+            archived_appointments = Appointment.objects.filter(
+                patient=patient, status__in=["Archived", "Cancelled"]
+            ).select_related("doctor__user", "clinic")
+
+            archived_data = [
+                {
+                    "appointment_id": appt.id,
+                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
+                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
+                    "date_time": appt.date_time.isoformat(),
+                    "status": appt.status,
+                }
+                for appt in archived_appointments
+            ]
+
+            return Response(
+                {
+                    "patient": patient_data,
+                    "completed_appointments": completed_data,
+                    "upcoming_appointments": upcoming_data,
+                    "archived_appointments": archived_data,
+                },
+                status=200
+            )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
+
 
 class PatientListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -27,3 +119,4 @@ class PatientListView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
             
+
