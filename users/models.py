@@ -43,6 +43,14 @@ def validate_terms(value):
         raise ValidationError("You must agree to the terms and conditions.")
 
 
+class TwoFactorMethod(models.Model):
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+    
+    
 class User(AbstractUser):
     ROLE_CHOICES = [
         ("Patient", "Patient"),
@@ -96,6 +104,10 @@ class User(AbstractUser):
     terms_and_condition = models.BooleanField(
         validators=[validate_terms], default=False
     )
+    
+    
+    # Two-Factor Authentication (Multiple Methods)
+    two_factor_methods = models.ManyToManyField("TwoFactorMethod", blank=True)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)

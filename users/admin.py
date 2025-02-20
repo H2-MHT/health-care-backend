@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Education, Skill, Media
+from .models import User, Education, Skill, Media, TwoFactorMethod
 
 # Register your models here.
 
@@ -17,7 +17,14 @@ class UserAdmin(admin.ModelAdmin):
 class EducationAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'degree', 'start_month_year', 'end_month_year', 'grade')
 
+class TwoFactorMethodAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'is_active')
+    verbose_name = "Two-Factor Method"
+    verbose_name_plural = "Two-Factor Methods"
+    
 admin.site.register(Media)
 admin.site.register(Skill)
 admin.site.register(Education, EducationAdmin)
 admin.site.register(User, UserAdmin)
+
+admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)

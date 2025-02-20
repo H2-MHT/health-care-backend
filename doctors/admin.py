@@ -10,8 +10,6 @@ from .models import(
     ConsultationSettings,
     NoShowPolicy,
     CommunicationPreferences,
-    TwoFactorMethod,
-    TwoFactorAuthentication,
     Membership,
 )
 # Register your models here.
@@ -35,6 +33,4 @@ admin.site.register(ReschedulePolicy)
 admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
-admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)
-admin.site.register(TwoFactorAuthentication)
 admin.site.register(Membership)
