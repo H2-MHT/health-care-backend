@@ -168,15 +168,16 @@ class CommunicationPreferences(models.Model):
     
     
 
-class TwoFactorAuthentication(models.Model):
-    METHOD_CHOICES = [
-        ('email', 'Email'),
-        ('sms', 'SMS'),
-        ('whatsapp', 'WhatsApp'),
-    ]
+class TwoFactorMethod(models.Model):
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    def __str__(self):
+        return self.name
     
+    
+class TwoFactorAuthentication(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default='email')
+    method = models.ForeignKey(TwoFactorMethod, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.first_name} - {self.method}"

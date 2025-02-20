@@ -32,6 +32,7 @@ from .models import (
     NoShowPolicy,
     Referral,
     ReschedulePolicy,
+    TwoFactorMethod,
     TwoFactorAuthentication,
     UserPreference,
     Membership,
@@ -84,7 +85,7 @@ class DoctorNotesCreateAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request, *args, **kwargs):
@@ -121,7 +122,7 @@ class DoctorNotesCreateAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def put(self, request, *args, **kwargs):
@@ -173,7 +174,7 @@ class DoctorNotesCreateAPIView(APIView):
                 logger.exception("Unexpected error fetching user profile: %s", str(e))
                 return Response(
                     {"message": f"An unexpected error occurred: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
     def delete(self, request, *args, **kwargs):
@@ -208,7 +209,7 @@ class DoctorNotesCreateAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -227,7 +228,7 @@ class DoctorListAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -255,7 +256,7 @@ class AppointmentManagementAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -289,7 +290,7 @@ class AppointmentManagementAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -333,7 +334,7 @@ class AppointmentManagementAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
             
@@ -593,7 +594,7 @@ class ConsultationSettingsAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request, *args, **kwargs):
@@ -644,7 +645,7 @@ class ConsultationSettingsAPIView(APIView):
             logger.error(f"Error in ConsultationSettingsAPIView: {str(e)}")
             return Response(
                 {"error": "Something went wrong", "details": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -676,7 +677,7 @@ class UserPreferenceView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request):
@@ -730,7 +731,7 @@ class UserPreferenceView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -803,7 +804,7 @@ class ReschedulePolicyView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
     def get(self, request):
         """Fetch all reschedule policies for the logged-in user."""
@@ -823,7 +824,7 @@ class ReschedulePolicyView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -894,7 +895,7 @@ class CancellationPolicyView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -918,7 +919,7 @@ class NoShowPolicyAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request, *args, **kwargs):
@@ -952,7 +953,7 @@ class NoShowPolicyAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
 
@@ -981,7 +982,7 @@ class NoShowPolicyAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -1001,7 +1002,7 @@ class CommunicationPreferencesAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def put(self, request, *args, **kwargs):
@@ -1025,7 +1026,7 @@ class CommunicationPreferencesAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -1036,51 +1037,102 @@ class SelectMethodsAPIView(APIView):
         try:
             """Retrieve all selected 2FA methods for the current user."""
             user = request.user
-            print(f"Authenticated user: {user.username}, ID: {user.id}")
+            print(f"Authenticated user: {user.email}, ID: {user.id}")
 
             # Get all stored 2FA methods for the user
             two_factor_methods = TwoFactorAuthentication.objects.filter(user=user)
-            methods = [method.method for method in two_factor_methods]
+            methods = [method.method.name for method in two_factor_methods if method.method]
 
-            print(f"Methods for {user.username}: {methods}")
+            print(f"Methods for {user.email}: {methods}")
 
             return Response({"methods": methods}, status=status.HTTP_200_OK)
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request):
         try:
-            """Add or update 2FA methods while keeping previous selections."""
             user = request.user
-            selected_methods = request.data.get("methods", ["email"])  # Default: email
+            method_id = request.data.get("methods")
 
-            # Ensure input is a list
-            if not isinstance(selected_methods, list):
-                return Response({"error": "Methods should be a list"}, status=status.HTTP_400_BAD_REQUEST)
+            # Validate input
+            if not method_id or not isinstance(method_id, (int, str)):
+                return Response({"error": "Invalid method ID format"}, status=status.HTTP_400_BAD_REQUEST)
 
-            valid_methods = {"email", "sms", "whatsapp"}
-            if not set(selected_methods).issubset(valid_methods):
-                return Response({"error": "Invalid methods selected"}, status=status.HTTP_400_BAD_REQUEST)
+            # Convert to integer (if needed)
+            try:
+                method_id = int(method_id)
+            except ValueError:
+                return Response({"error": "Method ID must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get existing methods from the database
-            existing_methods = set(TwoFactorAuthentication.objects.filter(user=user).values_list("method", flat=True))
+            # Get valid method instance
+            try:
+                method = TwoFactorMethod.objects.get(id=method_id, is_active=True)
+            except TwoFactorMethod.DoesNotExist:
+                return Response({"error": "Invalid method ID"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Add new methods
-            new_methods = set(selected_methods) - existing_methods
-            TwoFactorAuthentication.objects.bulk_create([
-                TwoFactorAuthentication(user=user, method=method) for method in new_methods
-            ])
+            # Check if method already exists for the user
+            if TwoFactorAuthentication.objects.filter(user=user, method=method).exists():
+                return Response({"message": "Method already added"}, status=status.HTTP_200_OK)
 
-            return Response({"message": "Authentication methods updated successfully"}, status=status.HTTP_200_OK)
+            # Add new method
+            TwoFactorAuthentication.objects.create(user=user, method=method)
+
+            return Response({"message": "Authentication method updated successfully"}, status=status.HTTP_200_OK)
+        
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            logger.exception("Unexpected error updating authentication methods: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def delete(self, request):
+        try:
+            user = request.user
+            method_id = request.data.get("methods")  # method ID
+
+            # Validate input
+            if not method_id or not isinstance(method_id, (int, str)):
+                return Response({"error": "Invalid method ID format"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Convert to integer (if needed)
+            try:
+                method_id = int(method_id)
+            except ValueError:
+                return Response({"error": "Method ID must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if the method exists for the user
+            deleted_count, _ = TwoFactorAuthentication.objects.filter(user=user, method_id=method_id).delete()
+
+            if deleted_count == 0:
+                return Response({"error": "Method not found or already deleted"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Authentication method deleted successfully"}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            logger.exception("Unexpected error deleting authentication method: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+class AvailableMethodsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            """Retrieve all available 2FA methods."""
+            methods = TwoFactorMethod.objects.filter(is_active=True).values("id", "name")
+            return Response({"methods": list(methods)}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            logger.exception("Unexpected error fetching available methods: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 def send_otp(user):
@@ -1104,8 +1156,6 @@ def send_otp(user):
     return otp
 
 
-
-
 class RequestPasswordChangeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1126,7 +1176,7 @@ class RequestPasswordChangeAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class VerifyOTPAndChangePasswordAPIView(APIView):
@@ -1152,7 +1202,7 @@ class VerifyOTPAndChangePasswordAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class MembershipAPIView(APIView):
@@ -1187,7 +1237,7 @@ class MembershipAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
