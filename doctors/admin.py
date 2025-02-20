@@ -10,6 +10,7 @@ from .models import(
     ConsultationSettings,
     NoShowPolicy,
     CommunicationPreferences,
+    TwoFactorMethod,
     TwoFactorAuthentication,
     Membership,
 )
@@ -19,6 +20,10 @@ class DoctorAdmin(admin.ModelAdmin):
 
 class ReferralAdmin(admin.ModelAdmin):
     list_display = ['id','personal_code','referral_points', 'invited_users_count']
+
+
+class TwoFactorMethodAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'is_active']
     
 admin.site.register(Doctor, DoctorAdmin)
 admin.site.register(DoctorNotes)
@@ -30,5 +35,6 @@ admin.site.register(ReschedulePolicy)
 admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
+admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)
 admin.site.register(TwoFactorAuthentication)
 admin.site.register(Membership)
