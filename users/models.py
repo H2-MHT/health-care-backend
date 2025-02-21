@@ -186,3 +186,12 @@ class Media(models.Model):
 
     def __str__(self):
         return self.file.name if self.file else "Media"
+
+class Notes(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255, help_text="Title of the doctor's note")
+    note = models.TextField(help_text="Detailed note provided by the doctor")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time when the note was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
+    
+    

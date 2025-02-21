@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import EducationAPIView, UpdateEducationAPIView, SelectMethodsAPIView, AvailableMethodsAPIView, ViewSkills
+from .views import EducationAPIView, UpdateEducationAPIView, SelectMethodsAPIView, AvailableMethodsAPIView,  ViewSkills, NotesAPIView
 
 urlpatterns = [
         path('education/', EducationAPIView.as_view(), name='add-education'),
@@ -9,4 +9,8 @@ urlpatterns = [
         # 2FA
         path('select-methods/', SelectMethodsAPIView.as_view(), name='select_2fa_method'),
         path('all-methods/', AvailableMethodsAPIView.as_view(), name='available_2fa_method'),
+        
+        # notes
+        path("notes/", NotesAPIView.as_view(), name="notes-list-create"),
+        path("notes/<int:pk>/", NotesAPIView.as_view(), name="notes-detail"),
 ]

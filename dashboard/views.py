@@ -10,10 +10,10 @@ from users.models import User
 from patients.models import Patient
 from datetime import timedelta
 from appointments.models import Appointment
-from doctors.models import DoctorNotes
-from doctors.serializers import DoctorNotesSerializer
 from django.utils import timezone
 from rest_framework import status
+from users.models import Notes
+from users.serializers import NotesSerializer
 
 # Create your views here.
 
@@ -118,8 +118,8 @@ class DashboardAPIView(APIView):
             confirmed_data = format_appointment_data(confirmed_appointments)
 
             # Doctor Notes
-            doctor_notes = DoctorNotes.objects.filter(doctor=doctor).order_by('-created_at')
-            doctor_notes_serializer = DoctorNotesSerializer(doctor_notes, many=True)
+            doctor_notes = Notes.objects.filter(user=request.user, user__role="Doctor").order_by('-created_at')
+            doctor_notes_serializer = NotesSerializer(doctor_notes, many=True)
             doctor_notes_data = doctor_notes_serializer.data
                 
             # Diagnoses Data

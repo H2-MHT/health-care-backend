@@ -27,7 +27,6 @@ from .models import (
     CommunicationPreferences,
     ConsultationSettings,
     Doctor,
-    DoctorNotes,
     Invitation,
     NoShowPolicy,
     Referral,
@@ -39,7 +38,6 @@ from .serializers import (
     AppointmentManagementSerializer,
     CancellationPolicySerializer,
     CommunicationPreferencesSerializer,
-    DoctorNotesSerializer,
     ReferralSerializer,
     NoShowPolicySerializer,
     ReschedulePolicySerializer,
@@ -59,156 +57,6 @@ from rest_framework.decorators import api_view
 
 # Initialize logger
 logger = logging.getLogger(__name__)
-
-class DoctorNotesCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request, *args, **kwargs):
-        try:
-            """Retrieve doctor notes for the currently logged-in doctor."""
-            logger.info("Doctor %s is retrieving their notes.", request.user.email)
-            if request.user.role != "Doctor":
-                logger.warning("Unauthorized attempt to access notes by user: %s", request.user.email)
-                return Response(
-                    {"error": "Only doctors can view their notes."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            notes = DoctorNotes.objects.filter(doctor__user=request.user)
-            serializer = DoctorNotesSerializer(notes, many=True)
-            return Response(
-                {"message": "Doctor notes retrieved successfully.", "data": serializer.data},
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def post(self, request, *args, **kwargs):
-        try:
-            logger.info("Doctor %s is attempting to create a note.", request.user.email)
-            if request.user.role != "Doctor":
-                logger.warning(
-                    "Unauthorized attempt to create a note by user: %s", request.user.email
-                )
-                return Response(
-                    {"error": "Only doctors can create notes."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            serializer = DoctorNotesSerializer(
-                data=request.data, context={"request": request}
-            )
-            if serializer.is_valid():
-                serializer.save()
-                logger.info("Doctor note created successfully by %s", request.user.email)
-                return Response(
-                    {
-                        "message": "Doctor note created successfully.",
-                        "data": serializer.data,
-                    },
-                    status=status.HTTP_201_CREATED,
-                )
-            logger.warning(
-                "Doctor note creation failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def put(self, request, *args, **kwargs):
-        logger.info("Doctor %s is attempting to update a note.", request.user.email)
-        try:
-            if request.user.role != "Doctor":
-                logger.warning(
-                    "Unauthorized attempt to update a note by user: %s", request.user.email
-                )
-                return Response(
-                    {"error": "Only doctors can update notes."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            note_id = kwargs.get("pk")
-            try:
-                note = DoctorNotes.objects.get(id=note_id, doctor__user=request.user)
-            except DoctorNotes.DoesNotExist:
-                logger.warning(
-                    "Doctor note update failed - Note not found for user: %s",
-                    request.user.email,
-                )
-                return Response(
-                    {"error": "Note not found or you do not have permission to update it."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            new_content = request.data.get("note", "").strip()
-            if new_content:
-                request.data["note"] = (note.note or "") + " " + new_content
-            serializer = DoctorNotesSerializer(
-                note, data=request.data, partial=True, context={"request": request}
-            )
-            if serializer.is_valid():
-                serializer.save()
-                logger.info("Doctor note updated successfully by %s", request.user.email)
-                return Response(
-                    {
-                        "message": "Doctor note updated successfully.",
-                        "data": serializer.data,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-            logger.warning(
-                "Doctor note update failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-                logger.exception("Unexpected error fetching user profile: %s", str(e))
-                return Response(
-                    {"message": f"An unexpected error occurred: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-    def delete(self, request, *args, **kwargs):
-        logger.info("Doctor %s is attempting to delete a note.", request.user.email)
-        try:
-            if request.user.role != "Doctor":
-                logger.warning(
-                    "Unauthorized attempt to delete a note by user: %s", request.user.email
-                )
-                return Response(
-                    {"error": "Only doctors can delete notes."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            note_id = kwargs.get("pk")
-            try:
-                note = DoctorNotes.objects.get(id=note_id, doctor=request.user.doctor)
-            except DoctorNotes.DoesNotExist:
-                logger.warning(
-                    "Doctor note deletion failed - Note not found for user: %s",
-                    request.user.email,
-                )
-                return Response(
-                    {"error": "Note not found or you do not have permission to delete it."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            note.delete()
-            logger.info("Doctor note deleted successfully by %s", request.user.email)
-            return Response(
-                {"message": "Note deleted successfully."}, status=status.HTTP_204_NO_CONTENT
-            )
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
 
 class DoctorListAPIView(APIView):

@@ -2,7 +2,7 @@ from rest_framework import serializers
 import os
 import base64
 from django.core.files.base import ContentFile
-from .models import Education, Media, Skill, User
+from .models import Education, Media, Skill, User, Notes
 
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
@@ -78,3 +78,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture", "bio", "country", "city", "residence", "role"
         ]
+        
+
+class NotesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notes
+        fields = ["id", "title", "note", "created_at", "updated_at", "user"]
+        read_only_fields = ["id", "created_at", "updated_at", "user"]
+        

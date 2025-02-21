@@ -6,6 +6,7 @@ from appointments.models import Appointment
 from rest_framework import status
 from .models import Patient
 from django.utils import timezone
+from users.models import Notes
 
 # Create your views here.
 
@@ -30,6 +31,18 @@ class PatientDashboardAPIView(APIView):
                 "patient_id": patient.id,
                 "patient_name": f"{request.user.first_name} {request.user.last_name}",
             }
+
+            # Fetch patient-created notes
+            patient_notes = Notes.objects.filter(user=request.user)
+            notes_data = [
+                {
+                    "note_id": note.id,
+                    "title": note.title,
+                    "note": note.note,
+                    "created_at": note.created_at.isoformat(),
+                }
+                for note in patient_notes
+            ]
 
             # Completed Appointments (Confirmed & Completed)
             completed_appointments = Appointment.objects.filter(
@@ -86,6 +99,7 @@ class PatientDashboardAPIView(APIView):
             return Response(
                 {
                     "patient": patient_data,
+                    "notes": notes_data,  # Only patient-created notes
                     "completed_appointments": completed_data,
                     "upcoming_appointments": upcoming_data,
                     "archived_appointments": archived_data,

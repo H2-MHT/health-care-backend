@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from .models import DoctorNotes
 from .models import (
     Referral, Invitation,
     AppointmentManagement,
@@ -15,18 +14,18 @@ from django.contrib.auth.hashers import check_password
 from users.models import User
 from django.utils.timezone import now
 
-class DoctorNotesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DoctorNotes
-        fields = ['id', 'title', 'note', 'created_at']
-        read_only_fields = ['id', 'created_at', 'doctor']
+# class DoctorNotesSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = DoctorNotes
+#         fields = ['id', 'title', 'note', 'created_at']
+#         read_only_fields = ['id', 'created_at', 'doctor']
 
-    def create(self, validated_data):
-        request = self.context.get("request")
-        if not hasattr(request.user, "doctor"):  # Ensure the user is a doctor
-            raise serializers.ValidationError({"error": "Only doctors can create notes."})
-        validated_data["doctor"] = request.user.doctor  # Assign the related Doctor instance
-        return super().create(validated_data)
+#     def create(self, validated_data):
+#         request = self.context.get("request")
+#         if not hasattr(request.user, "doctor"):  # Ensure the user is a doctor
+#             raise serializers.ValidationError({"error": "Only doctors can create notes."})
+#         validated_data["doctor"] = request.user.doctor  # Assign the related Doctor instance
+#         return super().create(validated_data)
     
     
 class ReferralSerializer(serializers.ModelSerializer):

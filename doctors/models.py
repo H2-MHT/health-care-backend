@@ -2,8 +2,6 @@ from django.db import models
 from  users.models import User
 import random
 import string
-from django.contrib.auth import get_user_model
-import datetime
 # Create your models here.
 
 
@@ -18,15 +16,15 @@ class Doctor(models.Model):
     def __str__(self):
         return self.user.get_full_name()
 
-class DoctorNotes(models.Model):
-    doctor = models.ForeignKey(
-        "Doctor", 
-        on_delete=models.CASCADE, 
-    )
-    title = models.CharField(max_length=255, help_text="Title of the doctor's note")
-    note = models.TextField(help_text="Detailed note provided by the doctor")
-    created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time when the note was created")
-    updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
+# class DoctorNotes(models.Model):
+#     doctor = models.ForeignKey(
+#         "Doctor", 
+#         on_delete=models.CASCADE, 
+#     )
+#     title = models.CharField(max_length=255, help_text="Title of the doctor's note")
+#     note = models.TextField(help_text="Detailed note provided by the doctor")
+#     created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time when the note was created")
+#     updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
 
 
 

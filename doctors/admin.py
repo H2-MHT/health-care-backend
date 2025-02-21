@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import(
     Doctor,
-    DoctorNotes,
+    # DoctorNotes,
     Referral,
     UserPreference,
     Invitation,
@@ -24,7 +24,7 @@ class TwoFactorMethodAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'is_active']
     
 admin.site.register(Doctor, DoctorAdmin)
-admin.site.register(DoctorNotes)
+# admin.site.register(DoctorNotes)
 admin.site.register(Referral, ReferralAdmin)
 admin.site.register(Invitation)
 admin.site.register(AppointmentManagement)
