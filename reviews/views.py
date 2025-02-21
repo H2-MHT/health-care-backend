@@ -103,7 +103,7 @@ class AddReviewPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )   
     
 
@@ -155,7 +155,7 @@ class ReplyAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
     
     
@@ -177,7 +177,7 @@ class ReplyAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
     
     
@@ -193,7 +193,7 @@ class DoctorReviewsAPIView(generics.ListAPIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
     def list(self, request, *args, **kwargs):
         try:
@@ -210,7 +210,7 @@ class DoctorReviewsAPIView(generics.ListAPIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
             

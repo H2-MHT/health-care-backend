@@ -94,8 +94,10 @@ class PatientDashboardAPIView(APIView):
             )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
-        
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class PatientListView(APIView):
@@ -116,7 +118,7 @@ class PatientListView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
 

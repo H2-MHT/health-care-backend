@@ -87,7 +87,7 @@ class StripePaymentAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": "Payment failed", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
             
@@ -157,7 +157,7 @@ class TransactionHistoryAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": "An error occurred.", "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class AddAccountDetailAPIView(APIView):
@@ -217,7 +217,7 @@ class AddAccountDetailAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
         
     def get(self, request, *args, **kwargs):
@@ -245,7 +245,7 @@ class AddAccountDetailAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
             
