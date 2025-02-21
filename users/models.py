@@ -156,6 +156,12 @@ class UserFile(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.type}"
 
+class Skill(models.Model):
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+    
 
 class Education(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="educations")
@@ -167,23 +173,11 @@ class Education(models.Model):
     grade = models.CharField(max_length=50, blank=True, null=True)
     activities_and_societies = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
-
-    # Assuming skills are a ManyToMany relationship
-    skills = models.JSONField(default=list, blank=True)
-
-
-    # For media, you can either store files or URLs
+    skills = models.ManyToManyField(Skill, blank=True, default="")
     media = models.ImageField(upload_to='education_media/', blank=True, null=True)
 
     def __str__(self):
         return f"{self.school} - {self.degree or 'Education'}"
-
-
-class Skill(models.Model):
-    name = models.CharField(max_length=100)
-
-    def __str__(self):
-        return self.name
 
 
 class Media(models.Model):

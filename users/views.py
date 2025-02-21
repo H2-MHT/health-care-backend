@@ -4,59 +4,123 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 import logging
-from .serializers import EducationSerializer
-from .models import Education, User, TwoFactorMethod
+from .serializers import EducationSerializer, SkillSerializer
+from .models import Education, User, TwoFactorMethod, Skill
+
+
+class ViewSkills(APIView):
+    """
+    API to view all available skills.
+    """
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            skills = Skill.objects.all()
+            serializer = SkillSerializer(skills, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                    {"message": f"An unexpected error occurred: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+class EducationAPIView(APIView):
+    """
+    API to create, update, retrieve, and delete an Education record for a user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """Create a new education record"""
+        try:
+            serializer = EducationSerializer(data=request.data)
+            if serializer.is_valid():
+                education = serializer.save(user=request.user)
+                return Response(
+                    {"message": "Education record created successfully.", "data": serializer.data},
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(
+                {"message": "Invalid data provided.", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.exception("Unexpected error creating education record: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def get(self, request, *args, **kwargs):
+        """Retrieve all education records for the authenticated user"""
+        try:
+            education = Education.objects.filter(user=request.user)
+            serializer = EducationSerializer(education, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception("Unexpected error fetching education records: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class UpdateEducationAPIView(APIView):
     """
-    API to update or create an Education record for a user based on user ID.
+    API to update or delete an Education record for a user.
     """
+    permission_classes = [IsAuthenticated]
 
-    def patch(self, request, user_id, *args, **kwargs):
+    def patch(self, request, education_id, *args, **kwargs):
+        """Update an existing education record"""
         try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            education = Education.objects.filter(id=education_id, user=request.user).first()
+            if not education:
+                return Response(
+                    {"message": "Education record not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-        education = Education.objects.filter(user=user).first()
-
-        # Use the serializer to validate and save data
-        serializer = EducationSerializer(education, data=request.data, partial=True)
-        if serializer.is_valid():
-            if education:
+            serializer = EducationSerializer(education, data=request.data, partial=True)
+            if serializer.is_valid():
                 serializer.save()
                 return Response(
-                    {
-                        "message": "Education record updated successfully.",
-                        "data": serializer.data
-                    },
+                    {"message": "Education record updated successfully.", "data": serializer.data},
                     status=status.HTTP_200_OK
                 )
-            else:
-                serializer.save(user=user)
-                return Response(
-                    {
-                        "message": "Education record created successfully.",
-                        "data": serializer.data
-                    },
-                    status=status.HTTP_201_CREATED
-                )
-        return Response(
-            {"message": "Invalid data provided.", "errors": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
-    def get(self, request, user_id, *args, **kwargs):
+            return Response(
+                {"message": "Invalid data provided.", "errors": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.exception("Unexpected error updating education record: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def delete(self, request, education_id, *args, **kwargs):
+        """Delete an education record"""
         try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            education = Education.objects.filter(id=education_id, user=request.user).first()
+            if not education:
+                return Response(
+                    {"message": "Education record not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-        education = Education.objects.filter(user=user).first()
-        serializer = EducationSerializer(education)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-
+            education.delete()
+            return Response(
+                {"message": "Education record deleted successfully."},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.exception("Unexpected error deleting education record: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
 logger = logging.getLogger(__name__)
 class SelectMethodsAPIView(APIView):
     permission_classes = [IsAuthenticated]

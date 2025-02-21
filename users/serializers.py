@@ -19,9 +19,15 @@ class MediaSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return super().create(validated_data)
 
+class SkillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Skill
+        fields = ["id", "name"]
+        
+        
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.ListField(
-        child=serializers.CharField(max_length=100), required=False
+    skills = serializers.PrimaryKeyRelatedField(
+        queryset=Skill.objects.all(), many=True, required=False
     )
     media = serializers.ImageField(required=False)
 
@@ -31,28 +37,40 @@ class EducationSerializer(serializers.ModelSerializer):
             'id', 'school', 'degree', 'field_of_study', 'start_month_year', 'end_month_year',
             'grade', 'activities_and_societies', 'description', 'skills', 'media'
         ]
-    
+
     def create(self, validated_data):
+        skills = validated_data.pop('skills', [])
         media = validated_data.pop('media', None)
+
         # Create Education instance
         education = Education.objects.create(**validated_data)
-        # If media exists, store it in the ImageField
+        education.skills.set(skills)  # Assign selected skills
+
+        # If media exists, store it
         if media:
             education.media = media
             education.save()
+
         return education
 
     def update(self, instance, validated_data):
+        skills = validated_data.pop('skills', None)
         media = validated_data.pop('media', None)
+
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
+        # Update skills only if provided
+        if skills is not None:
+            instance.skills.set(skills)
+
         # If media exists, update it
         if media:
             instance.media = media
             instance.save()
+
         return instance
     
 class UserSerializer(serializers.ModelSerializer):
