@@ -116,7 +116,7 @@ class SignUpView(APIView):
                     logger.error(f"Failed to send OTP to {user.email}: {email_response}")
                     return Response(
                         {"message": f"Failed to send OTP: {email_response}"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
 
                 # Store OTP in the database for verification later
@@ -137,7 +137,7 @@ class SignUpView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class OTPVerificationView(APIView):
@@ -198,7 +198,7 @@ class OTPVerificationView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
             
             
@@ -224,7 +224,7 @@ class OTPVerificationView(APIView):
                 )
                 return Response(
                     {"message": "Error creating Doctor profile."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
             logger.info(
@@ -271,7 +271,7 @@ class SignInView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class ForgotPasswordView(APIView):
@@ -335,7 +335,7 @@ class ForgotPasswordView(APIView):
             logger.error(f"Failed to send OTP to {email}. Error: {email_response}")
             return Response(
                 {"message": f"Failed to send OTP: {email_response}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Store OTP in user's model
@@ -418,14 +418,14 @@ class ChangePasswordView(APIView):
             # Send OTP via email
             send_result = self.send_otp_email(user.email, otp_code)
             if isinstance(send_result, str):  # If email sending fails
-                return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def put(self, request, *args, **kwargs):
@@ -469,7 +469,7 @@ class ChangePasswordView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 class AccountDeactivateDeleteView(APIView):
@@ -500,7 +500,7 @@ class AccountDeactivateDeleteView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def delete(self, request, *args, **kwargs):
@@ -648,7 +648,7 @@ class ResendOTPView(APIView):
             if email_response is None:
                 return Response(
                     {"message": "Failed to resend OTP. Please try again later."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Update the user's OTP and set the timestamp
@@ -668,7 +668,7 @@ class ResendOTPView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -762,7 +762,7 @@ class GoogleLoginView(APIView):
             logger.exception("Unexpected error in Google login: %s", str(e))
             return Response(
                 {"error": "An error occurred. Please try again later."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -809,7 +809,7 @@ class AppleLoginView(APIView):
             logger.exception("Unexpected error during Apple login: %s", str(e))
             return Response(
                 {"error": "An error occurred. Please try again later."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
 
@@ -903,6 +903,6 @@ class GetUserProfileAPIView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
