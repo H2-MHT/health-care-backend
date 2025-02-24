@@ -351,7 +351,7 @@ class InviteUserView(APIView):
                 request.user.email,
                 str(e),
             )
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "You already applied other referral code"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["POST"])
