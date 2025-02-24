@@ -266,26 +266,34 @@ class NotesAPIView(APIView):
             )
 
     def put(self, request, *args, **kwargs):
-        """Allow users to update their own notes."""
+        """Update a user's note by appending new data to existing fields."""
         try:
             note_id = kwargs.get("pk")
-            try:
-                note = Notes.objects.get(id=note_id, user=request.user)  # Ensure they own the note
-            except Notes.DoesNotExist:
-                return Response({"error": "Note not found or you do not have permission to update it."},
-                                status=status.HTTP_404_NOT_FOUND)
+            note = Notes.objects.filter(id=note_id, user=request.user).first()
 
-            serializer = NotesSerializer(note, data=request.data, partial=True, context={"request": request})
-            if serializer.is_valid():
-                serializer.save()
-                return Response({"message": "Note updated successfully.", "data": serializer.data},
-                                status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if not note:
+                return Response({"error": "Note not found or you don't have permission."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Append new data to existing fields instead of replacing
+            for key, value in request.data.items():
+                if hasattr(note, key):
+                    current_value = getattr(note, key, "")
+                    if isinstance(current_value, str) and isinstance(value, str):  
+                        setattr(note, key, current_value + " " + value)  # Append with a newline
+                    elif isinstance(current_value, list) and isinstance(value, list):
+                        setattr(note, key, current_value + value)  # Append list data
+                    else:
+                        setattr(note, key, value)  # Update normally for other data types
+
+            note.save()
+            serializer = NotesSerializer(note, context={"request": request})
+
+            return Response({"message": "Note updated successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+            return Response({"message": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
     def delete(self, request, *args, **kwargs):
         """Allow users to delete their own notes."""
