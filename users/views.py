@@ -266,7 +266,7 @@ class NotesAPIView(APIView):
             )
 
     def put(self, request, *args, **kwargs):
-        """Update a user's note by appending new data to existing fields."""
+        """Update a user's note by replacing the title and appending to notes."""
         try:
             note_id = kwargs.get("pk")
             note = Notes.objects.filter(id=note_id, user=request.user).first()
@@ -274,16 +274,15 @@ class NotesAPIView(APIView):
             if not note:
                 return Response({"error": "Note not found or you don't have permission."}, status=status.HTTP_404_NOT_FOUND)
 
-            # Append new data to existing fields instead of replacing
-            for key, value in request.data.items():
-                if hasattr(note, key):
-                    current_value = getattr(note, key, "")
-                    if isinstance(current_value, str) and isinstance(value, str):  
-                        setattr(note, key, current_value + " " + value)  # Append with a newline
-                    elif isinstance(current_value, list) and isinstance(value, list):
-                        setattr(note, key, current_value + value)  # Append list data
-                    else:
-                        setattr(note, key, value)  # Update normally for other data types
+            # Replace title if provided
+            if "title" in request.data:
+                note.title = request.data["title"]  # Completely replace the existing title
+
+            # Append to note if provided
+            if "note" in request.data:
+                new_data = request.data["note"]
+                if isinstance(new_data, str):  # Ensure it's a string before appending
+                    note.note = (note.note or "") + " " + new_data  # Append with space
 
             note.save()
             serializer = NotesSerializer(note, context={"request": request})
@@ -292,6 +291,7 @@ class NotesAPIView(APIView):
 
         except Exception as e:
             return Response({"message": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
