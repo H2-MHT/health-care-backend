@@ -4,8 +4,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 import logging
-from .serializers import EducationSerializer, SkillSerializer
-from .models import Education, User, TwoFactorMethod, Skill
+from .serializers import EducationSerializer, SkillSerializer, NotesSerializer
+from .models import Education, User, TwoFactorMethod, Skill, Notes
 
 
 class ViewSkills(APIView):
@@ -228,3 +228,80 @@ class AvailableMethodsAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+            
+
+class NotesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """Retrieve notes created by the logged-in user (Doctor or Patient)."""
+        try:
+            notes = Notes.objects.filter(user=request.user)
+            serializer = NotesSerializer(notes, many=True)
+            return Response(
+                {"message": "Notes retrieved successfully.", "data": serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def post(self, request, *args, **kwargs):
+        """Allow the logged-in user (Doctor or Patient) to create their own note."""
+        try:
+            serializer = NotesSerializer(data=request.data, context={"request": request})
+            if serializer.is_valid():
+                serializer.save(user=request.user)  # Assign logged-in user as the creator
+                return Response(
+                    {"message": "Note created successfully.", "data": serializer.data},
+                    status=status.HTTP_201_CREATED,
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def put(self, request, *args, **kwargs):
+        """Allow users to update their own notes."""
+        try:
+            note_id = kwargs.get("pk")
+            try:
+                note = Notes.objects.get(id=note_id, user=request.user)  # Ensure they own the note
+            except Notes.DoesNotExist:
+                return Response({"error": "Note not found or you do not have permission to update it."},
+                                status=status.HTTP_404_NOT_FOUND)
+
+            serializer = NotesSerializer(note, data=request.data, partial=True, context={"request": request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Note updated successfully.", "data": serializer.data},
+                                status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def delete(self, request, *args, **kwargs):
+        """Allow users to delete their own notes."""
+        try:
+            note_id = kwargs.get("pk")
+            try:
+                note = Notes.objects.get(id=note_id, user=request.user)  # Ensure they own the note
+            except Notes.DoesNotExist:
+                return Response({"error": "Note not found or you do not have permission to delete it."},
+                                status=status.HTTP_404_NOT_FOUND)
+
+            note.delete()
+            return Response({"message": "Note deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
