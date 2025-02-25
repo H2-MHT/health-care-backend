@@ -24,8 +24,6 @@ from django.contrib.auth import authenticate, login
 from authify.utils import validate_google_id_token
 from doctors.models import Doctor
 from users.models import User
-from users.serializers import EducationSerializer
-from users.models import Education
 from .serializers import (
     OTPVerificationSerializer,
     RegistrationSerializer,
@@ -874,18 +872,6 @@ class GetUserProfileAPIView(APIView):
 
             serializer = UserProfileSerializer(user)
             data = serializer.data
-
-            # Include education only if the user is a doctor
-            if role == "Doctor":
-                logger.info("Returning doctor profile for user: %s", request.user.email)
-
-                # Fetch and serialize education records for doctors
-                education = Education.objects.filter(user=user)
-                education_serializer = EducationSerializer(education, many=True)
-
-                data["education"] = education_serializer.data
-            else:
-                data["education"] = []
 
             return Response(
                 {

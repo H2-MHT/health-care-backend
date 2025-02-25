@@ -7,7 +7,7 @@ from .models import Education, Media, Skill, User, Notes
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
-        fields = ["name"]
+        fields = ["id", "name"]
 
 class MediaSerializer(serializers.ModelSerializer):
     file = serializers.FileField()
@@ -19,16 +19,8 @@ class MediaSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return super().create(validated_data)
 
-class SkillSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Skill
-        fields = ["id", "name"]
-        
-        
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.PrimaryKeyRelatedField(
-        queryset=Skill.objects.all(), many=True, required=False
-    )
+    skills = SkillSerializer(many=True, read_only=True)  # nested serializer
     media = serializers.ImageField(required=False)
 
     class Meta:
@@ -72,6 +64,7 @@ class EducationSerializer(serializers.ModelSerializer):
             instance.save()
 
         return instance
+
     
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
