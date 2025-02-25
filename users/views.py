@@ -7,6 +7,7 @@ import logging
 from .serializers import EducationSerializer, SkillSerializer, NotesSerializer
 from .models import Education, User, TwoFactorMethod, Skill, Notes
 
+logger = logging.getLogger(__name__)
 
 class ViewSkills(APIView):
     """
@@ -54,7 +55,7 @@ class EducationAPIView(APIView):
     def get(self, request, *args, **kwargs):
         """Retrieve all education records for the authenticated user"""
         try:
-            education = Education.objects.filter(user=request.user)
+            education = Education.objects.filter(user=request.user).order_by("-id")
             serializer = EducationSerializer(education, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
@@ -121,7 +122,7 @@ class UpdateEducationAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
-logger = logging.getLogger(__name__)
+
 class SelectMethodsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -236,7 +237,7 @@ class NotesAPIView(APIView):
     def get(self, request, *args, **kwargs):
         """Retrieve notes created by the logged-in user (Doctor or Patient)."""
         try:
-            notes = Notes.objects.filter(user=request.user)
+            notes = Notes.objects.filter(user=request.user).order_by("-created_at")
             serializer = NotesSerializer(notes, many=True)
             return Response(
                 {"message": "Notes retrieved successfully.", "data": serializer.data},

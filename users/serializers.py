@@ -20,7 +20,9 @@ class MediaSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = SkillSerializer(many=True, read_only=True)  # nested serializer
+    skills = serializers.PrimaryKeyRelatedField(
+        queryset=Skill.objects.all(), many=True, required=False
+    )
     media = serializers.ImageField(required=False)
 
     class Meta:
@@ -36,7 +38,10 @@ class EducationSerializer(serializers.ModelSerializer):
 
         # Create Education instance
         education = Education.objects.create(**validated_data)
-        education.skills.set(skills)  # Assign selected skills
+
+        # Assign selected skills
+        if skills:
+            education.skills.set(skills)
 
         # If media exists, store it
         if media:
