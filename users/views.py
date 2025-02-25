@@ -245,7 +245,7 @@ class NotesAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def post(self, request, *args, **kwargs):
@@ -262,11 +262,11 @@ class NotesAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
     def put(self, request, *args, **kwargs):
-        """Update a user's note by replacing the title and appending to notes."""
+        """Update a user's note by replacing the title and updating note content correctly."""
         try:
             note_id = kwargs.get("pk")
             note = Notes.objects.filter(id=note_id, user=request.user).first()
@@ -278,11 +278,12 @@ class NotesAPIView(APIView):
             if "title" in request.data:
                 note.title = request.data["title"]  # Completely replace the existing title
 
-            # Append to note if provided
+            # Replace note if provided
             if "note" in request.data:
                 new_data = request.data["note"]
-                if isinstance(new_data, str):  # Ensure it's a string before appending
-                    note.note = (note.note or "") + " " + new_data  # Append with space
+
+                if isinstance(new_data, str):  # in string before updating
+                    note.note = new_data  # Completely replace existing note content
 
             note.save()
             serializer = NotesSerializer(note, context={"request": request})
@@ -290,8 +291,7 @@ class NotesAPIView(APIView):
             return Response({"message": "Note updated successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"message": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return Response({"message": f"An error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -310,6 +310,6 @@ class NotesAPIView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
