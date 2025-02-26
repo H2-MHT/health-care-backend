@@ -238,6 +238,11 @@ class SignInView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
+            role = request.data["role"]
+            email = request.data['email']
+            user = User.objects.filter(email=email, role=role).first()
+            if not user:
+                return Response({'message':'Email address does not belong to this role'}, status=status.HTTP_400_BAD_REQUEST)
             logger.info("Sign-in attempt")
             serializer = SignInSerializer(data=request.data)
             if serializer.is_valid():
