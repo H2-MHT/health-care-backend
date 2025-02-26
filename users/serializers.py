@@ -20,9 +20,7 @@ class MediaSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.PrimaryKeyRelatedField(
-        queryset=Skill.objects.all(), many=True, required=False
-    )
+    skills = serializers.SerializerMethodField()
     media = serializers.ImageField(required=False)
 
     class Meta:
@@ -32,6 +30,10 @@ class EducationSerializer(serializers.ModelSerializer):
             'grade', 'activities_and_societies', 'description', 'skills', 'media'
         ]
 
+    def get_skills(self, obj):
+        """Get the names of the skills"""
+        return [skill.name for skill in obj.skills.all()]
+    
     def create(self, validated_data):
         skills = validated_data.pop('skills', [])
         media = validated_data.pop('media', None)
