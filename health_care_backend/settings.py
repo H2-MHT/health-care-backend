@@ -33,6 +33,8 @@ ALLOWED_HOSTS = ['*', '209.38.123.166', '20.0.160.6']
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -51,9 +53,9 @@ INSTALLED_APPS = [
     'payments',
     'consultations',
     'reviews',
-    'dashboard'
+    'dashboard',
+    'chat'
 ]
-
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -110,7 +112,24 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'health_care_backend.wsgi.application'
+# WSGI_APPLICATION = 'health_care_backend.wsgi.application'
+ASGI_APPLICATION = 'health_care_backend.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [("127.0.0.1", 6379)],
+#         },
+#     }
+# }
+
 
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
