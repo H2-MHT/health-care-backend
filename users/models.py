@@ -113,6 +113,7 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
     last_activity = models.DateTimeField(blank=True, null=True)
+    is_online = models.BooleanField(default=False)
     rating = models.PositiveSmallIntegerField(null=True, default=0)
     reviews = models.PositiveBigIntegerField(null=True, default=0)
 
