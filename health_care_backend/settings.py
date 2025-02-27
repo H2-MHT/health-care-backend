@@ -382,4 +382,6 @@ CORS_ALLOW_METHODS = (
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://20.77.64.229',
+    'http://h2.doctor'
+    'https://h2.doctor'
 ]
