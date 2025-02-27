@@ -34,7 +34,7 @@ class EducationAPIView(APIView):
     def post(self, request, *args, **kwargs):
         """Create a new education record"""
         try:
-            serializer = EducationSerializer(data=request.data)
+            serializer = EducationSerializer(data=request.data, context= {'request': request})
             if serializer.is_valid():
                 education = serializer.save(user=request.user)
                 return Response(
@@ -81,7 +81,7 @@ class UpdateEducationAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            serializer = EducationSerializer(education, data=request.data, partial=True)
+            serializer = EducationSerializer(education, data=request.data, partial=True, context= {'request': request})
             if serializer.is_valid():
                 serializer.save()
                 return Response(

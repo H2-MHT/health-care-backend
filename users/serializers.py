@@ -10,33 +10,34 @@ class SkillSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 class MediaSerializer(serializers.ModelSerializer):
-    file = serializers.FileField()
 
     class Meta:
         model = Media
-        fields = ["file"]
+        fields = ["id","file"]
 
-    def create(self, validated_data):
-        return super().create(validated_data)
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.SerializerMethodField()
-    media = serializers.ImageField(required=False)
+    skills = serializers.PrimaryKeyRelatedField(
+        queryset=Skill.objects.all(), many=True, required=False, write_only=True
+    )
+
+    media = MediaSerializer(many=True, required=False)
 
     class Meta:
         model = Education
         fields = [
             'id', 'school', 'degree', 'field_of_study', 'start_month_year', 'end_month_year',
-            'grade', 'activities_and_societies', 'description', 'skills', 'media'
+            'grade', 'activities_and_societies', 'description', 'media', 'skills'
         ]
 
-    def get_skills(self, obj):
-        """Get the names of the skills"""
-        return [skill.name for skill in obj.skills.all()]
-    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['skills'] = [skill.name for skill in instance.skills.all()]  # Convert IDs to names
+        return data
+
     def create(self, validated_data):
         skills = validated_data.pop('skills', [])
-        media = validated_data.pop('media', None)
+        media_files = self.context['request'].FILES.getlist('media')
 
         # Create Education instance
         education = Education.objects.create(**validated_data)
@@ -46,15 +47,15 @@ class EducationSerializer(serializers.ModelSerializer):
             education.skills.set(skills)
 
         # If media exists, store it
-        if media:
-            education.media = media
-            education.save()
+        if media_files:
+            for file in media_files:
+                Media.objects.create(education=education, file=file)
 
         return education
 
     def update(self, instance, validated_data):
         skills = validated_data.pop('skills', None)
-        media = validated_data.pop('media', None)
+        media_files = self.context['request'].FILES.getlist('media')
 
         # Update other fields
         for attr, value in validated_data.items():
@@ -66,9 +67,10 @@ class EducationSerializer(serializers.ModelSerializer):
             instance.skills.set(skills)
 
         # If media exists, update it
-        if media:
-            instance.media = media
-            instance.save()
+        if media_files:
+            instance.media.all().delete()
+            for file in media_files:
+                Media.objects.create(education=instance, file=file)
 
         return instance
 
