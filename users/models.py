@@ -175,7 +175,6 @@ class Education(models.Model):
     activities_and_societies = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     skills = models.ManyToManyField(Skill, blank=True, default="")
-    media = models.ImageField(upload_to='education_media/', blank=True, null=True)
 
     def __str__(self):
         return f"{self.school} - {self.degree or 'Education'}"
@@ -183,6 +182,7 @@ class Education(models.Model):
 
 class Media(models.Model):
     file = models.FileField(upload_to="education_media/", blank=True, null=True)
+    education = models.ForeignKey(Education, on_delete=models.CASCADE, default="", blank=True, null=True, related_name="media")
     description = models.TextField(blank=True, null=True)
 
     def __str__(self):
