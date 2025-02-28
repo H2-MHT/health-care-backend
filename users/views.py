@@ -6,7 +6,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 import logging
 from .serializers import EducationSerializer, SkillSerializer, NotesSerializer
 from .models import Education, User, TwoFactorMethod, Skill, Notes
-
+import json
+from django.http import QueryDict
 logger = logging.getLogger(__name__)
 
 class ViewSkills(APIView):
@@ -34,17 +35,37 @@ class EducationAPIView(APIView):
     def post(self, request, *args, **kwargs):
         """Create a new education record"""
         try:
-            serializer = EducationSerializer(data=request.data, context= {'request': request})
+
+            if isinstance(request.data, QueryDict):
+                data = request.data.dict()
+            else:
+                data = request.data.copy()
+
+            if 'skills' in data and isinstance(data['skills'], str):
+                try:
+                    data['skills'] = json.loads(data['skills'])
+                    if not isinstance(data['skills'], list):
+                        data['skills'] = [data['skills']]
+                except json.JSONDecodeError:
+                        data['skills'] = []
+
+            if 'media' in data:
+                del data['media']
+
+            serializer = EducationSerializer(data=data, context={'request': request})
+
             if serializer.is_valid():
-                education = serializer.save(user=request.user)
+                serializer.save(user=request.user)
                 return Response(
                     {"message": "Education record created successfully.", "data": serializer.data},
                     status=status.HTTP_201_CREATED
                 )
+
             return Response(
                 {"message": "Invalid data provided.", "errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
         except Exception as e:
             logger.exception("Unexpected error creating education record: %s", str(e))
             return Response(
@@ -81,7 +102,24 @@ class UpdateEducationAPIView(APIView):
                     status=status.HTTP_404_NOT_FOUND
                 )
 
-            serializer = EducationSerializer(education, data=request.data, partial=True, context= {'request': request})
+            if isinstance(request.data, QueryDict):
+                data = request.data.dict()
+            else:
+                data = request.data.copy()
+
+            if 'skills' in data and isinstance(data['skills'], str):
+                try:
+                    data['skills'] = json.loads(data['skills'])
+                    if not isinstance(data['skills'], list):
+                        data['skills'] = [data['skills']]
+                except json.JSONDecodeError:
+                        data['skills'] = []
+
+            if 'media' in data:
+                del data['media']
+
+
+            serializer = EducationSerializer(education, data=data, context={'request': request}, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(
