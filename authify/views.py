@@ -1,6 +1,7 @@
 import logging
 import random
 import re
+import sendgrid
 from datetime import timedelta
 from django.utils import timezone
 
@@ -24,6 +25,7 @@ from django.contrib.auth import authenticate, login
 from authify.utils import validate_google_id_token
 from doctors.models import Doctor
 from users.models import User
+
 from .serializers import (
     OTPVerificationSerializer,
     RegistrationSerializer,
@@ -204,31 +206,55 @@ class OTPVerificationView(APIView):
     @staticmethod
     def create_doctor_profile(user):
         if user.role == "Doctor":
-            logger.info(
-                f"User {user.email} is a doctor. Attempting to create Doctor profile..."
-            )
+            logger.info(f"User {user.email} is a doctor. Creating profile...")
             try:
                 doctor, created = Doctor.objects.get_or_create(user=user)
                 if created:
-                    doctor.is_verified = (
-                        True  # Mark doctor as verified after OTP verification
-                    )
+                    doctor.is_verified = True
                     doctor.save()
-                    logger.info(f"Doctor profile created for user {user.email}.")
+                    logger.info(f"Doctor profile created for {user.email}.")
+
+                    # Send doctor profile email content
+                    subject = f"Doctor Onboarding Team"
+                    body = f"""
+                    Dear Admin/Team,
+
+                    A new Doctor has onboarded. Below are the details for your action:
+
+                    **Doctor Details:**
+                    - **Doctor ID:** {doctor.id}
+                    - **Doctor Name:** {user.get_full_name()}
+                    - **Email:** {user.email}
+                    - **Phone Number:** {user.phone_number}
+                    - **Specialization:** {doctor.specialization}
+                    - **Experience:** {doctor.experience}
+                    - **Availability:** {doctor.availability}
+                    - **Registration Date:** {doctor.created_at}
+                    - **Verification Status:** {doctor.is_verified}
+                    - **Last Login:** {doctor.last_login}
+                    Best regards,  
+                    My Health Today Team
+                    """
+
+                    message = Mail(
+                        from_email="it@my-health.today",
+                        to_emails="onboarding-doctor@my-health.today",
+                        subject=subject,
+                        plain_text_content=body.strip(),
+                    )
+                    try:
+                        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                        response = sg.send(message)
+                        logger.info(f"Doctor profile email sent. Response: {response.status_code}")
+                        return response
+                    except Exception as email_error:
+                        logger.error(f"Failed to send doctor profile email: {str(email_error)}")
+                        return str(email_error)
+                        
                 else:
-                    logger.info(f"Doctor profile already exists for user {user.email}.")
+                    logger.info(f"Doctor profile already exists for {user.email}.")
             except Exception as e:
-                logger.error(
-                    f"Error creating Doctor profile for user {user.email}: {str(e)}"
-                )
-                return Response(
-                    {"message": "Error creating Doctor profile."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            logger.info(
-                f"User {user.email} is not a doctor, skipping Doctor profile creation."
-            )
+                logger.error(f"Error creating Doctor profile for {user.email}: {str(e)}")
 
 
 class SignInView(APIView):
@@ -238,11 +264,6 @@ class SignInView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            role = request.data["role"]
-            email = request.data['email']
-            user = User.objects.filter(email=email, role=role).first()
-            if not user:
-                return Response({'message':'Email address does not belong to this role'}, status=status.HTTP_400_BAD_REQUEST)
             logger.info("Sign-in attempt")
             serializer = SignInSerializer(data=request.data)
             if serializer.is_valid():
@@ -839,9 +860,12 @@ class UpdateUserProfileAPIView(APIView):
                     status=status.HTTP_200_OK,
                 )
 
-            logger.warning("Profile update failed for user: %s, errors: %s", request.user.email, serializer.errors)
+            logger.warning(
+                "Profile update failed for user: %s, errors: %s",
+                request.user.email,
+                serializer.errors,
+            )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
@@ -878,13 +902,26 @@ class GetUserProfileAPIView(APIView):
             serializer = UserProfileSerializer(user)
             data = serializer.data
 
-            return Response(
-                {
-                    "message": f"{role} profile.",
-                    "data": data,
-                },
-                status=status.HTTP_200_OK,
-            )
+            if role == "Patient":
+                logger.info(
+                    "Returning patient profile for user: %s", request.user.email
+                )
+                return Response(
+                    {"message": "Patient profile.", "data": data},
+                    status=status.HTTP_200_OK,
+                )
+            elif role == "Doctor":
+                logger.info("Returning doctor profile for user: %s", request.user.email)
+                return Response(
+                    {"message": "Doctor profile.", "data": data},
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                logger.error("Invalid role assigned to user: %s", request.user.email)
+                return Response(
+                    {"message": "Invalid role assigned to user."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         except AuthenticationFailed as e:
             logger.warning("Authentication failed: %s", str(e))
