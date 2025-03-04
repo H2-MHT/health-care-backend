@@ -72,8 +72,12 @@ class ClinicRegisterAPIView(APIView):
                 data=request.data, context={"request": request}
             )
             if serializer.is_valid():
-                serializer.save()
+                clinic = serializer.save()
                 clinic_user = UserSerializer(serializer.instance.user)
+
+                # Send email directly to the Outlook Group
+                self.send_registration_email(clinic)
+
                 response_data = serializer.data
                 response_data["user"] = clinic_user.data
                 return Response(response_data, status=status.HTTP_201_CREATED)
@@ -85,6 +89,47 @@ class ClinicRegisterAPIView(APIView):
             return Response(
                 {"error": str(e)}, status=status.HTTP_417_EXPECTATION_FAILED
             )
+
+    def send_registration_email(self, clinic):
+        subject = f"Clinic Onboarding Team"
+        body = f"""
+                    Dear Admin/Team,
+
+                    A new Clinic has onboarded. Below are the details for your action:
+
+                    **Clinic Details:**
+                    - **Clinic ID:** {clinic.id}
+                    - **Clinic Name:** {clinic.name}
+                    - **Clinic Email:** {clinic.user.email}
+                    - **Clinic Phone Number:** {clinic.phone_number}
+                    - **Clinic Address:** {clinic.address}
+                    - **Clinic Country:** {clinic.country}
+                    - **Clinic Website:** {clinic.website}
+                    - **Clinic Contact Email:** {clinic.contact_email}
+                    - **Clinic Working Time:** {clinic.working_time}
+                    - **Clinic Administrator Name:** {clinic.administrator_email}
+                    
+                    Best regards,  
+                    My Health Today Team
+                    """
+
+        message = Mail(
+            from_email="it@my-health.today",
+            to_emails="onboarding-clinic@my-health.today",
+            subject=subject,
+            plain_text_content=body.strip(),
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            print(f"Email sent! Status Code: {response.status_code}")
+
+            if response.status_code != 202:
+                print(f"SendGrid Error: {response.body}")
+
+        except Exception as e:
+            print(f"Failed to send email: {str(e)}")
 
 
 class ClinicInfoAPIView(APIView):
