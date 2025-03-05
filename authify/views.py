@@ -34,6 +34,8 @@ from .serializers import (
     UserProfileSerializer,
     UserProfileUpdateSerializer,
 )
+from clinics.models import Clinic
+from clinics.serializers import ClinicInfoSerializer
 import logging
 
 from django.dispatch import receiver
@@ -902,18 +904,25 @@ class GetUserProfileAPIView(APIView):
             serializer = UserProfileSerializer(user)
             data = serializer.data
 
-            if role == "Patient":
-                logger.info(
-                    "Returning patient profile for user: %s", request.user.email
-                )
+            if role == "Doctor":
+                logger.info("Returning doctor profile for user: %s", request.user.email)
+
+                # Fetch clinic data if it exists
+                clinic = Clinic.objects.filter(user=user).first()
+                clinic_data = ClinicInfoSerializer(clinic).data if clinic else None
+
                 return Response(
-                    {"message": "Patient profile.", "data": data},
+                    {
+                        "message": "Doctor profile.",
+                        "data": data,
+                        "clinic_data": clinic_data,  # Include clinic data
+                    },
                     status=status.HTTP_200_OK,
                 )
-            elif role == "Doctor":
-                logger.info("Returning doctor profile for user: %s", request.user.email)
+            elif role == "Patient":
+                logger.info("Returning patient profile for user: %s", request.user.email)
                 return Response(
-                    {"message": "Doctor profile.", "data": data},
+                    {"message": "Patient profile.", "data": data},
                     status=status.HTTP_200_OK,
                 )
             else:

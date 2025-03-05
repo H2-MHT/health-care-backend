@@ -71,6 +71,8 @@ class ServicesProvidedSerializer(serializers.ModelSerializer):
 
 class ClinicInfoSerializer(serializers.ModelSerializer):
     # User fields
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
     bio = serializers.CharField(source='user.bio', required=False)
     country = serializers.CharField(source='user.country', required=False)
     city = serializers.CharField(source='user.city', required=False)
@@ -84,10 +86,10 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
         model = Clinic
         fields = [
             # User fields
-            'bio', 'country', 'city', 'phone_number', 'email', 'working_time', 'expertise', 'languages', 'profile_picture',
+            'first_name', 'last_name','bio', 'country', 'city', 'phone_number', 'email', 'working_time', 'expertise', 'languages', 'profile_picture',
 
             # Clinic fields
-            'organisation_name', 'license_number', 'clinic_type', 'public_name', 
+            'address', 'organisation_name', 'license_number', 'clinic_type', 'public_name', 
             'clinic_logo', 'website'
         ]
 
