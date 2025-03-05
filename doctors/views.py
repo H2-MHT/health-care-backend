@@ -1,18 +1,9 @@
 import logging
-import random
-from datetime import datetime
+from datetime import timedelta
 
-import pytz
-import sendgrid
-from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
-from django.forms import ValidationError
 from django.shortcuts import get_object_or_404
-from django.utils.crypto import get_random_string
 from rest_framework import status
-from rest_framework.decorators import api_view
-from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -33,6 +24,7 @@ from .models import (
     ReschedulePolicy,
     UserPreference,
     Membership,
+    BookedAppointment,
 )
 from .serializers import (
     AppointmentManagementSerializer,
@@ -42,6 +34,7 @@ from .serializers import (
     NoShowPolicySerializer,
     ReschedulePolicySerializer,
     ConsultationSettingsSerializer,
+    BookedAppointmentSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -79,143 +72,320 @@ class DoctorListAPIView(APIView):
 
 
 class AppointmentManagementAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            preferences = AppointmentManagement.objects.filter(user=request.user)
+            serializer = AppointmentManagementSerializer(preferences, many=True)
+            return Response({"message": "Appointment preferences retrieved successfully.", "data": serializer.data})
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request):
+        """Create a new appointment"""
+        try:
+            logger.info(f"User {request.user} is attempting to create an appointment with data: {request.data}")
+
+            serializer = AppointmentManagementSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+
+                logger.info(
+                    f"User {request.user} successfully created an appointment with ID {serializer.instance.id}.")
+                return Response(
+                    {"message": "Appointment preference created successfully.", "data": serializer.data},
+                    status=status.HTTP_201_CREATED
+                )
+
+            logger.warning(f"User {request.user} provided invalid data: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.exception(f"Error creating appointment for user {request.user}: {str(e)}")
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        """Update an existing appointment using pk from the request body"""
+        try:
+            pk = request.data.get("pk")
+            if not pk:
+                return Response({"message": "ID (pk) is required for updating."}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment = get_object_or_404(AppointmentManagement, id=pk, user=request.user)
+            
+            serializer = AppointmentManagementSerializer(appointment, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                logger.info(f"Appointment with ID {pk} updated successfully by user {request.user}.")
+                return Response(
+                    {"message": "Appointment preference updated successfully.", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
+            logger.warning(f"Invalid data for updating appointment ID {pk}: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.error(f"Error while updating appointment: {str(e)}", exc_info=True)
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        """Delete an existing appointment using pk from the request body"""
+        try:
+            pk = request.data.get("pk")  # Get 'pk' from request body
+            if not pk:
+                logger.warning(f"User {request.user} attempted to delete an appointment without providing an ID.")
+                return Response({"message": "ID is required for deletion."}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment = AppointmentManagement.objects.filter(id=pk, user=request.user).first()
+            if not appointment:
+                logger.error(f"User {request.user} attempted to delete a non-existing appointment with ID {pk}.")
+                return Response({"message": "Appointment preference not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            appointment.delete()
+            logger.info(f"User {request.user} successfully deleted appointment with ID {pk}.")
+            return Response({"message": "Appointment preference deleted successfully."},
+                            status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception(f"Error deleting appointment for user {request.user}: {str(e)}")
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AvailableSlotsAPIView(APIView):
     """
-    API to manage appointment preferences (list, create, update, delete).
+    Get available slots for all doctors who have set their appointment time slots.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """
-        Get all appointment preferences for the logged-in user with pagination.
-        """
         try:
-            logger.info("User %s is retrieving appointment preferences.", request.user.email)
-            preferences = AppointmentManagement.objects.filter(user=request.user)
-            serializer = AppointmentManagementSerializer(preferences, many=True)
-            return Response(
-                {
-                    "message": "Appointment preferences retrieved successfully.",
-                    "data": serializer.data,
-                }
+            appointment_type = request.query_params.get('appointment_type', 'Planned')
+
+            # Get today's day (e.g., "Mon", "Tue")
+            today = datetime.now().strftime("%a")[:3]
+
+            # Get all doctors with set availability
+            doctors_with_availability = AppointmentManagement.objects.filter(
+                appointment_type=appointment_type, days__icontains=today
+            ).values_list('user', flat=True)
+
+            # Get only valid doctors
+            doctors = Doctor.objects.filter(
+                user__id__in=doctors_with_availability, user__role="Doctor"
             )
+
+            if not doctors.exists():
+                return Response({"message": "No doctors have set their availability today"}, status=200)
+
+            response_data = []
+
+            for doctor in doctors:
+                settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+                if not settings:
+                    continue  # Skip doctor if settings are missing
+
+                session_length = settings.planned_session_length if appointment_type == "Planned" else settings.urgent_session_length
+                if not session_length:
+                    continue  # Skip doctor if session length not configured
+
+                availability = AppointmentManagement.objects.filter(
+                    user=doctor.user, appointment_type=appointment_type, days__icontains=today
+                ).first()
+
+                if not availability:
+                    continue  # Skip if no availability today
+
+                start_time = availability.start_time
+                end_time = availability.end_time
+                booked_slots = BookedAppointment.objects.filter(
+                    doctor=doctor.user, appointment_type=appointment_type
+                ).values_list('slot', flat=True)
+
+                slots = []
+                current_time = start_time
+                while current_time < end_time:
+                    next_time = (datetime.combine(datetime.today(), current_time) + timedelta(
+                        minutes=session_length)).time()
+                    slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
+                    if slot_str not in booked_slots:
+                        slots.append(slot_str)  # ✅ Only add if it's not booked
+                    current_time = next_time
+
+                response_data.append({
+                    "doctor_id": doctor.user.id,
+                    "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+                    "specialty": doctor.specialty,
+                    "available_slots": slots
+                })
+
+            return Response({"message": "Available slots retrieved successfully", "doctors": response_data})
+
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": str(e)}, status=400)
 
 
+class BookAppointmentAPIView(APIView):
+    """
+    Allows patients to book an available appointment slot.
+    """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """
-        Create a new appointment preference for the logged-in user.
-        """
         try:
-            logger.info("User %s is creating a new appointment preference.", request.user.email)
-            serializer = AppointmentManagementSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(user=request.user)
-                logger.info(
-                    "Appointment preference created successfully by %s", request.user.email
-                )
-                return Response(
-                    {
-                        "message": "Appointment preference created successfully.",
-                        "data": serializer.data,
-                    },
-                    status=status.HTTP_201_CREATED,
-                )
-            logger.warning(
-                "Appointment preference creation failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
+            user = request.user  # The logged-in patient
+            if user.role != "Patient":
+                return Response({"error": "Only patients can book an appointment"}, status=403)
+
+            doctor_id = request.data.get("doctor_id")
+            slot = request.data.get("slot")  # format: "10:00 - 10:30"
+            appointment_type = request.data.get("appointment_type", "Planned")
+
+            # Ensure doctor exists
+            doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+            if not doctor:
+                return Response({"error": "Invalid doctor ID"}, status=404)
+
+            # Ensure slot is available
+            booked_slots = BookedAppointment.objects.filter(
+                doctor=doctor.user, appointment_type=appointment_type
+            ).values_list('slot', flat=True)
+
+            if slot in booked_slots:
+                return Response({"error": "Selected slot is already booked"}, status=400)
+
+            # Create appointment
+            appointment = BookedAppointment.objects.create(
+                doctor=doctor.user,
+                patient=user,
+                appointment_type=appointment_type,
+                slot=slot,
+                status="Confirmed"
             )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({"message": "Appointment booked successfully", "appointment_id": appointment.id})
+
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": str(e)}, status=400)
 
 
-    def put(self, request, pk):
-        """
-        Update an existing appointment preference.
-        """
+class MyAppointmentsAPIView(APIView):
+    """
+    Allows patients to view their booked appointments.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
         try:
-            logger.info("User %s is attempting to update appointment preference ID %s.", request.user.email,pk)
-            try:
-                preference = AppointmentManagement.objects.get(pk=pk, user=request.user)
-            except AppointmentManagement.DoesNotExist:
-                logger.warning(
-                    "Update failed - Preference not found for user: %s", request.user.email
-                )
-                return Response(
-                    {"error": "Preference not found or unauthorized"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-            serializer = AppointmentManagementSerializer(
-                preference, data=request.data, partial=True
-            )
-            if serializer.is_valid():
-                serializer.save()
-                logger.info(
-                    "Appointment preference updated successfully by %s", request.user.email
-                )
-                return Response(
-                    {
-                        "message": "Appointment preference updated successfully.",
-                        "data": serializer.data,
-                    }
-                )
-            logger.warning(
-                "Appointment preference update failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            user = request.user
+            if user.role != "Patient":
+                return Response({"error": "Only patients can view their appointments"}, status=403)
+
+            appointments = BookedAppointment.objects.filter(patient=user).order_by("slot")
+            data = [{
+                "appointment_id": appt.id,
+                "doctor_name": f"{appt.doctor.first_name} {appt.doctor.last_name}",
+                "appointment_type": appt.appointment_type,
+                "slot": appt.slot,
+                "status": appt.status
+            } for appt in appointments]
+
+            return Response({"message": "Appointments retrieved successfully", "appointments": data})
+
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-            
-            
-    def delete(self, request):
+            return Response({"error": str(e)}, status=400)
+
+
+# Reschedule Appointment API
+class RescheduleAppointmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
         """
-        Delete an appointment preference by ID provided in the request body.
+        Allows a patient to reschedule their appointment.
         """
-        pk = request.data.get("pk")
-        if not pk:
-            logger.warning(
-                "Delete failed - Missing 'pk' field in request by user: %s",
-                request.user.email,
-            )
-            raise ValidationError("The 'pk' field is required in the request body.")
+        appointment_id = kwargs.get("pk")
+        new_slot = request.data.get("new_slot")
 
         try:
-            preference = AppointmentManagement.objects.get(pk=pk, user=request.user)
-            preference.delete()
-            logger.info(
-                "Appointment preference deleted successfully by %s", request.user.email
-            )
-            return Response(
-                {"message": "Preference deleted successfully"},
-                status=status.HTTP_204_NO_CONTENT,
-            )
-        except AppointmentManagement.DoesNotExist:
-            logger.warning(
-                "Delete failed - Preference not found for user: %s", request.user.email
-            )
-            return Response(
-                {"error": "Preference not found or unauthorized"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
 
+            if appointment.status in ["Canceled"]:
+                return Response({"error": "Cannot reschedule a canceled appointment."}, status=status.HTTP_400_BAD_REQUEST)
 
+            appointment.slot = new_slot
+            appointment.status = "Rescheduled"
+            appointment.save()
+
+            return Response({"message": "Appointment rescheduled successfully"}, status=status.HTTP_200_OK)
+        except BookedAppointment.DoesNotExist:
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+# Cancel Appointment API
+class CancelAppointmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        """
+        Allows a patient to cancel their appointment.
+        """
+        appointment_id = kwargs.get("pk")
+
+        try:
+            appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
+
+            if appointment.status == "Canceled":
+                return Response({"error": "Appointment is already canceled."}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment.status = "Canceled"
+            appointment.save()
+
+            return Response({"message": "Appointment canceled successfully"}, status=status.HTTP_200_OK)
+        except BookedAppointment.DoesNotExist:
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+# Appointment Reminder API
+class AppointmentReminderAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """
+        Fetch upcoming appointment reminders for the authenticated patient.
+        """
+        today = datetime.now()
+        reminder_time = today + timedelta(days=1)
+
+        reminders = BookedAppointment.objects.filter(patient=request.user, created_at__lte=reminder_time).exclude(status="Canceled")
+        serializer = BookedAppointmentSerializer(reminders, many=True)
+
+        return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
+
+# Payment Confirmation API
+class PaymentConfirmationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Allows a patient to confirm their payment status.
+        """
+        appointment_id = request.data.get("appointment_id")
+        payment_status = request.data.get("payment_status")
+
+        try:
+            appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
+
+            if payment_status not in ["Pending", "Paid"]:
+                return Response({"error": "Invalid payment status"}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment.payment_status = payment_status
+            appointment.save()
+
+            return Response({"message": "Payment status updated successfully"}, status=status.HTTP_200_OK)
+        except BookedAppointment.DoesNotExist:
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)    
+    
+    
 class GenerateReferralCodeView(APIView):
     """Generate and return a user's referral code, registration link, and update referral points."""
 
@@ -300,7 +470,7 @@ class InviteUserView(APIView):
 
             # Check if this referral code has already been used by the current user
             if Invitation.objects.filter(
-                invited_by=referral, invited_user=request.user
+                    invited_by=referral, invited_user=request.user
             ).exists():
                 logger.warning(
                     "User %s already used referral code: %s",
