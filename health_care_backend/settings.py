@@ -54,7 +54,8 @@ INSTALLED_APPS = [
     'consultations',
     'reviews',
     'dashboard',
-    'chat'
+    'chat',
+    'MasterPanel',              # Admin Api
 ]
 
 REST_FRAMEWORK = {

@@ -42,6 +42,9 @@ urlpatterns = [
     # Include urls from the patient app
     path('patient/', include('patients.urls')),
     # Include urls from the patient app
-    path('chat/', include('chat.urls'))
+    path('chat/', include('chat.urls')),
+    
+    # include the urls from the adminApps app
+    path('MasterPanel/', include('MasterPanel.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
