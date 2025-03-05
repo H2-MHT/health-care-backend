@@ -1,17 +1,22 @@
 # urls.py
 from django.urls import path
 from .views import (DoctorReviewsAPIView,
-                    AddReviewPIView,
+                    ReviewPIView,
                     ReplyAPIView,
 )
 
 urlpatterns = [
-    path('doctor/<int:doctor_id>/', DoctorReviewsAPIView.as_view(), name='doctor-reviews'),
-    # path('create/', AddReviewPIView.as_view(), name='review-create'),
-    path('view-review/', AddReviewPIView.as_view(), name='review-view'),
-    # reply to the specific review 
+    # create review
+    path('review/', ReviewPIView.as_view(), name='review'),
+    # update review
+    path('review/<int:review_id>', ReviewPIView.as_view(), name='review'),
+    # reply to the specific review
     path('replies/<int:review_id>/', ReplyAPIView.as_view(), name='reply-to-review'),
-    # get a list of all the reviews and their replies 
+    # delete reply
+    path('delete-update-reply/<int:reply_id>/', ReplyAPIView.as_view(), name='delete-update-reply'),
+    # get a list of all the reviews and their replies
     path('replies/', ReplyAPIView.as_view(), name='view-all-reply-to-review'),
-    
+    # get a list of all the reviews related to the specific doctor
+    path('doctor/<int:doctor_id>/', DoctorReviewsAPIView.as_view(), name='doctor-reviews'),
+
 ]

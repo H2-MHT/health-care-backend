@@ -10,11 +10,11 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor_id', 'rating','title', 'content', 'recommend', 'created_at']
-        
+        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor', 'rating', 'title', 'content', 'recommend', 'created_at']
+
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
-    
+
     def get_reviewer_profile_picture(self, obj):
         if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
@@ -36,7 +36,22 @@ class ReviewSerializer(serializers.ModelSerializer):
                 {"doctor": "This doctor is not assigned to the logged-in patient through an appointment."}
             )
         return data
-    
+
+class ReviewUpdateSerializer(serializers.ModelSerializer):
+    reviewer_name = serializers.SerializerMethodField()
+    reviewer_profile_picture = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor', 'rating','title', 'content', 'recommend', 'created_at']
+
+    def get_reviewer_name(self, obj):
+        return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
+
+    def get_reviewer_profile_picture(self, obj):
+        if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
+            return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
+        return None
 
 class ReplySerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()  # Add user name field
@@ -46,7 +61,7 @@ class ReplySerializer(serializers.ModelSerializer):
     created_at = serializers.DateTimeField(read_only=True)
     patient_name = serializers.SerializerMethodField()
     profile_picture = serializers.SerializerMethodField()  # To get the profile picture from the User model
-    
+
     class Meta:
         model = Reply
         fields = ['id', 'user', 'user_name', 'profile_picture', 'user_type', 'patient_name', 'content', 'created_at', 'parent_reply']
@@ -66,29 +81,13 @@ class ReplySerializer(serializers.ModelSerializer):
         elif hasattr(obj.user, 'doctor'):
             return 'doctor'
         return None
-    
+
     def get_profile_picture(self, obj):
         user = obj.user  # Access the associated User object
         return user.profile_picture.url if user.profile_picture else None  # Return the URL of the profile picture, or None if no picture exists
 
-    
+
     def get_patient_name(self, obj):
         if hasattr(obj.user, 'patient') and obj.user.patient.user:
             return obj.user.patient.user.first_name
         return None
-
-
-# class ReviewSerializer(serializers.ModelSerializer):
-#     patient_name = serializers.SerializerMethodField()
-#     doctor_name = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = Review
-#         fields = ['id', 'patient_name','doctor_name', 'rating', 'content', 'recommend', 'reply', 'created_at']
-
-#     def get_patient_name(self, obj):
-#         return obj.patient.user.first_name
-    
-#     def get_doctor_name(self, obj):
-#         # Fetch the doctor's name from the User model
-#         return obj.doctor.user.first_name
