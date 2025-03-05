@@ -56,7 +56,10 @@ class ReviewPIView(APIView):
 
         if serializer.is_valid():
             serializer.save(patient=patient)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "Review added successfully!", "data": serializer.data},
+                status=status.HTTP_201_CREATED
+            )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -68,7 +71,10 @@ class ReviewPIView(APIView):
         if review_id:
             try:
                 review = Review.objects.get(id=review_id)
-                return Response(ReviewSerializer(review).data, status=status.HTTP_200_OK)
+                return Response(
+                    {"message": "Review retrieved successfully!", "data": ReviewSerializer(review).data},
+                    status=status.HTTP_200_OK
+                )
             except Review.DoesNotExist:
                 return Response({"detail": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -78,21 +84,30 @@ class ReviewPIView(APIView):
             if not reviews:
                 return Response({'message':' Does not have any review'}, status=status.HTTP_404_NOT_FOUND)
             serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Review retrieved successfully!", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
 
         # If the user is a patient, return all reviews they have written for different doctors
         if hasattr(request.user, 'patient'):
             patient = request.user.patient
             reviews = Review.objects.filter(patient=patient)
             serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Review retrieved successfully!", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
 
         # If the user is a doctor, return all reviews they have received from different patients
         if hasattr(request.user, 'doctor'):
             doctor = request.user.doctor
             reviews = Review.objects.filter(doctor=doctor)
             serializer = ReviewSerializer(reviews, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Review retrieved successfully!", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
 
         return Response({"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -112,7 +127,10 @@ class ReviewPIView(APIView):
         serializer = ReviewUpdateSerializer(review, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Review updated successfully!", "data": serializer.data},
+                status=status.HTTP_200_OK
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, review_id):
@@ -129,7 +147,7 @@ class ReviewPIView(APIView):
             return Response({'message': 'review does not belong to the requested user'}, status=status.HTTP_403_FORBIDDEN)
 
         review.delete()
-        return Response({'message': 'Review deleted'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Review deleted successfully'}, status=status.HTTP_200_OK)
 
 
 class DoctorReviewsAPIView(generics.ListAPIView):
@@ -162,7 +180,11 @@ class DoctorReviewsAPIView(generics.ListAPIView):
                 'total_reviews': total_reviews,
                 'reviews': serializer.data
             }
-            return Response(response_data)
+            return Response(
+                {"message": "Retrived successfully!", "data": response_data},
+                status=status.HTTP_200_OK
+            )
+
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
@@ -212,7 +234,12 @@ class ReplyAPIView(APIView):
                 review_data = ReviewSerializer(review).data
                 review_data['replies'] = ReplySerializer(review.replies.all(), many=True).data
                 # Return the review with the associated replies and user names
-                return Response(review_data, status=status.HTTP_201_CREATED)
+
+                return Response(
+                    {"message": "Reply added!", "data": review_data},
+                    status=status.HTTP_201_CREATED
+                )
+
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
@@ -263,7 +290,11 @@ class ReplyAPIView(APIView):
             # Add replies to each review's data
             review_data['replies'] = replies_data
             reviews_data.append(review_data)
-            return Response(reviews_data, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Review retrieved successfully!", "data": review_data},
+                status=status.HTTP_200_OK
+            )
+
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
