@@ -13,7 +13,16 @@ from .views import (
     RequestPasswordChangeAPIView,
     VerifyOTPAndChangePasswordAPIView,
     MembershipAPIView,
+    ConsultationSettingsAPIView,  # For doctor session lengths
+    AvailableSlotsAPIView,  # For fetching available slots
+    BookAppointmentAPIView,
+    MyAppointmentsAPIView,
+    RescheduleAppointmentAPIView,
+    CancelAppointmentAPIView,
+    AppointmentReminderAPIView,
+    PaymentConfirmationAPIView,
     redeem_invitation,
+    
     )
 
 
@@ -24,10 +33,23 @@ urlpatterns = [
     path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
     path('invite/', InviteUserView.as_view(), name='invite_user'),
     path('referral/redeem/<str:invitation_code>/', redeem_invitation, name='redeem_invitation'),
-    path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
     
-    # appointment management 
+    # Doctor's consultation settings
+    path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
+    # Appointment preferences (Doctor sets availability)
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
+    # Fetch available slots for a doctor based on settings
+    path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
+    # Book an appointment (Patient)
+    path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
+    # View booked appointments
+    path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
+    
+    path("appointment/reschedule/<int:pk>/", RescheduleAppointmentAPIView.as_view(), name="reschedule-appointment"),
+    path("appointment/cancel/<int:pk>/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
+    path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
+    path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
+
     path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
     path('reschedule-policies/', ReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST
     path('cancellation-policy/', CancellationPolicyView.as_view(), name='cancellation-policy'),
@@ -40,4 +62,6 @@ urlpatterns = [
 
     # Subsciption plan
     path('select-membership/', MembershipAPIView.as_view(), name='select-membership'),
+    
+
 ]

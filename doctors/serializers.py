@@ -8,6 +8,7 @@ from .models import (
     CancellationPolicy,
     NoShowPolicy,
     CommunicationPreferences,
+    BookedAppointment,
 )
 from datetime import datetime, timedelta
 from django.contrib.auth.hashers import check_password
@@ -71,6 +72,11 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
             'urgent_fee': {'required': False}
         }
         
+
+class BookedAppointmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookedAppointment
+        fields = '__all__'
         
 class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
