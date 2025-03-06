@@ -133,6 +133,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "bio",
             "country",
             "city",
+            "residence",
             "languages",
             "work_place",
             "expertise",

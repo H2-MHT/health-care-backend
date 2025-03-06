@@ -210,7 +210,7 @@ class AvailableSlotsAPIView(APIView):
                         minutes=session_length)).time()
                     slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
                     if slot_str not in booked_slots:
-                        slots.append(slot_str)  # ✅ Only add if it's not booked
+                        slots.append(slot_str)  # Only add if it's not booked
                     current_time = next_time
 
                 response_data.append({
