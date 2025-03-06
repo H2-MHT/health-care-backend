@@ -155,74 +155,87 @@ class AppointmentManagementAPIView(APIView):
 
 class AvailableSlotsAPIView(APIView):
     """
-    Get available slots for all doctors who have set their appointment time slots.
+    API to get available slots for a selected doctor.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
-            appointment_type = request.query_params.get('appointment_type', 'Planned')
+            doctor_id = request.query_params.get("doctor_id")
+            appointment_type = request.query_params.get("appointment_type")
 
-            # Get today's day (e.g., "Mon", "Tue")
+            print(f"Doctor ID: {doctor_id}, Appointment Type: {appointment_type}")
+
+            if not doctor_id:
+                return Response({"error": "Doctor ID is required"}, status=400)
+
+            # Validate doctor exists
+            doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+            if not doctor:
+                return Response({"error": "Invalid doctor ID"}, status=404)
+
+            # Get today's day abbreviation (e.g., "Mon", "Tue")
             today = datetime.now().strftime("%a")[:3]
+            print(f"Today's Day: {today}")
 
-            # Get all doctors with set availability
-            doctors_with_availability = AppointmentManagement.objects.filter(
-                appointment_type=appointment_type, days__icontains=today
-            ).values_list('user', flat=True)
+            # Fetch doctor's availability for today
+            availability = AppointmentManagement.objects.filter(
+                user=doctor.user, appointment_type=appointment_type, days=today
+            ).first()
 
-            # Get only valid doctors
-            doctors = Doctor.objects.filter(
-                user__id__in=doctors_with_availability, user__role="Doctor"
-            )
+            print(f"Querying AppointmentManagement with: {doctor_id}, {appointment_type}, {today}")
+            print(f"Availability Found: {availability}")
 
-            if not doctors.exists():
-                return Response({"message": "No doctors have set their availability today"}, status=200)
+            if not availability:
+                return Response({"message": "Doctor is not available today"}, status=200)
 
-            response_data = []
+            # Get session length from ConsultationSettings
+            settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            if not settings:
+                print("No consultation settings found!")
+                return Response({"error": "Consultation settings not found"}, status=400)
 
-            for doctor in doctors:
-                settings = ConsultationSettings.objects.filter(doctor=doctor).first()
-                if not settings:
-                    continue  # Skip doctor if settings are missing
+            session_length = settings.planned_session_length if appointment_type == "Planned" else settings.urgent_session_length
+            if not session_length:
+                print("Session length not configured in ConsultationSettings!")
+                return Response({"error": "Session length not configured"}, status=400)
 
-                session_length = settings.planned_session_length if appointment_type == "Planned" else settings.urgent_session_length
-                if not session_length:
-                    continue  # Skip doctor if session length not configured
+            start_time = availability.start_time
+            end_time = availability.end_time
+            print(f"Doctor Available From {start_time} to {end_time}")
 
-                availability = AppointmentManagement.objects.filter(
-                    user=doctor.user, appointment_type=appointment_type, days__icontains=today
-                ).first()
+            # Fetch already booked slots
+            booked_slots = BookedAppointment.objects.filter(
+                doctor=doctor.user, appointment_type=appointment_type
+            ).values_list('slot', flat=True)
 
-                if not availability:
-                    continue  # Skip if no availability today
+            print(f"Booked Slots: {booked_slots}")
 
-                start_time = availability.start_time
-                end_time = availability.end_time
-                booked_slots = BookedAppointment.objects.filter(
-                    doctor=doctor.user, appointment_type=appointment_type
-                ).values_list('slot', flat=True)
+            # Generate available slots
+            slots = []
+            current_time = start_time
+            while current_time < end_time:
+                next_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=session_length)).time()
+                slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
 
-                slots = []
-                current_time = start_time
-                while current_time < end_time:
-                    next_time = (datetime.combine(datetime.today(), current_time) + timedelta(
-                        minutes=session_length)).time()
-                    slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
-                    if slot_str not in booked_slots:
-                        slots.append(slot_str)  # Only add if it's not booked
-                    current_time = next_time
+                if slot_str not in booked_slots:
+                    slots.append(slot_str)  # Add only if not booked
 
-                response_data.append({
-                    "doctor_id": doctor.user.id,
-                    "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
-                    "specialty": doctor.specialty,
-                    "available_slots": slots
-                })
+                print(f"Generated Slot: {slot_str}")
+                current_time = next_time
 
-            return Response({"message": "Available slots retrieved successfully", "doctors": response_data})
+            print(f"Final Available Slots: {slots}")
+
+            return Response({
+                "message": "Available slots retrieved successfully",
+                "doctor_id": doctor.user.id,
+                "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+                "specialty": doctor.specialty,
+                "available_slots": slots
+            }, status=200)
 
         except Exception as e:
+            print(f"Exception Occurred: {str(e)}")
             return Response({"error": str(e)}, status=400)
 
 
