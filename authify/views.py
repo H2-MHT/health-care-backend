@@ -909,13 +909,15 @@ class GetUserProfileAPIView(APIView):
 
                 # Fetch clinic data if it exists
                 clinic = Clinic.objects.filter(user=user).first()
-                clinic_data = ClinicInfoSerializer(clinic).data if clinic else None
+                clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
+
+                # Nested clinic data inside user profile response
+                data["clinic_data"] = clinic_data
 
                 return Response(
                     {
                         "message": "Doctor profile.",
-                        "data": data,
-                        "clinic_data": clinic_data,  # Include clinic data
+                        "data": data,  # Includes nested clinic info
                     },
                     status=status.HTTP_200_OK,
                 )
