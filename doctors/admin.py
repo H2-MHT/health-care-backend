@@ -11,6 +11,7 @@ from .models import(
     NoShowPolicy,
     CommunicationPreferences,
     Membership,
+    BookedAppointment,
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -34,3 +35,4 @@ admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
 admin.site.register(Membership)
+admin.site.register(BookedAppointment)
