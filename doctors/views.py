@@ -241,7 +241,7 @@ class AvailableSlotsAPIView(APIView):
 
 class BookAppointmentAPIView(APIView):
     """
-    Allows patients to book an available appointment slot.
+    Allows patients to book an available appointment slot only if the doctor has availability.
     """
     permission_classes = [IsAuthenticated]
 
@@ -254,30 +254,65 @@ class BookAppointmentAPIView(APIView):
             doctor_id = request.data.get("doctor_id")
             slot = request.data.get("slot")  # format: "10:00 - 10:30"
             appointment_type = request.data.get("appointment_type", "Planned")
+            date = request.data.get("date") # (DD-MM-YYYY)
+
+            # Convert date to correct format
+            date_obj = datetime.strptime(date, "%d-%m-%Y").date()
+            appointment_day = date_obj.strftime("%a")
 
             # Ensure doctor exists
-            doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+            doctor = User.objects.filter(id=doctor_id, role="Doctor").first()
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
 
-            # Ensure slot is available
-            booked_slots = BookedAppointment.objects.filter(
-                doctor=doctor.user, appointment_type=appointment_type
-            ).values_list('slot', flat=True)
+            # Ensure doctor has set availability for this day
+            availability = AppointmentManagement.objects.filter(
+                user=doctor,
+                appointment_type=appointment_type,
+                days__icontains=appointment_day
+            ).first()
 
-            if slot in booked_slots:
+            if not availability:
+                return Response({"error": "Doctor is not available on this day"}, status=400)
+
+            # Convert slot start and end time
+            slot_start, slot_end = slot.split(" - ")
+            slot_start = datetime.strptime(slot_start, "%H:%M").time()
+            slot_end = datetime.strptime(slot_end, "%H:%M").time()
+
+            # Ensure slot falls within the doctor's available hours
+            if not (availability.start_time <= slot_start and availability.end_time >= slot_end):
+                return Response({"error": "Selected slot is outside doctor's available hours"}, status=400)
+
+            # Ensure slot is not already booked
+            is_booked = BookedAppointment.objects.filter(
+                doctor=doctor, slot=slot, date=date_obj
+            ).exists()
+
+            if is_booked:
                 return Response({"error": "Selected slot is already booked"}, status=400)
 
             # Create appointment
             appointment = BookedAppointment.objects.create(
-                doctor=doctor.user,
+                doctor=doctor,
                 patient=user,
                 appointment_type=appointment_type,
                 slot=slot,
-                status="Confirmed"
+                status="Confirmed",
+                date=date_obj,
+                payment_status="Pending",  # Payment status should be pending initially
             )
 
-            return Response({"message": "Appointment booked successfully", "appointment_id": appointment.id})
+            # Format response
+            return Response({
+                "message": "Appointment booked successfully",
+                "data": {
+                    "appointment_id": appointment.id,
+                    "appointment_type": appointment.appointment_type,
+                    "date": date,
+                    "payment_status": appointment.payment_status,
+                }
+            })
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)

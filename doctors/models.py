@@ -88,17 +88,26 @@ class BookedAppointment(models.Model):
         ("Canceled", "Canceled"),
     ]
 
+    PAYMENT_STATUS_CHOICES = [
+        ("Pending", "Pending"),
+        ("Paid", "Paid"),
+        ("Refunded", "Refunded"),
+        ("Failed", "Failed"),
+        ]
+
     doctor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="doctor_appointments")
     patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="patient_appointments")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
+    date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
 
     def __str__(self):
         return f"Appointment with Dr. {self.doctor} at {self.slot}"
 
-
+    
 class ConsultationSettings(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     planned_session = models.CharField(max_length=50, null=True, blank=True)
