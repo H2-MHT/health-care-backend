@@ -1,5 +1,7 @@
 import logging
 from datetime import timedelta
+import stripe
+import calendar
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -8,10 +10,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from sendgrid.helpers.mail import Content, Email, Mail, To
-
+from appointments.models import Appointment
 from users.models import User
 from users.serializers import UserSerializer
-
+from payments.models import Payment
+from patients.models import Patient
 from .models import (
     AppointmentManagement,
     CancellationPolicy,
@@ -35,6 +38,7 @@ from .serializers import (
     ReschedulePolicySerializer,
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
+    PaymentSummarySerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -152,6 +156,7 @@ class AppointmentManagementAPIView(APIView):
             logger.exception(f"Error deleting appointment for user {request.user}: {str(e)}")
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+# without buffer time
 
 class AvailableSlotsAPIView(APIView):
     """
@@ -237,6 +242,104 @@ class AvailableSlotsAPIView(APIView):
         except Exception as e:
             print(f"Exception Occurred: {str(e)}")
             return Response({"error": str(e)}, status=400)
+
+
+# with buffered time and one month slots time 
+# class AvailableSlotsAPIView(APIView):
+#     """
+#     API to get available slots for a selected doctor for all occurrences of that day in the current month.
+#     """
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         try:
+#             doctor_id = request.query_params.get("doctor_id")
+#             appointment_type = request.query_params.get("appointment_type")
+
+#             if not doctor_id:
+#                 return Response({"error": "Doctor ID is required"}, status=400)
+
+#             # Validate doctor exists
+#             doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+#             if not doctor:
+#                 return Response({"error": "Invalid doctor ID"}, status=404)
+
+#             # Get today's day abbreviation (e.g., "Mon", "Tue")
+#             today = datetime.now().strftime("%a")[:3]
+
+#             # Fetch doctor's availability for today
+#             availability = AppointmentManagement.objects.filter(
+#                 user=doctor.user, appointment_type=appointment_type, days=today
+#             ).first()
+
+#             if not availability:
+#                 return Response({"message": "Doctor is not available today"}, status=200)
+
+#             # Get session length from ConsultationSettings
+#             settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+#             if not settings:
+#                 return Response({"error": "Consultation settings not found"}, status=400)
+
+#             session_length = settings.planned_session_length if appointment_type == "Planned" else settings.urgent_session_length
+#             buffer_time = settings.buffer_time  # Fetch buffer time
+
+#             if not session_length:
+#                 return Response({"error": "Session length not configured"}, status=400)
+
+#             start_time = availability.start_time
+#             end_time = availability.end_time
+
+#             # Get the current month and year
+#             current_year = datetime.today().year
+#             current_month = datetime.today().month
+
+#             # Find all upcoming occurrences of the selected day in the current month
+#             day_name_to_index = {name: index for index, name in enumerate(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])}
+#             selected_day_index = day_name_to_index[today]  # Get day index (0 = Monday, 6 = Sunday)
+
+#             # Get all dates of the selected day in the current month
+#             days_in_month = calendar.monthrange(current_year, current_month)[1]
+#             selected_dates = [
+#                 datetime(current_year, current_month, day)
+#                 for day in range(1, days_in_month + 1)
+#                 if datetime(current_year, current_month, day).weekday() == selected_day_index
+#             ]
+
+#             # Fetch already booked slots
+#             booked_slots = BookedAppointment.objects.filter(
+#                 doctor=doctor.user, appointment_type=appointment_type
+#             ).values_list('slot', flat=True)
+
+#             # Generate available slots for each occurrence of the selected day
+#             all_slots = {}
+
+#             for date in selected_dates:
+#                 slots = []
+#                 current_time = start_time
+
+#                 while current_time < end_time:
+#                     next_time = (datetime.combine(datetime.today(), current_time) + timedelta(minutes=session_length)).time()
+#                     buffer_next_time = (datetime.combine(datetime.today(), next_time) + timedelta(minutes=buffer_time)).time()
+
+#                     slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
+
+#                     if slot_str not in booked_slots:
+#                         slots.append(slot_str)  # Add only bookable slots to the list
+
+#                     current_time = buffer_next_time  # Move to next slot after buffer time
+
+#                 all_slots[date.strftime('%Y-%m-%d')] = slots  # Store slots grouped by date
+
+#             return Response({
+#                 "message": "Available slots retrieved successfully",
+#                 "doctor_id": doctor.user.id,
+#                 "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+#                 "specialty": doctor.specialty,
+#                 "available_slots": all_slots  # Returning grouped slots by date
+#             }, status=200)
+
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=400)
 
 
 class BookAppointmentAPIView(APIView):
@@ -409,6 +512,40 @@ class AppointmentReminderAPIView(APIView):
 
         return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
 
+
+class AppointmentSummaryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, appointment_id):
+        """Retrieve appointment summary"""
+        try:
+            # Get the booked appointment
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+
+            # Get the doctor's specialty (category)
+            doctor = get_object_or_404(Doctor, user=appointment.doctor)
+
+            # Get consultation fee from ConsultationSettings
+            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            subtotal = consultation_settings.planned_fee or consultation_settings.urgent_fee
+
+            # Build response
+            response_data = {
+                "category": doctor.specialty,  # General medicine (example)
+                "date": appointment.date.strftime("%d %b, %Y"),  # Format date
+                "time": appointment.slot,  # Slot time (e.g., "11:00AM")
+                "subtotal": f"${subtotal:.2f}" if subtotal else "$0.00",
+                "discount": "$0.00",  # You can modify this if discounts apply
+                "total": f"${subtotal:.2f}" if subtotal else "$0.00",
+            }
+
+            return Response(response_data, status=200)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        
+    
 # Payment Confirmation API
 class PaymentConfirmationAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -433,7 +570,85 @@ class PaymentConfirmationAPIView(APIView):
         except BookedAppointment.DoesNotExist:
             return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)    
     
-    
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+class CreateStripeCheckoutSession(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Creates a Stripe Checkout Session for the appointment payment.
+        """
+        appointment_id = request.data.get("appointment_id")
+
+        appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+
+        if appointment.payment_status == "Paid":
+            return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Set the appointment price (example: $74)
+        amount = 7400  # Amount in cents (74.00 USD)
+
+        try:
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=["card"],  # Add "paypal" if needed
+                line_items=[{
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": f"Appointment with Dr. {appointment.doctor}"
+                        },
+                        "unit_amount": amount
+                    },
+                    "quantity": 1
+                }],
+                mode="payment",
+                success_url="http://localhost:8000/doctors/payment-success?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="http://localhost:8000/payment-cancelled",
+                metadata={"appointment_id": appointment.id}
+            )
+
+            # Save the session ID to track payment status
+            appointment.stripe_session_id = checkout_session.id
+            appointment.save()
+
+            return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
+
+        except stripe.error.StripeError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from django.http import JsonResponse
+
+class PaymentSuccessView(APIView):
+    def get(self, request):
+        session_id = request.GET.get("session_id")
+
+        if not session_id:
+            return Response("Session ID is missing", status=400)
+
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+
+            # Get appointment ID from metadata
+            appointment_id = session.metadata.get("appointment_id")
+
+            if not appointment_id:
+                return Response("No appointment linked to this payment", status=400)
+
+            # Update payment status
+            appointment = BookedAppointment.objects.get(id=appointment_id)
+            appointment.payment_status = "Paid"
+            appointment.save()
+
+            return Response("Payment was successful!", status=200)
+
+        except stripe.error.StripeError as e:
+            return Response(str(e), status=500)
+
+        except Exception as e:
+            return Response(str(e), status=500)
+        
+
 class GenerateReferralCodeView(APIView):
     """Generate and return a user's referral code, registration link, and update referral points."""
 

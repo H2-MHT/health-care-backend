@@ -21,6 +21,9 @@ from .views import (
     CancelAppointmentAPIView,
     AppointmentReminderAPIView,
     PaymentConfirmationAPIView,
+    CreateStripeCheckoutSession,
+    PaymentSuccessView,
+    AppointmentSummaryAPIView,
     redeem_invitation,
     
     )
@@ -49,6 +52,10 @@ urlpatterns = [
     path("appointment/cancel/<int:pk>/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
+    path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
+    path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
+
+    path("payment-success/", PaymentSuccessView.as_view(), name="payment-success"),
 
     path('user-preferences/', UserPreferenceView.as_view(), name='user-preferences'),
     path('reschedule-policies/', ReschedulePolicyView.as_view(), name='reschedule-policy-list'),  # GET all, POST

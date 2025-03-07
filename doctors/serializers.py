@@ -10,6 +10,7 @@ from .models import (
     CommunicationPreferences,
     BookedAppointment,
 )
+from payments.models import Payment
 from datetime import datetime, timedelta
 from django.contrib.auth.hashers import check_password
 from users.models import User
@@ -77,6 +78,53 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookedAppointment
         fields = '__all__'
+
+
+class PaymentSummarySerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
+    hour = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    discount = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Payment
+        fields = ["category", "date", "hour", "subtotal", "discount", "total"]
+
+    def get_category(self, obj):
+        """Fetch specialty from the Doctor model"""
+        try:
+            return obj.appointment.doctor.specialty  # Assuming appointment has a doctor field
+        except AttributeError:
+            return "Unknown"
+
+    def get_date(self, obj):
+        """Return the current date"""
+        return now().strftime("%d %b, %Y")
+
+    def get_hour(self, obj):
+        """Return the current time"""
+        return now().strftime("%I:%M %p")
+
+    def get_subtotal(self, obj):
+        """Fetch planned_fee or urgent_fee from ConsultationSettings"""
+        try:
+            consultation = ConsultationSettings.objects.get(doctor=obj.appointment.doctor)
+            return f"${consultation.planned_fee or consultation.urgent_fee:.2f}"
+        except ConsultationSettings.DoesNotExist:
+            return "$0.00"
+
+    def get_discount(self, obj):
+        """Set discount (modify logic if needed)"""
+        return "$0.00"
+
+    def get_total(self, obj):
+        """Total amount calculation (considering discount if applicable)"""
+        subtotal = float(self.get_subtotal(obj).replace("$", ""))
+        return f"${subtotal:.2f}"
+
+
         
 class UserPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
