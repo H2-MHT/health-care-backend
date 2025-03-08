@@ -98,17 +98,18 @@ class ClinicRegisterAPIView(APIView):
                     A new Clinic has onboarded. Below are the details for your action:
 
                     **Clinic Details:**
-                    - **Clinic ID:** {clinic.id}
-                    - **Clinic Name:** {clinic.name}
-                    - **Clinic Email:** {clinic.user.email}
-                    - **Clinic Phone Number:** {clinic.phone_number}
-                    - **Clinic Address:** {clinic.address}
-                    - **Clinic Country:** {clinic.country}
-                    - **Clinic Website:** {clinic.website}
-                    - **Clinic Contact Email:** {clinic.contact_email}
-                    - **Clinic Working Time:** {clinic.working_time}
-                    - **Clinic Administrator Name:** {clinic.administrator_email}
-                    
+                        - **Clinic ID:** {clinic.id}
+                        - **Clinic Name:** {clinic.public_name}
+                        - **Clinic Email:** {clinic.user.email if clinic.user else 'N/A'}
+                        - **Clinic Phone Number:** {clinic.contact_phone}
+                        - **Clinic Address:** {clinic.address}
+                        - **Clinic Country:** {clinic.user.country if clinic.user else 'N/A'}
+                        - **Clinic Website:** {clinic.website}
+                        - **Clinic Contact Email:** {clinic.contact_email}
+                        - **Clinic Working Time:** {clinic.optional_information}
+                        - **Clinic Administrator Name:** {clinic.administrator_name}
+                        - **Clinic Administrator Email:** {clinic.administrator_email}
+
                     Best regards,  
                     My Health Today Team
                     """
