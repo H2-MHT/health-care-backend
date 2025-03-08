@@ -603,8 +603,8 @@ class CreateStripeCheckoutSession(APIView):
                     "quantity": 1
                 }],
                 mode="payment",
-                success_url="http://localhost:8000/doctors/payment-success?session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="http://localhost:8000/payment-cancelled",
+                success_url="http://20.0.160.6/doctors/payment-success?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="http://20.0.160.6/doctors/payment-cancelled",
                 metadata={"appointment_id": appointment.id}
             )
 
@@ -617,7 +617,6 @@ class CreateStripeCheckoutSession(APIView):
         except stripe.error.StripeError as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-from django.http import JsonResponse
 
 class PaymentSuccessView(APIView):
     def get(self, request):
