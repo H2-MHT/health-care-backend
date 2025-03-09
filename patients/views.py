@@ -1,14 +1,25 @@
+import logging
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import PatientUserSerializer
+from .serializers import(
+    PatientUserSerializer,
+    MedicalDocumentSerializer,
+    AllergyDocumentSerializer,
+    FavouriteSerializer
+)
 from rest_framework.permissions import IsAuthenticated
 from appointments.models import Appointment
 from rest_framework import status
-from .models import Patient
+from .models import *
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from users.models import Notes
+from clinics.models import Clinic
+from doctors.models import Doctor
+
 
 # Create your views here.
+logger = logging.getLogger(__name__)
 
 
 class PatientDashboardAPIView(APIView):
@@ -132,7 +143,132 @@ class PatientListView(APIView):
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class MedicalDocumentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        # Get the patient linked to the logged-in user
+        try:
+            patient = Patient.objects.get(user=request.user)
+        except Patient.DoesNotExist:
+            return Response({"error": "Patient profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Serialize the data
+        serializer = MedicalDocumentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(patient=patient)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AllergyDocumentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        # Get the patient linked to the logged-in user
+        try:
+            patient = Patient.objects.get(user=request.user)
+        except Patient.DoesNotExist:
+            return Response({"error": "Patient profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Serialize the data
+        serializer = AllergyDocumentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(patient=patient)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
 
+class AddToFavouriteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """ Add a doctor or clinic to favorites """
+        try:
+            patient = request.user.patient_profile
+        except AttributeError:
+            return Response({"error": "You are not registered as a patient."}, status=status.HTTP_400_BAD_REQUEST)
+
+        fav_doc_id = request.data.get("fav_doc")
+        fav_clinic_id = request.data.get("fav_clinic")
+
+        if not fav_doc_id and not fav_clinic_id:
+            return Response({"error": "Provide a doctor or clinic to add to favorites."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if fav_doc_id:
+            try:
+                doctor = Doctor.objects.get(id=fav_doc_id)
+            except Doctor.DoesNotExist:
+                return Response({"error": "Doctor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            favourite, created = Favourite.objects.get_or_create(patient=patient, fav_doc=doctor)
+            favourite.doc_status = True
+            favourite.save()
+
+            return Response({"message": "Doctor added to favorites!", "data": FavouriteSerializer(favourite).data}, status=status.HTTP_201_CREATED)
+
+        if fav_clinic_id:
+            try:
+                clinic = Clinic.objects.get(id=fav_clinic_id)
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            favourite, created = Favourite.objects.get_or_create(patient=patient, fav_clinic=clinic)
+            favourite.clinic_status = True
+            favourite.save()
+
+            return Response({"message": "Clinic added to favorites!", "data": FavouriteSerializer(favourite).data}, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        """ Get all favorite doctors and clinics for the logged-in patient """
+        try:
+            patient = request.user.patient_profile
+        except AttributeError:
+            return Response({"error": "You are not registered as a patient."}, status=status.HTTP_400_BAD_REQUEST)
+
+        favourites = Favourite.objects.filter(patient=patient)
+
+        if not favourites.exists():
+            return Response({"message": "No favorites found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serialized_favourites = FavouriteSerializer(favourites, many=True)
+        return Response({"favorites": serialized_favourites.data}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        """ Remove a doctor or clinic from favorites """
+        try:
+            patient = request.user.patient_profile
+        except AttributeError:
+            return Response({"error": "You are not registered as a patient."}, status=status.HTTP_400_BAD_REQUEST)
+
+        fav_doc_id = request.data.get("fav_doc")
+        fav_clinic_id = request.data.get("fav_clinic")
+
+        if not fav_doc_id and not fav_clinic_id:
+            return Response({"error": "Provide a doctor or clinic to remove from favorites."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if fav_doc_id:
+            try:
+                favourite = Favourite.objects.get(patient=patient, fav_doc_id=fav_doc_id)
+                favourite.delete()
+                return Response({"message": "Doctor removed from favorites."}, status=status.HTTP_200_OK)
+            except Favourite.DoesNotExist:
+                return Response({"error": "Doctor favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if fav_clinic_id:
+            try:
+                favourite = Favourite.objects.get(patient=patient, fav_clinic_id=fav_clinic_id)
+                favourite.delete()
+                return Response({"message": "Clinic removed from favorites."}, status=status.HTTP_200_OK)
+            except Favourite.DoesNotExist:
+                return Response({"error": "Clinic favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            

@@ -1,7 +1,39 @@
 from rest_framework import serializers
 from users.models import User
+from .models import AllergyDocument, MedicalHistory, Favourite
+import os
+
 
 class PatientUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "first_name", "last_name", "phone_number", "profile_picture", "role", "city", "country", "residence"]
+
+# Validator for file type
+def validate_document_file(value):
+    ext = os.path.splitext(value.name)[1].lower()
+    allowed_extensions = [".pdf", ".jpg", ".jpeg", ".png"]
+
+    if ext not in allowed_extensions:
+        raise serializers.ValidationError("Only PDF, JPG, and PNG files are allowed.")
+
+class MedicalDocumentSerializer(serializers.ModelSerializer):
+    patient = serializers.PrimaryKeyRelatedField(read_only=True)  # Make patient read-only
+
+    class Meta:
+        model = MedicalHistory
+        fields = '__all__'  # Keep all fields, but patient is not required in input
+
+class AllergyDocumentSerializer(serializers.ModelSerializer):
+    patient = serializers.PrimaryKeyRelatedField(read_only=True)
+    class Meta:
+        model = AllergyDocument
+        fields = '__all__'
+        
+        
+
+class FavouriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Favourite
+        fields = ["id", "patient", "fav_doc", "doc_status", "fav_clinic", "clinic_status"]
+        read_only_fields = ["patient"]

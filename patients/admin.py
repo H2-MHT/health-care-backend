@@ -4,3 +4,5 @@ from .models import *
 
 admin.site.register(Patient)
 admin.site.register(MedicalHistory)
+admin.site.register(AllergyDocument)
+admin.site.register(Favourite)
