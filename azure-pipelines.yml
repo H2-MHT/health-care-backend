@@ -88,3 +88,4 @@ jobs:
                     else
                       echo "Not enough folders to delete. Keeping all existing folders."
                     fi
+              displayName: 'remove older folders'
