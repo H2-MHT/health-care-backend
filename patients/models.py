@@ -1,3 +1,5 @@
+import random
+import string
 from django.db import models
 from users.models import User
 # Create your models here.
@@ -61,3 +63,27 @@ class Favourite(models.Model):
     )
     clinic_status = models.BooleanField(default=False)
 
+
+class FamilyMember(models.Model):
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="family_members")
+    member_name = models.CharField(max_length=100)
+    member_email = models.EmailField()
+    family_status = models.CharField(max_length=100)
+    member_profile = models.FileField(upload_to="family_profiles/", null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.patient.name} added {self.family_member.name} as {self.family_status} ({'Verified' if self.is_verified else 'Pending'})"
+
+class OTPVerification(models.Model):
+    family_member = models.OneToOneField(FamilyMember, on_delete=models.CASCADE, related_name="otp_verification")
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def generate_otp():
+        """Generate a 6-digit random OTP."""
+        return ''.join(random.choices(string.digits, k=6))
+
+    def __str__(self):
+        return f"OTP for {self.family_member.family_member.email} - {self.otp}"
