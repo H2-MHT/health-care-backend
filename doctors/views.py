@@ -281,6 +281,7 @@ class AllDaySlotsAPIView(APIView):
         try:
             doctor_id = request.query_params.get("doctor_id")
             selected_date_str = request.query_params.get("date")
+            slot_type = request.query_params.get("slot_type")
 
             if not doctor_id:
                 return Response({"message": "Doctor ID is required", "data": {}}, status=400)
@@ -299,7 +300,7 @@ class AllDaySlotsAPIView(APIView):
                 full_day_name = calendar.day_name[selected_date.weekday()]
                 short_day_name = full_day_name[:3]  # "Sunday" → "Sun"
 
-                slots = AvailableSlot.objects.filter(doctor=doctor, day=short_day_name)
+                slots = AvailableSlot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
 
                 slot_data = [
                     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
