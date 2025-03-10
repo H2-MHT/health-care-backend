@@ -9,6 +9,7 @@ from .models import (
     NoShowPolicy,
     CommunicationPreferences,
     BookedAppointment,
+    AvailableSlot,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -74,6 +75,17 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
         }
         
 
+class AvailableSlotSerializer(serializers.ModelSerializer):
+    day_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AvailableSlot
+        fields = ["day_id", "day", "time_slot", "status"]
+
+    def get_day_id(self, obj):
+        return hash(obj.day)  # Generate a unique ID for each day
+
+
 class BookedAppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookedAppointment
@@ -95,7 +107,7 @@ class PaymentSummarySerializer(serializers.ModelSerializer):
     def get_category(self, obj):
         """Fetch specialty from the Doctor model"""
         try:
-            return obj.appointment.doctor.specialty  # Assuming appointment has a doctor field
+            return obj.appointment.doctor.specialty 
         except AttributeError:
             return "Unknown"
 

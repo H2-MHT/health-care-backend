@@ -13,8 +13,8 @@ from .views import (
     RequestPasswordChangeAPIView,
     VerifyOTPAndChangePasswordAPIView,
     MembershipAPIView,
-    ConsultationSettingsAPIView,  # For doctor session lengths
-    AvailableSlotsAPIView,  # For fetching available slots
+    ConsultationSettingsAPIView,
+    AllDaySlotsAPIView,
     BookAppointmentAPIView,
     MyAppointmentsAPIView,
     RescheduleAppointmentAPIView,
@@ -41,8 +41,13 @@ urlpatterns = [
     path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
     # Appointment preferences (Doctor sets availability)
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
+    
+    # Get All Day Slots for a Doctor
+    path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
+    
     # Fetch available slots for a doctor based on settings
-    path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
+    # path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
+    
     # Book an appointment (Patient)
     path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
     # View booked appointments
