@@ -534,7 +534,7 @@ class ChangePasswordView(APIView):
 
             # Update password immediately
             user.set_password(request.data.get("new_password"))
-            user.otp = None
+            user.otp = ""
             user.otp_created_at = None
             user.save()
             logger.info(f"Password changed successfully for user: {user.email}")
@@ -550,7 +550,7 @@ class ChangePasswordView(APIView):
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 class AccountDeactivateDeleteView(APIView):
