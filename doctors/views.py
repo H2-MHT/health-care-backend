@@ -597,7 +597,7 @@ class AppointmentSummaryAPIView(APIView):
             appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
 
             # Get the doctor's specialty (category)
-            doctor = get_object_or_404(Doctor, user=appointment.doctor)
+            doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
 
             # Get consultation fee from ConsultationSettings
             consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
@@ -651,60 +651,65 @@ class CreateStripeCheckoutSession(APIView):
         """
         Creates a Stripe Checkout Session for the appointment payment.
         """
-        appointment_id = request.data.get("appointment_id")
-
-        # Get the appointment object
-        appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
-
-        if appointment.payment_status == "Paid":
-            return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Ensure doctor is a valid instance of Doctor
-        if isinstance(appointment.doctor, Doctor):
-            doctor = appointment.doctor
-        else:
-            doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
-            if not doctor:
-                return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Fetch the doctor's consultation settings
-        consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
-        if not consultation_settings:
-            return Response({"error": "Consultation settings not found for the doctor"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Determine fee based on appointment type
-        if appointment.appointment_type == "urgent":
-            amount = int(consultation_settings.urgent_fee * 100)  # Convert to cents
-        else:
-            amount = int(consultation_settings.planned_fee * 100)  # Convert to cents
-
         try:
-            checkout_session = stripe.checkout.Session.create(
-                payment_method_types=["card"],
-                line_items=[{
-                    "price_data": {
-                        "currency": "usd",
-                        "product_data": {
-                            "name": f"Appointment with Dr. {doctor.user.first_name} {doctor.user.last_name}"
+            appointment_id = request.data.get("appointment_id")
+
+            # Get the appointment object
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+
+            if appointment.payment_status == "Paid":
+                return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Ensure doctor is a valid instance of Doctor
+            if isinstance(appointment.doctor, Doctor):
+                doctor = appointment.doctor
+            else:
+                doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
+                if not doctor:
+                    return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Fetch the doctor's consultation settings
+            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            if not consultation_settings:
+                return Response({"error": "Consultation settings not found for the doctor"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Determine fee based on appointment type
+            if appointment.appointment_type == "urgent":
+                amount = int(consultation_settings.urgent_fee * 100)  # Convert to cents
+            else:
+                amount = int(consultation_settings.planned_fee * 100)  # Convert to cents
+
+            try:
+                checkout_session = stripe.checkout.Session.create(
+                    payment_method_types=["card"],
+                    line_items=[{
+                        "price_data": {
+                            "currency": "usd",
+                            "product_data": {
+                                "name": f"Appointment with Dr. {doctor.user.first_name} {doctor.user.last_name}"
+                            },
+                            "unit_amount": amount
                         },
-                        "unit_amount": amount
-                    },
-                    "quantity": 1
-                }],
-                mode="payment",
-                success_url=f"https://h2.doctor/Patient/Appointmentlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
-                cancel_url="https://h2.doctor/Patient/Appointmentlist?status=cancel",
-                metadata={"appointment_id": appointment.id}
-            )
+                        "quantity": 1
+                    }],
+                    mode="payment",
+                    success_url=f"https://h2.doctor/Patient/Appointmentlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
+                    cancel_url="https://h2.doctor/Patient/Appointmentlist?status=cancel",
+                    metadata={"appointment_id": appointment.id}
+                )
 
-            # Save session ID
-            appointment.stripe_session_id = checkout_session.id
-            appointment.save()
+                # Save session ID
+                appointment.stripe_session_id = checkout_session.id
+                appointment.save()
 
-            return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
+                return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
 
-        except stripe.error.StripeError as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except stripe.error.StripeError as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as ex:
+            return Response({
+                "error": str(ex)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UpdatePaymentStatus(APIView):
