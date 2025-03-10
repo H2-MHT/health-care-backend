@@ -189,7 +189,7 @@ class AppointmentManagementAPIView(APIView):
                 )
                 for slot in slots
             ]
-            
+
             print(f"Slots to be created: {slots_to_create}")
 
             # Bulk Create
@@ -200,7 +200,7 @@ class AppointmentManagementAPIView(APIView):
             print(f"Error generating slots: {str(e)}")
 
 
-            
+
     def put(self, request):
         """Update an existing appointment using pk from the request body"""
         try:
@@ -209,7 +209,7 @@ class AppointmentManagementAPIView(APIView):
                 return Response({"message": "ID (pk) is required for updating."}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment = get_object_or_404(AppointmentManagement, id=pk, user=request.user)
-            
+
             serializer = AppointmentManagementSerializer(appointment, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
@@ -231,7 +231,7 @@ class AppointmentManagementAPIView(APIView):
             day = request.data.get("day")  # Expecting day name (e.g., "Wednesday" or "Wed")
             if not day:
                 return Response({"message": "Day is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             DAY_ID_MAP = {
                 "Monday": 1, "Mon": 1,
                 "Tuesday": 2, "Tue": 2,
@@ -401,8 +401,8 @@ class AvailableSlotsAPIView(APIView):
             },
             status=200,
         )
-        
-        
+
+
 class BookAppointmentAPIView(APIView):
     """
     Allows patients to book an available appointment slot only if the doctor has availability.
@@ -425,7 +425,7 @@ class BookAppointmentAPIView(APIView):
             appointment_day = date_obj.strftime("%a")
 
                         # Ensure doctor exists
-            doctor = Doctor.objects.filter(user__id=doctor_id).first()  
+            doctor = Doctor.objects.filter(user__id=doctor_id).first()
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
             doctor_user_obj = User.objects.get(id=doctor.user_id)
@@ -617,8 +617,8 @@ class AppointmentSummaryAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
-        
-    
+
+
 # Payment Confirmation API
 class PaymentConfirmationAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -641,8 +641,8 @@ class PaymentConfirmationAPIView(APIView):
 
             return Response({"message": "Payment status updated successfully"}, status=status.HTTP_200_OK)
         except BookedAppointment.DoesNotExist:
-            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)    
-    
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class CreateStripeCheckoutSession(APIView):
     permission_classes = [IsAuthenticated]
@@ -675,9 +675,9 @@ class CreateStripeCheckoutSession(APIView):
 
             # Determine fee based on appointment type
             if appointment.appointment_type == "urgent":
-                amount = int(consultation_settings.urgent_fee * 100)  # Convert to cents
+                amount = int(consultation_settings.urgent_fee * 100) if consultation_settings.urgent_fee else 0
             else:
-                amount = int(consultation_settings.planned_fee * 100)  # Convert to cents
+                amount = int(consultation_settings.planned_fee * 100) if consultation_settings.planned_fee else 0
 
             try:
                 checkout_session = stripe.checkout.Session.create(
@@ -770,7 +770,7 @@ class PaymentSuccessView(APIView):
 
         except Exception as e:
             return Response(str(e), status=500)
-        
+
 
 class GenerateReferralCodeView(APIView):
     """Generate and return a user's referral code, registration link, and update referral points."""
@@ -1357,7 +1357,7 @@ class NoShowPolicyAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
 
     def put(self, request, *args, **kwargs):
         try:
