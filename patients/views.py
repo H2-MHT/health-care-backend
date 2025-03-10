@@ -286,37 +286,55 @@ class AddFamilyMemberView(APIView):
         patient = get_object_or_404(Patient, user=request.user)
 
         member_name = request.data.get("member_name")
-        member_email = request.data.get("member_email")
         family_status = request.data.get("family_status")
         member_profile = request.FILES.get("member_profile")
 
-        if not (member_name and member_email and family_status):
-            return Response({"error": "All fields are required except profile picture."}, status=status.HTTP_400_BAD_REQUEST)
-
-        with transaction.atomic():
-            family_member = FamilyMember.objects.create(
-                patient=patient,
-                member_name=member_name,
-                member_email=member_email,
-                family_status=family_status,
-                member_profile=member_profile
+        if not (member_name and family_status):
+            return Response(
+                {"error": "Member name and family status are required."}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-            # Generate OTP
-            otp_code = OTPVerification.generate_otp()
-            print(f"Generated OTP: {otp_code} for {member_email}")
+        # Create a new family member
+        family_member = FamilyMember.objects.create(
+            patient=patient,
+            member_name=member_name,
+            family_status=family_status,
+            member_profile=member_profile
+        )
 
-            # Save OTP to the database
-            otp_entry = OTPVerification.objects.create(family_member=family_member, otp=otp_code)
-            print(f"Saved OTP: {otp_entry.otp} for FamilyMember ID: {family_member.id}")
+        # Delete any old OTPs for this family member
+        OTPVerification.objects.filter(family_member=family_member).delete()
 
-        # Send OTP via email
-        self.send_otp_email(member_email, member_name, family_status, otp_code)
+        # Generate a new OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))  # 6-digit OTP
+        print(f"Generated OTP: {otp_code}")
 
-        return Response({"message": "Family member added. OTP sent for verification."}, status=status.HTTP_201_CREATED)
+        # Save OTP in the database
+        OTPVerification.objects.create(family_member=family_member, otp=otp_code)
+
+        # Send OTP to the patient's email
+        self.send_otp_email(patient.user.email, member_name, family_status, otp_code)
+
+        return Response(
+            {
+                "message": "Family member added. OTP sent to patient email for verification.",
+                "family_member": {
+                    "id": family_member.id,
+                    "member_name": family_member.member_name,
+                    "family_status": family_member.family_status,
+                    "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
+                    "is_verified": family_member.is_verified
+                }
+            },
+            status=status.HTTP_201_CREATED
+        )
 
     def send_otp_email(self, to_email, member_name, family_status, otp_code):
         """Send OTP email using SendGrid"""
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+
         subject = "Family Member Verification"
         message_content = f"""
         Hello,
@@ -324,7 +342,7 @@ class AddFamilyMemberView(APIView):
         Your OTP for verifying {member_name} ({family_status}) is: {otp_code}
 
         Please enter this OTP in the application to verify the family member.
-
+        
         """
 
         email = Mail(
@@ -343,34 +361,45 @@ class AddFamilyMemberView(APIView):
 
 
 class VerifyFamilyMemberOTPAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        member_email = request.data.get("member_email")
         otp_code = request.data.get("otp")
+        member_id = request.data.get("family_member_id")
 
-        if not (member_email and otp_code):
-            return Response({"error": "Email and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (otp_code and member_id):
+            return Response({"error": "Family member ID and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        family_member = FamilyMember.objects.filter(member_email=member_email, is_verified=False).order_by('-id').first()
+        # Get the family member
+        family_member = FamilyMember.objects.filter(id=member_id, is_verified=False).first()
 
         if not family_member:
             return Response({"error": "Family member not found or already verified."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Get the latest OTP
+        # Get the latest OTP entry
         otp_entry = OTPVerification.objects.filter(family_member=family_member).order_by('-created_at').first()
 
-        if not otp_entry:
-            return Response({"error": "Invalid or expired OTP."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Validate OTP
-        if str(otp_entry.otp).strip() != str(otp_code).strip():
-            print(f"Entered OTP: {otp_code}, Expected OTP: {otp_entry.otp}")
+        if not otp_entry or str(otp_entry.otp).strip() != str(otp_code).strip():
             return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Mark the family member verified
+        # Mark the family member as verified
         family_member.is_verified = True
         family_member.save()
 
-        # Delete OTP entry after successful verification
+        # Delete OTP after verification
         otp_entry.delete()
 
-        return Response({"message": "Family member verified successfully."}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "message": "Family member verified successfully.",
+                "family_member": {
+                    "id": family_member.id,
+                    "member_name": family_member.member_name,
+                    "family_status": family_member.family_status,
+                    "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
+                    "is_verified": family_member.is_verified
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+
