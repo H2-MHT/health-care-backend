@@ -427,9 +427,10 @@ class BookAppointmentAPIView(APIView):
             doctor = Doctor.objects.filter(user__id=doctor_id).first()  
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
+            doctor_user_obj = User.objects.get(id=doctor.user_id)
             # Ensure doctor has set availability for this day
             availability = AppointmentManagement.objects.filter(
-                user=doctor,
+                user=doctor_user_obj,
                 appointment_type=appointment_type,
                 days__icontains=appointment_day
             ).first()
