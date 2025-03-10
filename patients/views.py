@@ -5,8 +5,12 @@ from .serializers import(
     PatientUserSerializer,
     MedicalDocumentSerializer,
     AllergyDocumentSerializer,
-    FavouriteSerializer
+    FavouriteSerializer,
 )
+from sendgrid import SendGridAPIClient
+
+from sendgrid.helpers.mail import Mail
+
 from rest_framework.permissions import IsAuthenticated
 from appointments.models import Appointment
 from rest_framework import status
@@ -16,6 +20,10 @@ from django.utils import timezone
 from users.models import Notes
 from clinics.models import Clinic
 from doctors.models import Doctor
+from django.shortcuts import get_object_or_404
+from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 
 
 # Create your views here.
@@ -271,4 +279,127 @@ class AddToFavouriteView(APIView):
             except Favourite.DoesNotExist:
                 return Response({"error": "Clinic favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
             
-            
+class AddFamilyMemberView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        patient = get_object_or_404(Patient, user=request.user)
+
+        member_name = request.data.get("member_name")
+        family_status = request.data.get("family_status")
+        member_profile = request.FILES.get("member_profile")
+
+        if not (member_name and family_status):
+            return Response(
+                {"error": "Member name and family status are required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create a new family member
+        family_member = FamilyMember.objects.create(
+            patient=patient,
+            member_name=member_name,
+            family_status=family_status,
+            member_profile=member_profile
+        )
+
+        # Delete any old OTPs for this family member
+        OTPVerification.objects.filter(family_member=family_member).delete()
+
+        # Generate a new OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))  # 6-digit OTP
+        print(f"Generated OTP: {otp_code}")
+
+        # Save OTP in the database
+        OTPVerification.objects.create(family_member=family_member, otp=otp_code)
+
+        # Send OTP to the patient's email
+        self.send_otp_email(patient.user.email, member_name, family_status, otp_code)
+
+        return Response(
+            {
+                "message": "Family member added. OTP sent to patient email for verification.",
+                "family_member": {
+                    "id": family_member.id,
+                    "member_name": family_member.member_name,
+                    "family_status": family_member.family_status,
+                    "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
+                    "is_verified": family_member.is_verified
+                }
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+    def send_otp_email(self, to_email, member_name, family_status, otp_code):
+        """Send OTP email using SendGrid"""
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+
+        subject = "Family Member Verification"
+        message_content = f"""
+        Hello,
+
+        Your OTP for verifying {member_name} ({family_status}) is: {otp_code}
+
+        Please enter this OTP in the application to verify the family member.
+        
+        """
+
+        email = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=to_email,
+            subject=subject,
+            plain_text_content=message_content
+        )
+
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(email)
+            print(f"SendGrid Response: {response.status_code}")
+        except Exception as e:
+            print(f"SendGrid Error: {e}")
+
+
+class VerifyFamilyMemberOTPAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        otp_code = request.data.get("otp")
+        member_id = request.data.get("family_member_id")
+
+        if not (otp_code and member_id):
+            return Response({"error": "Family member ID and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get the family member
+        family_member = FamilyMember.objects.filter(id=member_id, is_verified=False).first()
+
+        if not family_member:
+            return Response({"error": "Family member not found or already verified."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get the latest OTP entry
+        otp_entry = OTPVerification.objects.filter(family_member=family_member).order_by('-created_at').first()
+
+        if not otp_entry or str(otp_entry.otp).strip() != str(otp_code).strip():
+            return Response({"error": "Invalid OTP."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark the family member as verified
+        family_member.is_verified = True
+        family_member.save()
+
+        # Delete OTP after verification
+        otp_entry.delete()
+
+        return Response(
+            {
+                "message": "Family member verified successfully.",
+                "family_member": {
+                    "id": family_member.id,
+                    "member_name": family_member.member_name,
+                    "family_status": family_member.family_status,
+                    "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
+                    "is_verified": family_member.is_verified
+                }
+            },
+            status=status.HTTP_200_OK
+        )
+
