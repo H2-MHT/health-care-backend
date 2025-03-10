@@ -121,12 +121,31 @@ class AppointmentManagementAPIView(APIView):
         try:
             print(f"Generating slots for Doctor {appointment.user.doctor.id} on {appointment.days}")
 
+            # Fetch consultation settings for the doctor
             settings = ConsultationSettings.objects.filter(doctor=appointment.user.doctor).first()
             if not settings:
                 print("No consultation settings found for this doctor!")
                 return
 
-            session_length = settings.planned_session_length if appointment.appointment_type == "Planned" else settings.urgent_session_length
+            # Check if the doctor has defined separate session lengths for planned and urgent slots
+            session_length = None
+
+            if settings.planned_session_length and settings.urgent_session_length:
+                # Determine slot type dynamically if both session lengths exist
+                session_length = settings.planned_session_length if appointment.appointment_type == "Planned" else settings.urgent_session_length
+                slot_type = "Planned" if appointment.appointment_type == "Planned" else "Urgent"
+            elif settings.planned_session_length:
+                session_length = settings.planned_session_length
+                slot_type = "Planned"
+            elif settings.urgent_session_length:
+                session_length = settings.urgent_session_length
+                slot_type = "Urgent"
+            else:
+                print("No valid session length found!")
+                return
+
+            print(f"Session Length: {session_length} for slot type: {slot_type}")
+
             buffer_time = settings.buffer_time
 
             if session_length is None or buffer_time is None:
@@ -162,7 +181,12 @@ class AppointmentManagementAPIView(APIView):
                 print("No slots generated!")
 
             slots_to_create = [
-                AvailableSlot(doctor=appointment.user.doctor, day=appointment.days, time_slot=slot)
+                AvailableSlot(
+                    doctor=appointment.user.doctor,
+                    day=appointment.days,
+                    time_slot=slot,
+                    slot_type=slot_type  # Dynamically determined slot type
+                )
                 for slot in slots
             ]
             
@@ -329,62 +353,55 @@ class AllDaySlotsAPIView(APIView):
 
 
 # with buffered time and one month slots time 
-# class AvailableSlotsAPIView(APIView):
-#     """
-#     API to get available slots for a selected doctor on a specific date.
-#     """
-#     permission_classes = [IsAuthenticated]
+class AvailableSlotsAPIView(APIView):
+    """
+    API to get available slots for a selected doctor, filtered by 'Planned' or 'Urgent' using query parameters.
+    """
+    permission_classes = [IsAuthenticated]
 
-#     def get(self, request):
-#         try:
-#             # Extract query parameters
-#             doctor_id = request.query_params.get("doctor_id")
-#             selected_date_str = request.query_params.get("date")  # Expected format: YYYY-MM-DD
+    def get(self, request):
+        doctor_id = request.query_params.get("doctor_id")
+        slot_type = request.query_params.get("slot_type", "").strip()  # Get slot type from query params
 
-#             # Validate input parameters
-#             if not doctor_id:
-#                 return Response({"message": "Doctor ID is required", "data": {}}, status=400)
+        # Validate required parameters
+        if not doctor_id:
+            return Response({"message": "Doctor ID is required", "data": {}}, status=400)
 
-#             if not selected_date_str:
-#                 return Response({"message": "Date is required", "data": {}}, status=400)
+        # Validate doctor existence
+        doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+        if not doctor:
+            return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
 
-#             # Validate date format
-#             try:
-#                 selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
-#             except ValueError:
-#                 return Response({"message": "Invalid date format. Use YYYY-MM-DD", "data": {}}, status=400)
+        # Ensure slot_type is either "Planned" or "Urgent"
+        if slot_type and slot_type.lower() not in ["planned", "urgent"]:
+            return Response({"message": "Invalid slot type. Use 'Planned' or 'Urgent'.", "data": {}}, status=400)
 
-#             # Validate if the doctor exists
-#             doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
-#             if not doctor:
-#                 return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
+        # Apply filter if slot_type is provided
+        slot_filter = {"doctor": doctor}
+        if slot_type:
+            slot_filter["slot_type__iexact"] = slot_type  # Case-insensitive filtering
 
-#             # Convert the date to the corresponding weekday (e.g., "Sunday")
-#             selected_day = calendar.day_name[selected_date.weekday()]  # Ensures full weekday name
+        # Fetch available slots
+        slots = AvailableSlot.objects.filter(**slot_filter).only("time_slot")
 
-#             # Fetch available slots only for the selected day
-#             slots = AvailableSlot.objects.filter(doctor=doctor, day__iexact=selected_day).values_list("time_slot", flat=True)
+        # Prepare response data
+        response_data = {
+            "doctor_id": doctor.user.id,
+            "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+            "specialty": getattr(doctor, "specialty", ""),
+            "slot_type": slot_type or "All",  # Default to "All" if not provided
+            "available_slots": [slot.time_slot for slot in slots],
+        }
 
-#             # Prepare response data
-#             response_data = {
-#                 "doctor_id": doctor.user.id,
-#                 "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
-#                 "specialty": getattr(doctor, "specialty", ""),
-#                 "date": selected_date.strftime("%Y-%m-%d"),
-#                 "day": selected_day,  # Ensure the response shows the correct day
-#                 "available_slots": list(slots),
-#             }
-
-#             # Return response
-#             if not slots:
-#                 return Response({"message": f"No available slots on {selected_day} ({selected_date})", "data": response_data}, status=200)
-
-#             return Response({"message": f"Available slots for {selected_day} ({selected_date})", "data": response_data}, status=200)
-
-#         except Exception as e:
-#             return Response({"message": f"An error occurred: {str(e)}"}, status=500)
-
-
+        return Response(
+            {
+                "message": f"Available slots for type '{slot_type or 'All'}'",
+                "data": response_data,
+            },
+            status=200,
+        )
+        
+        
 class BookAppointmentAPIView(APIView):
     """
     Allows patients to book an available appointment slot only if the doctor has availability.

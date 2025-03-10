@@ -24,6 +24,7 @@ from .views import (
     CreateStripeCheckoutSession,
     PaymentSuccessView,
     AppointmentSummaryAPIView,
+    AvailableSlotsAPIView,
     redeem_invitation,
     
     )
@@ -46,7 +47,7 @@ urlpatterns = [
     path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
     
     # Fetch available slots for a doctor based on settings
-    # path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
+    path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
     
     # Book an appointment (Patient)
     path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),

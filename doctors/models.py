@@ -84,6 +84,7 @@ class AvailableSlot(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     day = models.CharField(max_length=10)  # Example: "Sun", "Mon"
     time_slot = models.CharField(max_length=20)  # Example: "10:00 - 10:30"
+    slot_type = models.CharField(max_length=10, choices=[("Planned", "Planned"), ("Urgent", "Urgent")], blank=True)
     is_booked = models.BooleanField(default=False)
     
 class BookedAppointment(models.Model):
