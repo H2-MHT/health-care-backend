@@ -7,12 +7,17 @@ import logging
 from django.templatetags.static import static
 import os
 from datetime import datetime
+from appointments.models import Appointment
+from doctors.models import Doctor
 from weasyprint import HTML
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.http import HttpResponse
-
+from .models import Prescription
+from django.utils.dateparse import parse_date
+from rest_framework.permissions import IsAuthenticated
+from .serializers import PrescriptionSerializer
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -55,30 +60,30 @@ class PrescriptionPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         try:
+            prescription_id = request.query_params.get('prescription_id')
+            try:
+                prescription = Prescription.objects.get(pk=prescription_id)
+            except Prescription.DoesNotExist:
+                return Response({'message':'prescription not found'}, status=status.HTTP_404_NOT_FOUND)
+
             template_path = 'prescription.html'
             context = {
-                    'prescription_id': '27346733-022',
-                    'created_date': '6 March, 2020',
-                    'due_date': '7 March, 2020',
-                    'doctor_name': 'Dr. Ava Willson',
-                    'doctor_email': 'starfleet@abagal.com',
-                    'doctor_phone': '(+254) 243-124-392',
-                    'hospital_name': 'Hospital St.Katarina',
-                    'hospital_address': '9029 Arcane, Jupiter 2',
-                    'patient_name': 'Din Djarin',
-                    'patient_email': 'dindjarin@gmail.com',
-                    'patient_address': '9029 Salt Lake, Mandalor',
-                    'patient_phone': '(+254) 724-453-233',
-                    'diagnosis': 'ave dolurum kircbe',
-                    'notes': 'akdncurfj ksk fycn wjkd sa chfnra,',
-                    'medicines': [
-                        {'name': 'Medical consultation', 'description': 'details of description', 'quantity': '1 ml',
-                        'time': 'Morning', 'times_per_day': '2', 'duration': '6 days'},
-                        {'name': 'Paracetamol', 'description': 'Pain reliever', 'quantity': '500 mg', 'time': 'Evening',
-                        'times_per_day': '3', 'duration': '5 days'}
-                    ],
-                    'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
-                }
+                'prescription_id': prescription.id,
+                'created_date': prescription.created_at,
+                'doctor_name': prescription.appointment.doctor.user.first_name + " " + prescription.appointment.doctor.user.last_name,
+                'doctor_email': prescription.appointment.doctor.user.email,
+                'doctor_phone': prescription.appointment.doctor.user.phone_number,
+                'hospital_name': prescription.appointment.clinic.user.first_name,
+                'hospital_address': prescription.appointment.clinic.address,
+                'patient_name': prescription.appointment.patient.user.first_name,
+                'patient_email': prescription.appointment.patient.user.email,
+                'patient_address': prescription.appointment.patient.user.city,
+                'patient_phone': prescription.appointment.patient.user.phone_number,
+                'diagnosis': prescription.diagnosis,
+                'notes': prescription.appointment.notes,
+                'medicines': prescription.medicines,
+                'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
+            }
             pdf_content, temp_pdf_name = generate_pdf(template_path, context, request)
             # Return PDF response
             response = HttpResponse(pdf_content, content_type='application/pdf')
@@ -87,16 +92,152 @@ class PrescriptionPDFView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-    def post(self,request):
+
+class PrescriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
         try:
-            send = send_prescription_email(request)
-            return Response(send, status=status.HTTP_200_OK)
+            if request.user.role != 'Doctor':
+                return Response({'message': 'only doctor can perform this action'}, status=status.HTTP_400_BAD_REQUEST)
+
+            data = request.data
+            appointment_id = data.get("appointment_id")
+            appointment = Appointment.objects.filter(id=appointment_id).first()
+
+            if not appointment:
+                return Response({"error": "Appointment not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            doctor = appointment.doctor
+            prescription = Prescription.objects.create(
+                appointment=appointment,
+                doctor=doctor,
+                diagnosis=data.get("diagnosis"),
+                medicines=data.get("medicines"),
+                additional_instruction=data.get("additional_instruction")
+            )
+
+            send = send_prescription_email(request, prescription)
+
+            return Response(
+                {"message": "Prescription saved and email sent!", "prescription_id": prescription.id},
+                status=status.HTTP_201_CREATED
+            )
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        
+    def get(self, request):
+        try:
+            user = request.user
+            try:
+                patient = user.patient
+            except Exception as e:
+                return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointments = Appointment.objects.filter(patient=patient, status='Completed')
+
+            if not appointments.exists():
+                return Response({'message': 'No completed appointments found'}, status=status.HTTP_404_NOT_FOUND)
+
+            prescriptions = Prescription.objects.filter(appointment__in=appointments)
+
+            if not prescriptions.exists():
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
+
+            data = [
+                {
+                    'appointment_id': prescription.appointment.id,
+                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
+                    "doctor": {
+                        "name": f"{prescription.appointment.doctor.user.first_name} {prescription.appointment.doctor.user.last_name}",
+                        "email": prescription.appointment.doctor.user.email,
+                    },
+                    'patient': {
+                        'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
+                        "email": prescription.appointment.patient.user.email,
+                    },
+                }
+                for prescription in prescriptions
+            ]
+
+            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        try:
+            if request.user.role != 'Doctor':
+                return Response({'message': 'only doctor can perform this action'}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment_id = request.query_params.get('appointment_id', None)
+            prescription = Prescription.objects.filter(appointment__id=appointment_id).first()
+
+            if not prescription:
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
+
+            data = request.data
+            serializer = PrescriptionSerializer(prescription, data=data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SpecificPrescriptionView(APIView):
+    def get(self, request):
+        try:
+            user = request.user
+            try:
+                patient = user.patient
+            except Exception as e:
+                return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment_id = request.query_params.get('appointment_id', None)
+            prescriptions = Prescription.objects.filter(appointment__id=appointment_id)
+
+            if not prescriptions.exists():
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
+
+            data = [
+                {
+                    'appointment_id': prescription.appointment.id,
+                    "prescription_id": prescription.id,
+                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
+                    "doctor": {
+                        "id": prescription.appointment.doctor.id,
+                        "name": f"{prescription.appointment.doctor.user.first_name} {prescription.appointment.doctor.user.last_name}",
+                        "email": prescription.appointment.doctor.user.email,
+                        "phone": prescription.appointment.doctor.user.phone_number,
+                    },
+                    'patient': {
+                        'id': prescription.appointment.patient.id,
+                        'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
+                        "email": prescription.appointment.patient.user.email,
+                        "phone": prescription.appointment.patient.user.phone_number,
+                        'address': prescription.appointment.patient.user.city
+                    },
+                    'notes': prescription.appointment.notes,
+                    "diagnosis": prescription.diagnosis,
+                    "medicines": prescription.medicines,
+                    "additional_instruction": prescription.additional_instruction,
+                }
+                for prescription in prescriptions
+            ]
+
+            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},
+                            status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request):
     """
     Generate a PDF and send it via SendGrid email with the attachment.
@@ -134,36 +275,30 @@ def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request)
         return str(e)
 
 
-def send_prescription_email(request):
+def send_prescription_email(request, prescription):
     """
     API endpoint to send a prescription email with a PDF attachment using SendGrid.
     """
     context = {
-        'prescription_id': '27346733-022',
-        'created_date': '6 March, 2020',
-        'due_date': '7 March, 2020',
-        'doctor_name': 'Dr. Ava Willson',
-        'doctor_email': 'starfleet@abagal.com',
-        'doctor_phone': '(+254) 243-124-392',
-        'hospital_name': 'Hospital St.Katarina',
-        'hospital_address': '9029 Arcane, Jupiter 2',
-        'patient_name': 'Din Djarin',
-        'patient_email': 'dindjarin@gmail.com',
-        'patient_address': '9029 Salt Lake, Mandalor',
-        'patient_phone': '(+254) 724-453-233',
-        'diagnosis': 'ave dolurum kircbe',
-        'notes': 'akdncurfj ksk fycn wjkd sa chfnra,',
-        'medicines': [
-            {'name': 'Medical consultation', 'description': 'details of description', 'quantity': '1 ml',
-             'time': 'Morning', 'times_per_day': '2', 'duration': '6 days'},
-            {'name': 'Paracetamol', 'description': 'Pain reliever', 'quantity': '500 mg', 'time': 'Evening',
-             'times_per_day': '3', 'duration': '5 days'}
-        ],
+        'prescription_id': prescription.id,
+        'created_date': prescription.created_at,
+        'doctor_name': prescription.appointment.doctor.user.first_name + " " + prescription.appointment.doctor.user.last_name,
+        'doctor_email': prescription.appointment.doctor.user.email,
+        'doctor_phone': prescription.appointment.doctor.user.phone_number,
+        'hospital_name': prescription.appointment.clinic.user.first_name,
+        'hospital_address': prescription.appointment.clinic.address,
+        'patient_name': prescription.appointment.patient.user.first_name,
+        'patient_email': prescription.appointment.patient.user.email,
+        'patient_address': prescription.appointment.patient.user.city,
+        'patient_phone': prescription.appointment.patient.user.phone_number,
+        'diagnosis': prescription.diagnosis,
+        'notes': prescription.appointment.notes,
+        'medicines': prescription.medicines,
         'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
     }
 
     template_path = 'prescription.html'
-    recipient_email = 'prescription@yopmail.com'
+    recipient_email = context['patient_email']
 
     send_pdf_via_sendgrid(template_path, context, recipient_email, request)
 
