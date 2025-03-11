@@ -189,7 +189,7 @@ class AppointmentManagementAPIView(APIView):
                 )
                 for slot in slots
             ]
-            
+
             print(f"Slots to be created: {slots_to_create}")
 
             # Bulk Create
@@ -200,7 +200,7 @@ class AppointmentManagementAPIView(APIView):
             print(f"Error generating slots: {str(e)}")
 
 
-            
+
     def put(self, request):
         """Update an existing appointment using pk from the request body"""
         try:
@@ -209,7 +209,7 @@ class AppointmentManagementAPIView(APIView):
                 return Response({"message": "ID (pk) is required for updating."}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment = get_object_or_404(AppointmentManagement, id=pk, user=request.user)
-            
+
             serializer = AppointmentManagementSerializer(appointment, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
@@ -231,7 +231,7 @@ class AppointmentManagementAPIView(APIView):
             day = request.data.get("day")  # Expecting day name (e.g., "Wednesday" or "Wed")
             if not day:
                 return Response({"message": "Day is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
+
             DAY_ID_MAP = {
                 "Monday": 1, "Mon": 1,
                 "Tuesday": 2, "Tue": 2,
@@ -281,6 +281,7 @@ class AllDaySlotsAPIView(APIView):
         try:
             doctor_id = request.query_params.get("doctor_id")
             selected_date_str = request.query_params.get("date")
+            slot_type = request.query_params.get("slot_type")
 
             if not doctor_id:
                 return Response({"message": "Doctor ID is required", "data": {}}, status=400)
@@ -299,7 +300,7 @@ class AllDaySlotsAPIView(APIView):
                 full_day_name = calendar.day_name[selected_date.weekday()]
                 short_day_name = full_day_name[:3]  # "Sunday" → "Sun"
 
-                slots = AvailableSlot.objects.filter(doctor=doctor, day=short_day_name)
+                slots = AvailableSlot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
 
                 slot_data = [
                     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
@@ -400,8 +401,8 @@ class AvailableSlotsAPIView(APIView):
             },
             status=200,
         )
-        
-        
+
+
 class BookAppointmentAPIView(APIView):
     """
     Allows patients to book an available appointment slot only if the doctor has availability.
@@ -424,12 +425,13 @@ class BookAppointmentAPIView(APIView):
             appointment_day = date_obj.strftime("%a")
 
                         # Ensure doctor exists
-            doctor = Doctor.objects.filter(user__id=doctor_id).first()  
+            doctor = Doctor.objects.filter(user__id=doctor_id).first()
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
+            doctor_user_obj = User.objects.get(id=doctor.user_id)
             # Ensure doctor has set availability for this day
             availability = AppointmentManagement.objects.filter(
-                user=doctor,
+                user=doctor_user_obj,
                 appointment_type=appointment_type,
                 days__icontains=appointment_day
             ).first()
@@ -595,7 +597,7 @@ class AppointmentSummaryAPIView(APIView):
             appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
 
             # Get the doctor's specialty (category)
-            doctor = get_object_or_404(Doctor, user=appointment.doctor)
+            doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
 
             # Get consultation fee from ConsultationSettings
             consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
@@ -615,8 +617,8 @@ class AppointmentSummaryAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
-        
-    
+
+
 # Payment Confirmation API
 class PaymentConfirmationAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -639,8 +641,8 @@ class PaymentConfirmationAPIView(APIView):
 
             return Response({"message": "Payment status updated successfully"}, status=status.HTTP_200_OK)
         except BookedAppointment.DoesNotExist:
-            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)    
-    
+            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class CreateStripeCheckoutSession(APIView):
     permission_classes = [IsAuthenticated]
@@ -649,60 +651,65 @@ class CreateStripeCheckoutSession(APIView):
         """
         Creates a Stripe Checkout Session for the appointment payment.
         """
-        appointment_id = request.data.get("appointment_id")
-
-        # Get the appointment object
-        appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
-
-        if appointment.payment_status == "Paid":
-            return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Ensure doctor is a valid instance of Doctor
-        if isinstance(appointment.doctor, Doctor):
-            doctor = appointment.doctor
-        else:
-            doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
-            if not doctor:
-                return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Fetch the doctor's consultation settings
-        consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
-        if not consultation_settings:
-            return Response({"error": "Consultation settings not found for the doctor"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Determine fee based on appointment type
-        if appointment.appointment_type == "urgent":
-            amount = int(consultation_settings.urgent_fee * 100)  # Convert to cents
-        else:
-            amount = int(consultation_settings.planned_fee * 100)  # Convert to cents
-
         try:
-            checkout_session = stripe.checkout.Session.create(
-                payment_method_types=["card"],
-                line_items=[{
-                    "price_data": {
-                        "currency": "usd",
-                        "product_data": {
-                            "name": f"Appointment with Dr. {doctor.user.first_name} {doctor.user.last_name}"
+            appointment_id = request.data.get("appointment_id")
+
+            # Get the appointment object
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+
+            if appointment.payment_status == "Paid":
+                return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Ensure doctor is a valid instance of Doctor
+            if isinstance(appointment.doctor, Doctor):
+                doctor = appointment.doctor
+            else:
+                doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
+                if not doctor:
+                    return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Fetch the doctor's consultation settings
+            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            if not consultation_settings:
+                return Response({"error": "Consultation settings not found for the doctor"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Determine fee based on appointment type
+            if appointment.appointment_type == "urgent":
+                amount = int(consultation_settings.urgent_fee * 100) if consultation_settings.urgent_fee else 0
+            else:
+                amount = int(consultation_settings.planned_fee * 100) if consultation_settings.planned_fee else 0
+
+            try:
+                checkout_session = stripe.checkout.Session.create(
+                    payment_method_types=["card"],
+                    line_items=[{
+                        "price_data": {
+                            "currency": "usd",
+                            "product_data": {
+                                "name": f"Appointment with Dr. {doctor.user.first_name} {doctor.user.last_name}"
+                            },
+                            "unit_amount": amount
                         },
-                        "unit_amount": amount
-                    },
-                    "quantity": 1
-                }],
-                mode="payment",
-                success_url=f"https://h2.doctor/Patient/allDoctorlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
-                cancel_url="https://h2.doctor/Patient/allDoctorlist?status=cancel",
-                metadata={"appointment_id": appointment.id}
-            )
+                        "quantity": 1
+                    }],
+                    mode="payment",
+                    success_url=f"https://h2.doctor/Patient/Appointmentlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
+                    cancel_url="https://h2.doctor/Patient/Appointmentlist?status=cancel",
+                    metadata={"appointment_id": appointment.id}
+                )
 
-            # Save session ID
-            appointment.stripe_session_id = checkout_session.id
-            appointment.save()
+                # Save session ID
+                appointment.stripe_session_id = checkout_session.id
+                appointment.save()
 
-            return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
+                return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
 
-        except stripe.error.StripeError as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except stripe.error.StripeError as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as ex:
+            return Response({
+                "error": str(ex)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UpdatePaymentStatus(APIView):
@@ -763,7 +770,7 @@ class PaymentSuccessView(APIView):
 
         except Exception as e:
             return Response(str(e), status=500)
-        
+
 
 class GenerateReferralCodeView(APIView):
     """Generate and return a user's referral code, registration link, and update referral points."""
@@ -1350,7 +1357,7 @@ class NoShowPolicyAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-            
+
 
     def put(self, request, *args, **kwargs):
         try:
