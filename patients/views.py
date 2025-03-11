@@ -135,25 +135,28 @@ class PatientDashboardAPIView(APIView):
 
 class PatientListView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             appointments = Appointment.objects.filter(doctor__user=request.user)
-            # empty list for patients
-            patients = []
+            
+            patients_data = []
             for appointment in appointments:
                 if appointment.patient.user.role == 'Patient':
-                    patients.append(appointment.patient.user)
-            serializer = PatientUserSerializer(patients, many=True)
+                    patients_data.append({
+                        "appointment_id": appointment.id,
+                        "patient": PatientUserSerializer(appointment.patient.user).data
+                    })
+            
             return Response({
-                "total_assigned_patients": len(patients),
-                "assigned_patients": serializer.data
+                "total_assigned_patients": len(patients_data),
+                "assigned_patients": patients_data
             })
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class MedicalDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
