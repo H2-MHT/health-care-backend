@@ -129,11 +129,11 @@ class DashboardAPIView(APIView):
             diagnoses = MedicalHistory.objects.filter(patient__appointment__doctor=doctor).select_related("patient__user")[:5]
             diagnoses_data = [
                 {
-                    "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
+                    # "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
                     "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
                     # "condition": history.condition,
-                    "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
-                    "notes": history.notes,
+                    # "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
+                    # "notes": history.notes,
                 }
                 for history in diagnoses
             ]
