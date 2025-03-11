@@ -73,6 +73,7 @@ class DashboardAPIView(APIView):
             upcoming_requests_data = [
                 {
                     "appointment_id": appt.id,
+                    "doctor_id": appt.doctor.id,
                     "patient_name": f"{appt.patient.user.first_name} {appt.patient.user.last_name}",
                     "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
                     "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
