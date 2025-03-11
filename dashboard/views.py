@@ -38,6 +38,7 @@ class DashboardAPIView(APIView):
             reviews = Review.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user")[:10]
             reviews_data = [
                 {
+                    "doctor_id": review.doctor.id,
                     "patient_name": f"{review.patient.user.first_name} {review.patient.user.last_name}",
                     "doctor_name": f"{review.doctor.user.first_name} {review.doctor.user.last_name}",
                     "rating": review.rating,
@@ -160,6 +161,7 @@ class DashboardAPIView(APIView):
 
             # Final Response
             data = {
+                "doctor_id":doctor.id,
                 "total_reviews": total_reviews,
                 "reviews": reviews_data,
                 "appointments": appointments_data,
