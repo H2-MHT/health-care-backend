@@ -53,6 +53,7 @@ class DashboardAPIView(APIView):
             appointments_data = [
                 {
                     "appointment_id": appointment.id,
+                    "doctor_id": appointment.doctor.id,
                     "patient_id": appointment.patient.id,
                     "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
                     "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
@@ -128,7 +129,7 @@ class DashboardAPIView(APIView):
                 {
                     "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
                     "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
-                    "condition": history.condition,
+                    # "condition": history.condition,
                     "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
                     "notes": history.notes,
                 }
@@ -143,7 +144,7 @@ class DashboardAPIView(APIView):
                 last_reports_data.append(
                     {
                         "patient_name": f"{patient.user.first_name} {patient.user.last_name}",
-                        "condition": last_diagnosis.condition if last_diagnosis else "No Diagnosis",
+                        # "condition": last_diagnosis.condition if last_diagnosis else "No Diagnosis",
                         "diagnosis_date": last_diagnosis.diagnosis_date.strftime("%d-%m-%Y") if last_diagnosis and last_diagnosis.diagnosis_date else None,
                         "time": f"{last_diagnosis.diagnosis_date.strftime('%H:%M')} - {last_diagnosis.diagnosis_date.strftime('%H:%M')}" if last_diagnosis and last_diagnosis.diagnosis_date else None,
                         "notes": last_diagnosis.notes if last_diagnosis else "No Notes",
