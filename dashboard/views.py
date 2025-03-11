@@ -16,7 +16,7 @@ from users.models import Notes
 from users.serializers import NotesSerializer
 
 # Create your views here.
-
+# consultation view: here is a deshboard api
 
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
