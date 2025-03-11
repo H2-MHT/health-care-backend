@@ -693,8 +693,8 @@ class CreateStripeCheckoutSession(APIView):
                         "quantity": 1
                     }],
                     mode="payment",
-                    success_url=f"https://h2.doctor/Patient/Appointmentlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
-                    cancel_url="https://h2.doctor/Patient/Appointmentlist?status=cancel",
+                    success_url=f"https://h2.doctor/Patient/allDoctorlist?session_id={{CHECKOUT_SESSION_ID}}&status=success",
+                    cancel_url="https://h2.doctor/Patient/allDoctorlist?status=cancel",
                     metadata={"appointment_id": appointment.id}
                 )
 
