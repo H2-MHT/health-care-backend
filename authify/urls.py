@@ -8,6 +8,7 @@ from .views import (
     ForgotPasswordView,
     ResendOTPView,
     ChangePasswordView,
+    ResetPasswordView,
     UpdateUserProfileAPIView,
     DeleteProfilePictureAPIView,
     GetUserProfileAPIView,
@@ -17,8 +18,11 @@ from .views import (
 urlpatterns = [
     path("signup/", SignUpView.as_view(), name="signup"),
     path("signin/", SignInView.as_view(), name="signin"),
-    path("verify-otp/", OTPVerificationView.as_view(), name="verify-otp"),
+    # password reset
     path("forget-password/", ForgotPasswordView.as_view(), name="forget-password"),
+    path("verify-otp/", OTPVerificationView.as_view(), name="verify-otp"),
+    path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+    # update password
     path("change-password/", ChangePasswordView.as_view(), name="change-update-password"),
     path('deactivate-account/', AccountDeactivateDeleteView.as_view(), name='deactivate-account'),
     path('delete-account/', AccountDeactivateDeleteView.as_view(), name='delete-account'),

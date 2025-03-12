@@ -1491,8 +1491,8 @@ class VerifyOTPAndChangePasswordAPIView(APIView):
                 return Response({"error": "No new password found. Please restart the process."}, status=status.HTTP_400_BAD_REQUEST)
             # Update the user's password
             user.password = make_password(new_password)
-            user.otp = None  # Clear OTP
-            user.temp_password = None  # Clear temp password
+            user.otp = ""  # Clear OTP
+            user.temp_password = ""  # Clear temp password
             user.save()
             return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
         except Exception as e:
