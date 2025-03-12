@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 import json
 from doctors.models import Doctor
 from users.models import User
-
+import re
 
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -98,6 +98,39 @@ class SignInSerializer(serializers.Serializer):
         return data
 
 
+class ResetPasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True)
+
+    def validate(self, data):
+        request = self.context["request"]
+        user = request.user
+
+        if not user or not user.is_authenticated:
+            raise serializers.ValidationError({"access": "Invalid or expired token."})
+
+        new_password = data.get("new_password")
+
+        error_list = []
+        if len(new_password) < 8:
+            error_list.append("Password must be at least 8 characters long.")
+        if not re.search(r"[A-Za-z]", new_password):
+            error_list.append("Password must contain at least one letter.")
+        if not re.search(r"[0-9]", new_password):
+            error_list.append("Password must contain at least one number.")
+        if not re.search(r"[@$!%*?&]", new_password):
+            error_list.append("Password must contain at least one special character.")
+        
+        if error_list:
+            raise serializers.ValidationError({'errors':error_list})
+        
+        return data
+
+    def save(self):
+        user = self.context["request"].user
+        user.set_password(self.validated_data["new_password"])
+        user.save()
+        
+        
 class SocialLoginSerializer(serializers.Serializer):
     ROLE_CHOICES = [
         ("Patient", "Patient"),

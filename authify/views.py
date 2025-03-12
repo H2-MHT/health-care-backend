@@ -33,6 +33,7 @@ from .serializers import (
     SocialLoginSerializer,
     UserProfileSerializer,
     UserProfileUpdateSerializer,
+    ResetPasswordSerializer,
 )
 from clinics.models import Clinic
 from clinics.serializers import ClinicInfoSerializer
@@ -429,7 +430,16 @@ class ForgotPasswordView(APIView):
             status=status.HTTP_200_OK,
         )
 
+class ResetPasswordView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Password reset successful!"}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ChangePasswordView(APIView):
     """
