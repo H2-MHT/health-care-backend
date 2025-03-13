@@ -131,6 +131,19 @@ class ConsultationSettings(models.Model):
         return f"Consultation settings for {self.doctor}"
     
     
+class ConsultationSessionAndFee(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    planned_session = models.CharField(max_length=50, null=True, blank=True)
+    urgent_session = models.CharField(max_length=50, null=True, blank=True)
+    planned_session_length = models.IntegerField(choices=[(15, '15 minutes'), (30, '30 minutes')], null=True, blank=True)
+    urgent_session_length = models.IntegerField(choices=[(15, '15 minutes'), (30, '30 minutes')], null=True, blank=True)
+    buffer_time = models.DurationField(blank=True, null=True)
+    planned_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    urgent_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    def __str__(self):
+        return f"Consultation settings for {self.doctor}"
+
     
 class UserPreference(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)

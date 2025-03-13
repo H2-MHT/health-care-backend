@@ -22,7 +22,7 @@ from .models import (
     AppointmentManagement,
     CancellationPolicy,
     CommunicationPreferences,
-    ConsultationSettings,
+    ConsultationSessionAndFee,
     Doctor,
     Invitation,
     NoShowPolicy,
@@ -122,7 +122,7 @@ class AppointmentManagementAPIView(APIView):
             print(f"Generating slots for Doctor {appointment.user.doctor.id} on {appointment.days}")
 
             # Fetch consultation settings for the doctor
-            settings = ConsultationSettings.objects.filter(doctor=appointment.user.doctor).first()
+            settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.user.doctor).first()
             if not settings:
                 print("No consultation settings found for this doctor!")
                 return
@@ -600,7 +600,7 @@ class AppointmentSummaryAPIView(APIView):
             doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
 
             # Get consultation fee from ConsultationSettings
-            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
             subtotal = consultation_settings.planned_fee or consultation_settings.urgent_fee
 
             # Build response
@@ -669,7 +669,7 @@ class CreateStripeCheckoutSession(APIView):
                     return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Fetch the doctor's consultation settings
-            consultation_settings = ConsultationSettings.objects.filter(doctor=doctor).first()
+            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
             if not consultation_settings:
                 return Response({"error": "Consultation settings not found for the doctor"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -983,7 +983,7 @@ class ConsultationSettingsAPIView(APIView):
                     {"error": "You are not a registered doctor."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            consultation_settings = ConsultationSettings.objects.filter(doctor=user.doctor)
+            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=user.doctor)
             serializer = ConsultationSettingsSerializer(consultation_settings, many=True)
             return Response(
                 {
@@ -1011,32 +1011,28 @@ class ConsultationSettingsAPIView(APIView):
 
         try:
             with transaction.atomic():
-                consultation_settings = ConsultationSettings.objects.filter(
+                # Check if a similar setting already exists
+                existing_setting = ConsultationSessionAndFee.objects.filter(
                     doctor=doctor
                 ).first()
 
-                if consultation_settings:
+                if existing_setting:
+                    # Update the existing setting
                     serializer = ConsultationSettingsSerializer(
-                        consultation_settings, data=request.data, partial=True
+                        existing_setting, data=request.data, partial=True
                     )
+                    message = "Consultation settings updated successfully"
                 else:
+                    # Create a new setting for the doctor
                     request.data["doctor"] = doctor.id
                     serializer = ConsultationSettingsSerializer(data=request.data)
+                    message = "Consultation settings created successfully"
 
                 if serializer.is_valid():
                     serializer.save()
-                    message = (
-                        "Consultation settings updated successfully"
-                        if consultation_settings
-                        else "Consultation settings created successfully"
-                    )
                     return Response(
                         {"message": message, "data": serializer.data},
-                        status=(
-                            status.HTTP_200_OK
-                            if consultation_settings
-                            else status.HTTP_201_CREATED
-                        ),
+                        status=status.HTTP_200_OK if existing_setting else status.HTTP_201_CREATED,
                     )
 
                 return Response(

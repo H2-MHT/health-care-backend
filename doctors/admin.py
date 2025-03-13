@@ -7,7 +7,7 @@ from .models import(
     Invitation,
     ReschedulePolicy,
     AppointmentManagement,
-    ConsultationSettings,
+    ConsultationSessionAndFee,
     NoShowPolicy,
     CommunicationPreferences,
     Membership,
@@ -30,7 +30,7 @@ admin.site.register(Doctor, DoctorAdmin)
 admin.site.register(Referral, ReferralAdmin)
 admin.site.register(Invitation)
 admin.site.register(AppointmentManagement)
-admin.site.register(ConsultationSettings)
+admin.site.register(ConsultationSessionAndFee)
 admin.site.register(ReschedulePolicy)
 admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
