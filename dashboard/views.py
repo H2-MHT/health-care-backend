@@ -123,7 +123,9 @@ class DashboardAPIView(APIView):
             doctor_notes_data = doctor_notes_serializer.data
                 
             # Diagnoses Data
-            diagnoses = MedicalHistory.objects.filter(patient__appointment__doctor=doctor).select_related("patient__user")[:5]
+            diagnoses = MedicalHistory.objects.filter(
+                patient__in=Patient.objects.filter(appointment__doctor=doctor)).select_related("patient__user")[:5]
+
             diagnoses_data = [
                 {
                     "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
