@@ -131,11 +131,11 @@ class DashboardAPIView(APIView):
 
             diagnoses_data = [
                 {
-                    # "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
+                    "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
                     "patient_name": f"{history.patient.user.first_name} {history.patient.user.last_name}",
-                    # "condition": history.condition,
-                    # "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
-                    # "notes": history.notes,
+                    "condition": history.condition,
+                    "diagnosis_date": history.diagnosis_date.isoformat() if history.diagnosis_date else None,
+                    "notes": history.notes,
                 }
                 for history in diagnoses
             ]
