@@ -6,6 +6,8 @@ from .serializers import(
     MedicalDocumentSerializer,
     AllergyDocumentSerializer,
     FavouriteSerializer,
+    FavouriteDoctorSerializer,
+    FavouriteClinicSerializer
 )
 from sendgrid import SendGridAPIClient
 
@@ -281,7 +283,43 @@ class AddToFavouriteView(APIView):
                 return Response({"message": "Clinic removed from favorites."}, status=status.HTTP_200_OK)
             except Favourite.DoesNotExist:
                 return Response({"error": "Clinic favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
-            
+ 
+class ListFavouriteDoctors(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+       try:
+            user = request.user
+            try:
+                patient = user.patient_profile
+            except AttributeError:
+                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND) 
+
+            fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False)    
+            serializer = FavouriteDoctorSerializer(fav_doctors, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+        
+       except Exception as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        
+class ListFavouriteClinics(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+       try:
+            user = request.user
+            try:
+                patient = user.patient_profile
+            except AttributeError:
+                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND)  
+
+            fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)    
+            serializer = FavouriteClinicSerializer(fav_clinics, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+        
+       except Exception as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+    
 class AddFamilyMemberView(APIView):
     permission_classes = [IsAuthenticated]
 
