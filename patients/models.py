@@ -24,6 +24,9 @@ class MedicalHistory(models.Model):
     file = models.FileField(upload_to="medical_documents/", null=True, blank=True )
     title = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
+    condition = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    diagnosis_date = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
