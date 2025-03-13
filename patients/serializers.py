@@ -46,14 +46,14 @@ class FavouriteDoctorSerializer(serializers.ModelSerializer):
     fav_doc = DoctorSerializer()
     class Meta:
         model = Favourite
-        fields = ["id", "patient", "fav_doc"]
+        fields = ["id", "patient", "doc_status", "fav_doc"]
         read_only_fields = ["patient"]
 
 class FavouriteClinicSerializer(serializers.ModelSerializer):
     fav_clinic = ClinicSerializer()
     class Meta:
         model = Favourite
-        fields = ["id", "patient", "fav_clinic"]
+        fields = ["id", "patient", "clinic_status", "fav_clinic"]
         read_only_fields = ["patient"]
 
 
