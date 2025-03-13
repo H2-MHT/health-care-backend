@@ -140,6 +140,7 @@ class DashboardAPIView(APIView):
                 for history in diagnoses
             ]
 
+
             # Last Reports for Patients
             patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
             last_reports_data = []
