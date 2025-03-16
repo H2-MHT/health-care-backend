@@ -2,6 +2,9 @@ from django.db import models
 from  users.models import User
 import random
 import string
+from payments.models import Payment
+from patients.models import Patient
+from appointments.models import Appointment
 # Create your models here.
 
 
@@ -71,7 +74,7 @@ class AppointmentManagement(models.Model):
         ('Urgent', 'Urgent call'),
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="appointment_preferences")
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="appointment_preferences", null=True)
     appointment_type = models.CharField(max_length=50, choices=APPOINTMENT_TYPE_CHOICES)
     days = models.CharField(max_length=100, help_text="Comma-separated days, e.g., Mon,Fri,Sat")
     start_time = models.TimeField()
@@ -80,12 +83,34 @@ class AppointmentManagement(models.Model):
     def __str__(self):
         return f"{self.appointment_type} ({self.days} {self.start_time}-{self.end_time})"
 
-class AvailableSlot(models.Model):
+class Slot(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
-    day = models.CharField(max_length=10)  # Example: "Sun", "Mon"
-    time_slot = models.CharField(max_length=20)  # Example: "10:00 - 10:30"
+    day = models.CharField(max_length=10)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
     slot_type = models.CharField(max_length=10, choices=[("Planned", "Planned"), ("Urgent", "Urgent")], blank=True)
     is_booked = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.doctor} - {self.day} {self.start_time}-{self.end_time} ({self.slot_type})"
+    
+class DoctorSchedule(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
+    schedule = models.JSONField(default=dict)  # Stores full schedule as JSON
+
+class PatientBookAppointment(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, null=True, blank=True)  # Add patient field
+    appointment = models.OneToOneField(Appointment, on_delete=models.CASCADE, null=True, blank=True)
+    schedule = models.JSONField(default=dict)  # Stores appointments as JSON { "YYYY-MM-DD": { "slots": [...] } }
+    date = models.DateField(auto_now_add=True)  # Date when the appointment was recorded
+    status = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True)
+    APPOINTMENT_TYPES = [
+        ("Planned", "Planned"),
+        ("Urgent", "Urgent"),
+    ]
+    appointment_type = models.CharField(max_length=20, choices=APPOINTMENT_TYPES)
+    
     
 class BookedAppointment(models.Model):
     STATUS_CHOICES = [
@@ -111,7 +136,7 @@ class BookedAppointment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
-    appointment_status = models.ForeignKey(AvailableSlot, on_delete=models.SET_NULL, null=True, blank=True)
+    appointment_status = models.ForeignKey(Slot, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"Appointment with Dr. {self.doctor} at {self.slot}"

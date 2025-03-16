@@ -9,7 +9,7 @@ from .models import (
     NoShowPolicy,
     CommunicationPreferences,
     BookedAppointment,
-    AvailableSlot,
+    Slot,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -55,8 +55,8 @@ class InvitationSerializer(serializers.ModelSerializer):
 class AppointmentManagementSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppointmentManagement
-        fields = ['id', 'user', 'appointment_type', 'days', 'start_time', 'end_time']
-        read_only_fields = ['user']
+        fields = ['id', 'doctor', 'appointment_type', 'days', 'start_time', 'end_time']
+        read_only_fields = ['doctor']
         
         
 class ConsultationSettingsSerializer(serializers.ModelSerializer):
@@ -80,7 +80,7 @@ class AvailableSlotSerializer(serializers.ModelSerializer):
     day_id = serializers.SerializerMethodField()
 
     class Meta:
-        model = AvailableSlot
+        model = Slot
         fields = ["day_id", "day", "time_slot", "status"]
 
     def get_day_id(self, obj):

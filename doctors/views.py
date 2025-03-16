@@ -31,7 +31,9 @@ from .models import (
     UserPreference,
     Membership,
     BookedAppointment,
-    AvailableSlot,
+    Slot,
+    DoctorSchedule,
+    PatientBookAppointment,
 )
 from .serializers import (
     AppointmentManagementSerializer,
@@ -85,7 +87,7 @@ class AppointmentManagementAPIView(APIView):
 
     def get(self, request):
         try:
-            preferences = AppointmentManagement.objects.filter(user=request.user)
+            preferences = AppointmentManagement.objects.filter(doctor=request.doctor)
             serializer = AppointmentManagementSerializer(preferences, many=True)
             return Response({"message": "Appointment preferences retrieved successfully.", "data": serializer.data})
         except Exception as e:
@@ -94,11 +96,17 @@ class AppointmentManagementAPIView(APIView):
     def post(self, request):
         """Create a new appointment and generate slots"""
         try:
-            logger.info(f"User {request.user} is attempting to create an appointment with data: {request.data}")
+            logger.info(f"User is attempting to create an appointment with data: {request.data}")
 
             serializer = AppointmentManagementSerializer(data=request.data)
             if serializer.is_valid():
-                appointment = serializer.save(user=request.user)
+                doctor_id = request.data.get("doctor")  # Extract doctor ID from request data
+                if not doctor_id:
+                    return Response({"message": "Doctor ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+                doctor = Doctor.objects.get(id=doctor_id)  # Fetch the doctor instance
+
+                appointment = serializer.save(doctor=doctor)
 
                 # Generate slots immediately after saving appointment preferences
                 self.generate_slots(appointment)
@@ -106,12 +114,15 @@ class AppointmentManagementAPIView(APIView):
                 logger.info(
                     f"User {request.user} successfully created an appointment with ID {serializer.instance.id}.")
                 return Response(
-                    {"message": "Appointment preference created successfully, slots generated.", "data": serializer.data},
+                    {"message": "Appointment preference created successfully, slots generated.",
+                     "data": serializer.data},
                     status=status.HTTP_201_CREATED
                 )
 
             logger.warning(f"User {request.user} provided invalid data: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Doctor.DoesNotExist:
+            return Response({"message": "Doctor not found"}, status=status.HTTP_404_NOT_FOUND)
 
         except Exception as e:
             logger.exception(f"Error creating appointment for user {request.user}: {str(e)}")
@@ -119,10 +130,9 @@ class AppointmentManagementAPIView(APIView):
 
     def generate_slots(self, appointment):
         try:
-            print(f"Generating slots for Doctor {appointment.user.doctor.id} on {appointment.days}")
-
+            print(f"Generating slots for Doctor {appointment.doctor.id} on {appointment.days}")
             # Fetch consultation settings for the doctor
-            settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.user.doctor).first()
+            settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.doctor).first()
             if not settings:
                 print("No consultation settings found for this doctor!")
                 return
@@ -180,27 +190,118 @@ class AppointmentManagementAPIView(APIView):
             if not slots:
                 print("No slots generated!")
 
-            slots_to_create = [
-                AvailableSlot(
-                    doctor=appointment.user.doctor,
-                    day=appointment.days,
-                    time_slot=slot,
-                    slot_type=slot_type  # Dynamically determined slot type
-                )
+            # slots_to_create = [
+            #
+            #     Slot(
+            #         doctor=appointment.doctor,
+            #         day=appointment.days,
+            #         start_time=datetime.strptime(slot.split(" - ")[0], "%H:%M").time(),
+            #         end_time=datetime.strptime(slot.split(" - ")[1], "%H:%M").time(),
+            #         slot_type=slot_type
+            #     )
+            #     for slot in slots
+            # ]
+            formatted_slots = [
+                {
+                    "slot": f"{datetime.strptime(slot.split(' - ')[0], '%H:%M').strftime('%H:%M')} - {datetime.strptime(slot.split(' - ')[1], '%H:%M').strftime('%H:%M')}"
+                }
                 for slot in slots
             ]
 
-            print(f"Slots to be created: {slots_to_create}")
+            print(formatted_slots, "---------------------------------- formatted_slots")
+            new_schedule = {
+                appointment.days: {
+                    slot_type:formatted_slots
+                }
+            }
 
-            # Bulk Create
-            AvailableSlot.objects.bulk_create(slots_to_create, ignore_conflicts=True)
-            print(f"{len(slots)} slots saved successfully.")
+            print(new_schedule, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> new_schedule")
+            self.update_schedule(appointment.doctor.id, new_schedule)
+            # slot_data = [
+            #     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
+            #     for slot in slots
+            # ]
+            #
+            # response_data = {
+            #     "doctor_id": appointment.doctor.id,
+            #     "doctor_name": f"{appointment.doctor.first_name} {appointment.doctor.last_name}",
+            #     appointment.days: [
+            #         {
+            #             "Planned":{
+            #                 "slots": slot_data
+            #             },
+            #             "Urgent":{
+            #                 "slots": slot_data
+            #             }
+            #
+            #         }
+            #     ],
+            # }
+            # # Bulk Create
+            # Slot.objects.bulk_create(slots_to_create, ignore_conflicts=True)
+            # print(f"{len(slots)} slots saved successfully.")
 
         except Exception as e:
             print(f"Error generating slots: {str(e)}")
 
+    # def update_schedule(self, doctor_id, new_schedule):
+    #     try:
+    #         # Fetch existing schedule
+    #         doctor = DoctorSchedule.objects.get_or_create(doctor_id=doctor_id)
+    #         existing_schedule = doctor.schedule  # Get existing JSON
+    #
+    #
+    #         # Merge the new schedule with the existing one
+    #         for day, categories in new_schedule.items():
+    #             if day in existing_schedule:  # If the day exists, update categories
+    #                 for category, slots in categories.items():
+    #                     if category in existing_schedule[day]:
+    #                         existing_schedule[day][category].extend(slots)  # Append new slots
+    #                     else:
+    #                         existing_schedule[day][category] = slots  # Add new category
+    #             else:
+    #                 existing_schedule[day] = categories  # Add new day
+    #
+    #         # Save updated schedule
+    #         doctor.schedule = existing_schedule
+    #         doctor.save()
+    #         print("Schedule updated successfully.")
+    #
+    #
+    #     except Exception as e:
+    #         print(f"Doctor Not Found: {str(e)}")
 
+    def update_schedule(self, doctor_id, new_schedule):
+        try:
+            # Fetch the Doctor instance
+            doctor_instance = Doctor.objects.get(id=doctor_id)
 
+            # Get or create the DoctorSchedule instance
+            doctor_schedule, created = DoctorSchedule.objects.get_or_create(doctor=doctor_instance, defaults={"schedule": {}})
+
+            # Get existing schedule (ensure it's a valid dictionary)
+            existing_schedule = doctor_schedule.schedule or {}
+
+            # Merge the new schedule with the existing one
+            for day, categories in new_schedule.items():
+                if day in existing_schedule:
+                    for category, slots in categories.items():
+                        if category in existing_schedule[day]:
+                            existing_schedule[day][category].extend(slots)  # Append new slots
+                        else:
+                            existing_schedule[day][category] = slots  # Add new category
+                else:
+                    existing_schedule[day] = categories  # Add new day
+
+            # Save updated schedule
+            doctor_schedule.schedule = existing_schedule
+            doctor_schedule.save()
+            print("Schedule updated successfully.")
+
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            
+    
     def put(self, request):
         """Update an existing appointment using pk from the request body"""
         try:
@@ -249,7 +350,7 @@ class AppointmentManagementAPIView(APIView):
             doctor = request.user.doctor
 
             # Delete all slots for the specified day and doctor
-            deleted_count, _ = AvailableSlot.objects.filter(doctor=doctor, day=day).delete()
+            deleted_count, _ = Slot.objects.filter(doctor=doctor, day=day).delete()
 
             if deleted_count > 0:
                 return Response({"message": f"Successfully deleted {deleted_count} slots for {day}."}, status=status.HTTP_200_OK)
@@ -300,7 +401,7 @@ class AllDaySlotsAPIView(APIView):
                 full_day_name = calendar.day_name[selected_date.weekday()]
                 short_day_name = full_day_name[:3]  # "Sunday" → "Sun"
 
-                slots = AvailableSlot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
+                slots = Slot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
 
                 slot_data = [
                     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
@@ -323,7 +424,7 @@ class AllDaySlotsAPIView(APIView):
 
             else:
                 # Fetch all slots grouped by day
-                available_slots = AvailableSlot.objects.filter(doctor=doctor)
+                available_slots = Slot.objects.filter(doctor=doctor)
 
                 slots_by_day = defaultdict(list)
                 for slot in available_slots:
@@ -383,7 +484,7 @@ class AvailableSlotsAPIView(APIView):
             slot_filter["slot_type__iexact"] = slot_type  # Case-insensitive filtering
 
         # Fetch available slots
-        slots = AvailableSlot.objects.filter(**slot_filter).only("time_slot")
+        slots = Slot.objects.filter(**slot_filter).only("time_slot")
 
         # Prepare response data
         response_data = {
@@ -411,88 +512,79 @@ class BookAppointmentAPIView(APIView):
 
     def post(self, request):
         try:
-            user = request.user  # The logged-in patient
-            if user.role != "Patient":
-                return Response({"error": "Only patients can book an appointment"}, status=403)
-
+            # Extract request data
+            patient_id = request.data.get("patient_id")
             doctor_id = request.data.get("doctor_id")
             slot = request.data.get("slot")  # format: "10:00 - 10:30"
-            appointment_type = request.data.get("appointment_type", "Planned")
+            appointment_type = request.data.get("appointment_type")
             date = request.data.get("date")  # (DD-MM-YYYY)
 
             # Convert date to correct format
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
-            appointment_day = date_obj.strftime("%a")
+            time_slot = f"{datetime.strptime(slot.split(' - ')[0], '%H:%M').strftime('%H:%M')} - {datetime.strptime(slot.split(' - ')[1], '%H:%M').strftime('%H:%M')}"
 
-                        # Ensure doctor exists
-            doctor = Doctor.objects.filter(user__id=doctor_id).first()
-            if not doctor:
-                return Response({"error": "Invalid doctor ID"}, status=404)
-            doctor_user_obj = User.objects.get(id=doctor.user_id)
-            # Ensure doctor has set availability for this day
-            availability = AppointmentManagement.objects.filter(
-                user=doctor_user_obj,
-                appointment_type=appointment_type,
-                days__icontains=appointment_day
-            ).first()
+            # Call function to book the appointment
+            response = self.book_patient_appointment(doctor_id, patient_id, date_obj, time_slot, appointment_type)
 
-            if not availability:
-                return Response({"error": "Doctor is not available on this day"}, status=400)
+            # Debugging
+            print("Response from booking function:", response)
 
-            # Convert slot start and end time
-            slot_start, slot_end = slot.split(" - ")
-            slot_start = datetime.strptime(slot_start, "%H:%M").time()
-            slot_end = datetime.strptime(slot_end, "%H:%M").time()
+            # If the response is an error message
+            if not response.get("success", True):
+                return Response({"error": response.get("message", "Unknown error")}, status=400)
 
-            # Ensure slot falls within the doctor's available hours
-            if not (availability.start_time <= slot_start and availability.end_time >= slot_end):
-                return Response({"error": "Selected slot is outside doctor's available hours"}, status=400)
+            appointment = response.get("appointment")
 
-            # Ensure slot is not already booked
-            is_booked = BookedAppointment.objects.filter(
-                doctor=doctor, slot=slot, date=date_obj
-            ).exists()
+            # Ensure appointment exists before proceeding
+            if not appointment:
+                return Response({"error": "Appointment data is missing", "debug_response": response}, status=400)
 
-            if is_booked:
-                return Response({"error": "Selected slot is already booked"}, status=400)
-
-            # Find the corresponding AvailableSlot
-            available_slot = AvailableSlot.objects.filter(
-                doctor=doctor, day=appointment_day, time_slot=slot
-            ).first()
-
-            if not available_slot:
-                return Response({"error": "Selected slot is not available"}, status=400)
-
-            # Create the appointment
-            appointment = BookedAppointment.objects.create(
-                doctor=doctor,
-                patient=user,
-                appointment_type=appointment_type,
-                slot=slot,
-                status="Confirmed",
-                date=date_obj,
-                payment_status="Pending",  # Payment status is pending 
-                appointment_status=available_slot
-            )
-
-            # Mark slot as booked
-            available_slot.is_booked = True
-            available_slot.save()
-
-            # Return response
+            # Return successful response
             return Response({
                 "message": "Appointment booked successfully",
                 "data": {
                     "appointment_id": appointment.id,
                     "appointment_type": appointment.appointment_type,
-                    "date": date,
-                    "payment_status": appointment.payment_status,
+                    "date": appointment.date,
                 }
             }, status=201)
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
+
+    def book_patient_appointment(self, doctor_id, patient_id, date, time_slot, appointment_type, amount=0.0):
+        """
+        Books an appointment for a patient with a doctor.
+        """
+        try:
+            doctor_instance = Doctor.objects.get(id=doctor_id)
+            patient_instance = Patient.objects.get(id=patient_id)
+
+            if appointment_type not in ["Planned", "Urgent"]:
+                return {"success": False, "message": "Invalid appointment type. Choose 'Planned' or 'Urgent'."}
+
+            # Create the appointment
+            appointment = PatientBookAppointment.objects.create(
+                doctor=doctor_instance,
+                patient=patient_instance,
+                date=date,
+                appointment_type=appointment_type
+            )
+
+            # Save the appointment
+            appointment.save()
+
+            # ✅ Return the actual appointment object
+            return {"success": True, "appointment": appointment}
+
+        except Doctor.DoesNotExist:
+            return {"success": False, "message": "Doctor not found."}
+        except Patient.DoesNotExist:
+            return {"success": False, "message": "Patient not found."}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+        
 
 
 class MyAppointmentsAPIView(APIView):
