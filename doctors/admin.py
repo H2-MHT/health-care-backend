@@ -7,12 +7,13 @@ from .models import(
     Invitation,
     ReschedulePolicy,
     AppointmentManagement,
-    ConsultationSettings,
+    ConsultationSessionAndFee,
     NoShowPolicy,
     CommunicationPreferences,
     Membership,
     BookedAppointment,
-    AvailableSlot,
+    Slot,
+    DoctorSchedule,
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -30,11 +31,12 @@ admin.site.register(Doctor, DoctorAdmin)
 admin.site.register(Referral, ReferralAdmin)
 admin.site.register(Invitation)
 admin.site.register(AppointmentManagement)
-admin.site.register(ConsultationSettings)
+admin.site.register(ConsultationSessionAndFee)
 admin.site.register(ReschedulePolicy)
 admin.site.register(UserPreference)
 admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
 admin.site.register(Membership)
 admin.site.register(BookedAppointment)
-admin.site.register(AvailableSlot)
+admin.site.register(Slot)
+admin.site.register(DoctorSchedule)

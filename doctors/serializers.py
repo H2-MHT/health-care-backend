@@ -2,14 +2,14 @@ from rest_framework import serializers
 from .models import (
     Referral, Invitation,
     AppointmentManagement,
-    ConsultationSettings,
+    ConsultationSessionAndFee,
     UserPreference,
     ReschedulePolicy,
     CancellationPolicy,
     NoShowPolicy,
     CommunicationPreferences,
     BookedAppointment,
-    AvailableSlot,
+    Slot,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -55,23 +55,24 @@ class InvitationSerializer(serializers.ModelSerializer):
 class AppointmentManagementSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppointmentManagement
-        fields = ['id', 'user', 'appointment_type', 'days', 'start_time', 'end_time']
-        read_only_fields = ['user']
+        fields = ['id', 'doctor', 'appointment_type', 'days', 'start_time', 'end_time']
+        read_only_fields = ['doctor']
         
         
 class ConsultationSettingsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ConsultationSettings
+        model = ConsultationSessionAndFee
         fields = '__all__'
         extra_kwargs = {
-            'doctor': {'required': False},
+            'doctor': {'required': True},
+            'doctor_id': {'required': True},
             'planned_session': {'required': False},
             'urgent_session': {'required': False},
             'planned_session_length': {'required': False},
             'urgent_session_length': {'required': False},
             'buffer_time': {'required': False},
-            'planned_fee': {'required': False},
-            'urgent_fee': {'required': False}
+            'planned_fees': {'required': False},
+            'urgent_fees': {'required': False}
         }
         
 
@@ -79,7 +80,7 @@ class AvailableSlotSerializer(serializers.ModelSerializer):
     day_id = serializers.SerializerMethodField()
 
     class Meta:
-        model = AvailableSlot
+        model = Slot
         fields = ["day_id", "day", "time_slot", "status"]
 
     def get_day_id(self, obj):
@@ -122,9 +123,9 @@ class PaymentSummarySerializer(serializers.ModelSerializer):
     def get_subtotal(self, obj):
         """Fetch planned_fee or urgent_fee from ConsultationSettings"""
         try:
-            consultation = ConsultationSettings.objects.get(doctor=obj.appointment.doctor)
+            consultation = ConsultationSessionAndFee.objects.get(doctor=obj.appointment.doctor)
             return f"${consultation.planned_fee or consultation.urgent_fee:.2f}"
-        except ConsultationSettings.DoesNotExist:
+        except ConsultationSessionAndFee.DoesNotExist:
             return "$0.00"
 
     def get_discount(self, obj):
