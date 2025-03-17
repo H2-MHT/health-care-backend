@@ -84,7 +84,7 @@ class AppointmentManagement(models.Model):
         return f"{self.appointment_type} ({self.days} {self.start_time}-{self.end_time})"
 
 class Slot(models.Model):
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, null=True)
     day = models.CharField(max_length=10)
     start_time = models.TimeField()
     end_time = models.TimeField()
