@@ -136,7 +136,7 @@ class BookedAppointment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
-    appointment_status = models.ForeignKey(Slot, on_delete=models.SET_NULL, null=True, blank=True)
+    appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return f"Appointment with Dr. {self.doctor} at {self.slot}"
