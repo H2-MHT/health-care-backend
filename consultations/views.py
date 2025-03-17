@@ -60,9 +60,9 @@ class PrescriptionPDFView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, request):
         try:
-            prescription_id = request.query_params.get('prescription_id')
+            appointment_id = request.query_params.get('appointment_id')
             try:
-                prescription = Prescription.objects.get(pk=prescription_id)
+                prescription = Prescription.objects.get(appointment__id=appointment_id)
             except Prescription.DoesNotExist:
                 return Response({'message':'prescription not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -125,79 +125,9 @@ class PrescriptionView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    
     def get(self, request):
         try:
-            user = request.user
-            try:
-                patient = user.patient
-            except Exception as e:
-                return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
-
-            appointments = Appointment.objects.filter(patient=patient, status='Completed')
-
-            if not appointments.exists():
-                return Response({'message': 'No completed appointments found'}, status=status.HTTP_404_NOT_FOUND)
-
-            prescriptions = Prescription.objects.filter(appointment__in=appointments)
-
-            if not prescriptions.exists():
-                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
-
-            data = [
-                {
-                    'appointment_id': prescription.appointment.id,
-                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
-                    "doctor": {
-                        "name": f"{prescription.appointment.doctor.user.first_name} {prescription.appointment.doctor.user.last_name}",
-                        "email": prescription.appointment.doctor.user.email,
-                    },
-                    'patient': {
-                        'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
-                        "email": prescription.appointment.patient.user.email,
-                    },
-                }
-                for prescription in prescriptions
-            ]
-
-            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    def put(self, request):
-        try:
-            if request.user.role != 'Doctor':
-                return Response({'message': 'only doctor can perform this action'}, status=status.HTTP_400_BAD_REQUEST)
-
-            appointment_id = request.query_params.get('appointment_id', None)
-            prescription = Prescription.objects.filter(appointment__id=appointment_id).first()
-
-            if not prescription:
-                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
-
-            data = request.data
-            serializer = PrescriptionSerializer(prescription, data=data, partial=True)
-
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
-
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class SpecificPrescriptionView(APIView):
-    def get(self, request):
-        try:
-            user = request.user
-            try:
-                patient = user.patient
-            except Exception as e:
-                return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
-
             appointment_id = request.query_params.get('appointment_id', None)
             prescriptions = Prescription.objects.filter(appointment__id=appointment_id)
 
@@ -232,6 +162,71 @@ class SpecificPrescriptionView(APIView):
 
             return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},
                             status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        try:
+            if request.user.role != 'Doctor':
+                return Response({'message': 'only doctor can perform this action'}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment_id = request.query_params.get('appointment_id', None)
+            prescription = Prescription.objects.filter(appointment__id=appointment_id).first()
+
+            if not prescription:
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
+
+            data = request.data
+            serializer = PrescriptionSerializer(prescription, data=data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PrescriptionListView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            user = request.user
+            try:
+                patient = user.patient_profile
+            except Exception as e:
+                return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointments = Appointment.objects.filter(patient=patient, status='Completed')
+
+            if not appointments.exists():
+                return Response({'message': 'No completed appointments found'}, status=status.HTTP_404_NOT_FOUND)
+
+            prescriptions = Prescription.objects.filter(appointment__in=appointments)
+
+            if not prescriptions.exists():
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
+
+            data = [
+                {
+                    'appointment_id': prescription.appointment.id,
+                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
+                    "doctor": {
+                        "name": f"{prescription.appointment.doctor.user.first_name} {prescription.appointment.doctor.user.last_name}",
+                        "email": prescription.appointment.doctor.user.email,
+                    },
+                    'patient': {
+                        'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
+                        "email": prescription.appointment.patient.user.email,
+                    },
+                }
+                for prescription in prescriptions
+            ]
+
+            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

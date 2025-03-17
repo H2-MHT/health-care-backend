@@ -17,7 +17,6 @@ from users.serializers import NotesSerializer
 
 # Create your views here.
 
-
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

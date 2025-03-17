@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from users.models import User
 from .models import AllergyDocument, MedicalHistory, Favourite, FamilyMember, OTPVerification
+from clinics.serializers import ClinicSerializer
+from doctors.models import Doctor
 import os
 
 class PatientUserSerializer(serializers.ModelSerializer):
@@ -29,12 +31,29 @@ class AllergyDocumentSerializer(serializers.ModelSerializer):
         model = AllergyDocument
         fields = '__all__'
         
-        
 
 class FavouriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Favourite
         fields = ["id", "patient", "fav_doc", "doc_status", "fav_clinic", "clinic_status"]
+        read_only_fields = ["patient"]
+
+class DoctorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Doctor
+        fields = '__all__'
+class FavouriteDoctorSerializer(serializers.ModelSerializer):
+    fav_doc = DoctorSerializer()
+    class Meta:
+        model = Favourite
+        fields = ["id", "patient", "doc_status", "fav_doc"]
+        read_only_fields = ["patient"]
+
+class FavouriteClinicSerializer(serializers.ModelSerializer):
+    fav_clinic = ClinicSerializer()
+    class Meta:
+        model = Favourite
+        fields = ["id", "patient", "clinic_status", "fav_clinic"]
         read_only_fields = ["patient"]
 
 

@@ -6,6 +6,8 @@ from .serializers import(
     MedicalDocumentSerializer,
     AllergyDocumentSerializer,
     FavouriteSerializer,
+    FavouriteDoctorSerializer,
+    FavouriteClinicSerializer
 )
 from sendgrid import SendGridAPIClient
 
@@ -135,25 +137,28 @@ class PatientDashboardAPIView(APIView):
 
 class PatientListView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             appointments = Appointment.objects.filter(doctor__user=request.user)
-            # empty list for patients
-            patients = []
+            
+            patients_data = []
             for appointment in appointments:
                 if appointment.patient.user.role == 'Patient':
-                    patients.append(appointment.patient.user)
-            serializer = PatientUserSerializer(patients, many=True)
+                    patients_data.append({
+                        "appointment_id": appointment.id,
+                        "patient": PatientUserSerializer(appointment.patient.user).data
+                    })
+            
             return Response({
-                "total_assigned_patients": len(patients),
-                "assigned_patients": serializer.data
+                "total_assigned_patients": len(patients_data),
+                "assigned_patients": patients_data
             })
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class MedicalDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -278,7 +283,43 @@ class AddToFavouriteView(APIView):
                 return Response({"message": "Clinic removed from favorites."}, status=status.HTTP_200_OK)
             except Favourite.DoesNotExist:
                 return Response({"error": "Clinic favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
-            
+ 
+class ListFavouriteDoctors(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+       try:
+            user = request.user
+            try:
+                patient = user.patient_profile
+            except AttributeError:
+                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND) 
+
+            fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False)    
+            serializer = FavouriteDoctorSerializer(fav_doctors, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+        
+       except Exception as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+        
+class ListFavouriteClinics(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+       try:
+            user = request.user
+            try:
+                patient = user.patient_profile
+            except AttributeError:
+                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND)  
+
+            fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)    
+            serializer = FavouriteClinicSerializer(fav_clinics, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+        
+       except Exception as e:
+            return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+    
 class AddFamilyMemberView(APIView):
     permission_classes = [IsAuthenticated]
 
