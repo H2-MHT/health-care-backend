@@ -14,7 +14,7 @@ from .views import (
     VerifyOTPAndChangePasswordAPIView,
     MembershipAPIView,
     ConsultationSettingsAPIView,
-    AllDaySlotsAPIView,
+    # AllDaySlotsAPIView,
     BookAppointmentAPIView,
     MyAppointmentsAPIView,
     RescheduleAppointmentAPIView,
@@ -23,8 +23,8 @@ from .views import (
     PaymentConfirmationAPIView,
     CreateStripeCheckoutSession,
     PaymentSuccessView,
-    AppointmentSummaryAPIView,
-    AvailableSlotsAPIView,
+    # AppointmentSummaryAPIView,
+    # AvailableSlotsAPIView,
     redeem_invitation,
     
     )
@@ -44,10 +44,10 @@ urlpatterns = [
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     
     # Get All Day Slots for a Doctor
-    path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
+    # path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
     
     # Fetch available slots for a doctor based on settings
-    path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
+    # path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
     
     # Book an appointment (Patient)
     path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
@@ -59,7 +59,7 @@ urlpatterns = [
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
     path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
-    path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
+    # path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
 
     path("payment-success/", PaymentSuccessView.as_view(), name="payment-success"),
 

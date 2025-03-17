@@ -9,7 +9,7 @@ from .models import (
     NoShowPolicy,
     CommunicationPreferences,
     BookedAppointment,
-    Slot,
+    # Slot,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -76,15 +76,15 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
         }
         
 
-class AvailableSlotSerializer(serializers.ModelSerializer):
-    day_id = serializers.SerializerMethodField()
+# class AvailableSlotSerializer(serializers.ModelSerializer):
+#     day_id = serializers.SerializerMethodField()
 
-    class Meta:
-        model = Slot
-        fields = ["day_id", "day", "time_slot", "status"]
+#     class Meta:
+#         model = Slot
+#         fields = ["day_id", "day", "time_slot", "status"]
 
-    def get_day_id(self, obj):
-        return hash(obj.day)  # Generate a unique ID for each day
+#     def get_day_id(self, obj):
+#         return hash(obj.day)  # Generate a unique ID for each day
 
 
 class BookedAppointmentSerializer(serializers.ModelSerializer):
