@@ -31,7 +31,7 @@ from .models import (
     UserPreference,
     Membership,
     BookedAppointment,
-    Slot,
+    # Slot,
     DoctorSchedule,
     PatientBookAppointment,
 )
@@ -327,181 +327,181 @@ class AppointmentManagementAPIView(APIView):
             logger.error(f"Error while updating appointment: {str(e)}", exc_info=True)
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request):
-        try:
-            day = request.data.get("day")  # Expecting day name (e.g., "Wednesday" or "Wed")
-            if not day:
-                return Response({"message": "Day is required."}, status=status.HTTP_400_BAD_REQUEST)
+    # def delete(self, request):
+    #     try:
+    #         day = request.data.get("day")  # Expecting day name (e.g., "Wednesday" or "Wed")
+    #         if not day:
+    #             return Response({"message": "Day is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-            DAY_ID_MAP = {
-                "Monday": 1, "Mon": 1,
-                "Tuesday": 2, "Tue": 2,
-                "Wednesday": 3, "Wed": 3,
-                "Thursday": 4, "Thu": 4,
-                "Friday": 5, "Fri": 5,
-                "Saturday": 6, "Sat": 6,
-                "Sunday": 7, "Sun": 7
-            }
+    #         DAY_ID_MAP = {
+    #             "Monday": 1, "Mon": 1,
+    #             "Tuesday": 2, "Tue": 2,
+    #             "Wednesday": 3, "Wed": 3,
+    #             "Thursday": 4, "Thu": 4,
+    #             "Friday": 5, "Fri": 5,
+    #             "Saturday": 6, "Sat": 6,
+    #             "Sunday": 7, "Sun": 7
+    #         }
 
-            day_id = DAY_ID_MAP.get(day)
-            if not day_id:
-                return Response({"message": "Invalid day provided."}, status=status.HTTP_400_BAD_REQUEST)
+    #         day_id = DAY_ID_MAP.get(day)
+    #         if not day_id:
+    #             return Response({"message": "Invalid day provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-            doctor = request.user.doctor
+    #         doctor = request.user.doctor
 
-            # Delete all slots for the specified day and doctor
-            deleted_count, _ = Slot.objects.filter(doctor=doctor, day=day).delete()
+    #         # Delete all slots for the specified day and doctor
+    #         deleted_count, _ = Slot.objects.filter(doctor=doctor, day=day).delete()
 
-            if deleted_count > 0:
-                return Response({"message": f"Successfully deleted {deleted_count} slots for {day}."}, status=status.HTTP_200_OK)
-            else:
-                return Response({"message": "No slots found for the given day."}, status=status.HTTP_404_NOT_FOUND)
+    #         if deleted_count > 0:
+    #             return Response({"message": f"Successfully deleted {deleted_count} slots for {day}."}, status=status.HTTP_200_OK)
+    #         else:
+    #             return Response({"message": "No slots found for the given day."}, status=status.HTTP_404_NOT_FOUND)
 
-        except Exception as e:
-            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    #     except Exception as e:
+    #         return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-class AllDaySlotsAPIView(APIView):
-    """
-    API to get available slots for a doctor.
-    - If `date` is provided, returns slots for that date with booking status.
-    - If `date` is not provided, returns all available slots for all days.
-    """
-    permission_classes = [IsAuthenticated]
+# class AllDaySlotsAPIView(APIView):
+#     """
+#     API to get available slots for a doctor.
+#     - If `date` is provided, returns slots for that date with booking status.
+#     - If `date` is not provided, returns all available slots for all days.
+#     """
+#     permission_classes = [IsAuthenticated]
 
-    DAY_ID_MAP = {
-    "Monday": 1, "Mon": 1,
-    "Tuesday": 2, "Tue": 2,
-    "Wednesday": 3, "Wed": 3,
-    "Thursday": 4, "Thu": 4,
-    "Friday": 5, "Fri": 5,
-    "Saturday": 6, "Sat": 6,
-    "Sunday": 7, "Sun": 7
-    }
+#     DAY_ID_MAP = {
+#     "Monday": 1, "Mon": 1,
+#     "Tuesday": 2, "Tue": 2,
+#     "Wednesday": 3, "Wed": 3,
+#     "Thursday": 4, "Thu": 4,
+#     "Friday": 5, "Fri": 5,
+#     "Saturday": 6, "Sat": 6,
+#     "Sunday": 7, "Sun": 7
+#     }
 
-    def get(self, request):
-        try:
-            doctor_id = request.query_params.get("doctor_id")
-            selected_date_str = request.query_params.get("date")
-            slot_type = request.query_params.get("slot_type")
+#     def get(self, request):
+#         try:
+#             doctor_id = request.query_params.get("doctor_id")
+#             selected_date_str = request.query_params.get("date")
+#             slot_type = request.query_params.get("slot_type")
 
-            if not doctor_id:
-                return Response({"message": "Doctor ID is required", "data": {}}, status=400)
+#             if not doctor_id:
+#                 return Response({"message": "Doctor ID is required", "data": {}}, status=400)
 
-            doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
-            if not doctor:
-                return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
+#             doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+#             if not doctor:
+#                 return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
 
-            if selected_date_str:
-                # Fetch slots for a specific date
-                try:
-                    selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
-                except ValueError:
-                    return Response({"message": "Invalid date format. Use YYYY-MM-DD", "data": {}}, status=400)
+#             if selected_date_str:
+#                 # Fetch slots for a specific date
+#                 try:
+#                     selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+#                 except ValueError:
+#                     return Response({"message": "Invalid date format. Use YYYY-MM-DD", "data": {}}, status=400)
 
-                full_day_name = calendar.day_name[selected_date.weekday()]
-                short_day_name = full_day_name[:3]  # "Sunday" → "Sun"
+#                 full_day_name = calendar.day_name[selected_date.weekday()]
+#                 short_day_name = full_day_name[:3]  # "Sunday" → "Sun"
 
-                slots = Slot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
+#                 slots = Slot.objects.filter(doctor=doctor, day=short_day_name, slot_type=slot_type )
 
-                slot_data = [
-                    {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
-                    for slot in slots
-                ]
+#                 slot_data = [
+#                     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
+#                     for slot in slots
+#                 ]
 
-                response_data = {
-                    "doctor_id": doctor.user.id,
-                    "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
-                    "available_slots": [
-                        {
-                            "day_id": self.DAY_ID_MAP.get(full_day_name, 0),
-                            "day": full_day_name,
-                            "slots": slot_data
-                        }
-                    ],
-                }
+#                 response_data = {
+#                     "doctor_id": doctor.user.id,
+#                     "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+#                     "available_slots": [
+#                         {
+#                             "day_id": self.DAY_ID_MAP.get(full_day_name, 0),
+#                             "day": full_day_name,
+#                             "slots": slot_data
+#                         }
+#                     ],
+#                 }
 
-                return Response({"message": "Appointment preferences retrieved successfully.", "data": response_data}, status=200)
+#                 return Response({"message": "Appointment preferences retrieved successfully.", "data": response_data}, status=200)
 
-            else:
-                # Fetch all slots grouped by day
-                available_slots = Slot.objects.filter(doctor=doctor)
+#             else:
+#                 # Fetch all slots grouped by day
+#                 available_slots = Slot.objects.filter(doctor=doctor)
 
-                slots_by_day = defaultdict(list)
-                for slot in available_slots:
-                    slots_by_day[slot.day].append({
-                        "time_slot": slot.time_slot,
-                        "status": "Booked" if slot.is_booked else "Available"
-                    })
+#                 slots_by_day = defaultdict(list)
+#                 for slot in available_slots:
+#                     slots_by_day[slot.day].append({
+#                         "time_slot": slot.time_slot,
+#                         "status": "Booked" if slot.is_booked else "Available"
+#                     })
 
-                formatted_slots = [
-                    {
-                        "day_id": self.DAY_ID_MAP.get(day, 0),
-                        "day": day,
-                        "slots": slots
-                    }
-                    for day, slots in slots_by_day.items()
-                ]
+#                 formatted_slots = [
+#                     {
+#                         "day_id": self.DAY_ID_MAP.get(day, 0),
+#                         "day": day,
+#                         "slots": slots
+#                     }
+#                     for day, slots in slots_by_day.items()
+#                 ]
 
-                response_data = {
-                    "doctor_id": doctor.user.id,
-                    "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
-                    "available_slots": formatted_slots,
-                }
+#                 response_data = {
+#                     "doctor_id": doctor.user.id,
+#                     "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+#                     "available_slots": formatted_slots,
+#                 }
 
-                return Response({"message": "Appointment preferences retrieved successfully.", "data": response_data}, status=200)
+#                 return Response({"message": "Appointment preferences retrieved successfully.", "data": response_data}, status=200)
 
-        except Exception as e:
-            return Response({"message": f"An error occurred: {str(e)}"}, status=500)
+#         except Exception as e:
+#             return Response({"message": f"An error occurred: {str(e)}"}, status=500)
 
 
 # with buffered time and one month slots time 
-class AvailableSlotsAPIView(APIView):
-    """
-    API to get available slots for a selected doctor, filtered by 'Planned' or 'Urgent' using query parameters.
-    """
-    permission_classes = [IsAuthenticated]
+# class AvailableSlotsAPIView(APIView):
+#     """
+#     API to get available slots for a selected doctor, filtered by 'Planned' or 'Urgent' using query parameters.
+#     """
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        doctor_id = request.query_params.get("doctor_id")
-        slot_type = request.query_params.get("slot_type", "").strip()  # Get slot type from query params
+#     def get(self, request):
+#         doctor_id = request.query_params.get("doctor_id")
+#         slot_type = request.query_params.get("slot_type", "").strip()  # Get slot type from query params
 
-        # Validate required parameters
-        if not doctor_id:
-            return Response({"message": "Doctor ID is required", "data": {}}, status=400)
+#         # Validate required parameters
+#         if not doctor_id:
+#             return Response({"message": "Doctor ID is required", "data": {}}, status=400)
 
-        # Validate doctor existence
-        doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
-        if not doctor:
-            return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
+#         # Validate doctor existence
+#         doctor = Doctor.objects.filter(user__id=doctor_id, user__role="Doctor").first()
+#         if not doctor:
+#             return Response({"message": "Invalid doctor ID", "data": {}}, status=404)
 
-        # Ensure slot_type is either "Planned" or "Urgent"
-        if slot_type and slot_type.lower() not in ["planned", "urgent"]:
-            return Response({"message": "Invalid slot type. Use 'Planned' or 'Urgent'.", "data": {}}, status=400)
+#         # Ensure slot_type is either "Planned" or "Urgent"
+#         if slot_type and slot_type.lower() not in ["planned", "urgent"]:
+#             return Response({"message": "Invalid slot type. Use 'Planned' or 'Urgent'.", "data": {}}, status=400)
 
-        # Apply filter if slot_type is provided
-        slot_filter = {"doctor": doctor}
-        if slot_type:
-            slot_filter["slot_type__iexact"] = slot_type  # Case-insensitive filtering
+#         # Apply filter if slot_type is provided
+#         slot_filter = {"doctor": doctor}
+#         if slot_type:
+#             slot_filter["slot_type__iexact"] = slot_type  # Case-insensitive filtering
 
-        # Fetch available slots
-        slots = Slot.objects.filter(**slot_filter).only("time_slot")
+#         # Fetch available slots
+#         slots = Slot.objects.filter(**slot_filter).only("time_slot")
 
-        # Prepare response data
-        response_data = {
-            "doctor_id": doctor.user.id,
-            "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
-            "specialty": getattr(doctor, "specialty", ""),
-            "slot_type": slot_type or "All",  # Default to "All" if not provided
-            "available_slots": [slot.time_slot for slot in slots],
-        }
+#         # Prepare response data
+#         response_data = {
+#             "doctor_id": doctor.user.id,
+#             "doctor_name": f"{doctor.user.first_name} {doctor.user.last_name}",
+#             "specialty": getattr(doctor, "specialty", ""),
+#             "slot_type": slot_type or "All",  # Default to "All" if not provided
+#             "available_slots": [slot.time_slot for slot in slots],
+#         }
 
-        return Response(
-            {
-                "message": f"Available slots for type '{slot_type or 'All'}'",
-                "data": response_data,
-            },
-            status=200,
-        )
+#         return Response(
+#             {
+#                 "message": f"Available slots for type '{slot_type or 'All'}'",
+#                 "data": response_data,
+#             },
+#             status=200,
+#         )
 
 
 class BookAppointmentAPIView(APIView):
@@ -679,36 +679,36 @@ class AppointmentReminderAPIView(APIView):
         return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
 
 
-class AppointmentSummaryAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+# class AppointmentSummaryAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request, appointment_id):
-        """Retrieve appointment summary"""
-        try:
-            # Get the booked appointment
-            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+#     def get(self, request, appointment_id):
+#         """Retrieve appointment summary"""
+#         try:
+#             # Get the booked appointment
+#             appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
 
-            # Get the doctor's specialty (category)
-            doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
+#             # Get the doctor's specialty (category)
+#             doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
 
-            # Get consultation fee from ConsultationSettings
-            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
-            subtotal = consultation_settings.planned_fee or consultation_settings.urgent_fee
+#             # Get consultation fee from ConsultationSettings
+#             consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
+#             subtotal = consultation_settings.planned_fee or consultation_settings.urgent_fee
 
-            # Build response
-            response_data = {
-                "category": doctor.specialty,  # General medicine (example)
-                "date": appointment.date.strftime("%d %b, %Y"),  # Format date
-                "time": appointment.slot,  # Slot time (e.g., "11:00AM")
-                "subtotal": f"${subtotal:.2f}" if subtotal else "$0.00",
-                "discount": "$0.00",  # You can modify this if discounts apply
-                "total": f"${subtotal:.2f}" if subtotal else "$0.00",
-            }
+#             # Build response
+#             response_data = {
+#                 "category": doctor.specialty,  # General medicine (example)
+#                 "date": appointment.date.strftime("%d %b, %Y"),  # Format date
+#                 "time": appointment.slot,  # Slot time (e.g., "11:00AM")
+#                 "subtotal": f"${subtotal:.2f}" if subtotal else "$0.00",
+#                 "discount": "$0.00",  # You can modify this if discounts apply
+#                 "total": f"${subtotal:.2f}" if subtotal else "$0.00",
+#             }
 
-            return Response(response_data, status=200)
+#             return Response(response_data, status=200)
 
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=400)
 
 
 # Payment Confirmation API

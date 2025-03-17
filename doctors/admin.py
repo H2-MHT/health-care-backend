@@ -12,7 +12,7 @@ from .models import(
     CommunicationPreferences,
     Membership,
     BookedAppointment,
-    Slot,
+    # Slot,
     DoctorSchedule,
 )
 # Register your models here.
@@ -38,5 +38,5 @@ admin.site.register(NoShowPolicy)
 admin.site.register(CommunicationPreferences)
 admin.site.register(Membership)
 admin.site.register(BookedAppointment)
-admin.site.register(Slot)
+# admin.site.register(Slot)
 admin.site.register(DoctorSchedule)
