@@ -26,7 +26,6 @@ from .views import (
     # AppointmentSummaryAPIView,
     # AvailableSlotsAPIView,
     redeem_invitation,
-    
     )
 
 
@@ -42,7 +41,8 @@ urlpatterns = [
     path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
     # Appointment preferences (Doctor sets availability)
     path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
-    
+    path('doctor-schedule/<int:doctor_id>/', AppointmentManagementAPIView.as_view(), name='doctor-schedule'),
+
     # Get All Day Slots for a Doctor
     # path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
     

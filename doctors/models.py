@@ -91,8 +91,8 @@ class AppointmentManagement(models.Model):
 #     slot_type = models.CharField(max_length=10, choices=[("Planned", "Planned"), ("Urgent", "Urgent")], blank=True)
 #     is_booked = models.BooleanField(default=False)
 
-    def __str__(self):
-        return f"{self.doctor} - {self.day} {self.start_time}-{self.end_time} ({self.slot_type})"
+    # def __str__(self):
+    #     return f"{self.doctor} - {self.day} {self.start_time}-{self.end_time} ({self.slot_type})"
     
 class DoctorSchedule(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor

@@ -9,6 +9,7 @@ from .models import (
     NoShowPolicy,
     CommunicationPreferences,
     BookedAppointment,
+    DoctorSchedule,
     # Slot,
 )
 from payments.models import Payment
@@ -58,7 +59,12 @@ class AppointmentManagementSerializer(serializers.ModelSerializer):
         fields = ['id', 'doctor', 'appointment_type', 'days', 'start_time', 'end_time']
         read_only_fields = ['doctor']
         
+class DoctorScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorSchedule
+        fields = ['doctor', 'schedule']
         
+
 class ConsultationSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConsultationSessionAndFee
