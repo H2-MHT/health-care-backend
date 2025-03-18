@@ -84,15 +84,23 @@ from django.utils.timezone import now
 
 class AppointmentManagementAPIView(APIView):
     permission_classes = [IsAuthenticated]
-
-    def get(self, request):
+    
+    def get(self, request, doctor_id):
+        """Fetch appointment schedule (day, start time, and end time) for a specific doctor"""
         try:
-            preferences = AppointmentManagement.objects.filter(doctor=request.doctor)
-            serializer = AppointmentManagementSerializer(preferences, many=True)
-            return Response({"message": "Appointment preferences retrieved successfully.", "data": serializer.data})
+            # Get all appointments for the given doctor
+            appointments = AppointmentManagement.objects.filter(doctor_id=doctor_id)
+
+            if not appointments.exists():
+                return Response({"message": "No appointments found for this doctor"}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = AppointmentManagementSerializer(appointments, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+        
+        
     def post(self, request):
         """Create a new appointment and generate slots"""
         try:
