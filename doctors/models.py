@@ -128,7 +128,7 @@ class BookedAppointment(models.Model):
         ]
 
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="patient_appointments")
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="patient_appointments")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
