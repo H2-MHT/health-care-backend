@@ -523,7 +523,7 @@ class BookAppointmentAPIView(APIView):
             doctor_id = request.data.get("doctor_id")
             patient_id = request.data.get("patient_id")
             slot = request.data.get("slot")  # format: "10:00 - 10:30"
-            appointment_type = request.data.get("appointment_type", "Planned")
+            appointment_type = request.data.get("appointment_type")
             date = request.data.get("date")  # (DD-MM-YYYY)
 
             # Convert date to correct format
