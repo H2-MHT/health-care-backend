@@ -520,7 +520,7 @@ class AppointmentManagementAPIView(APIView):
 class GetSlotsAPIView(APIView):
     def get(self, request):
        try:
-            doctor_id = request.data.get('doctor_id')  
+            doctor_id = request.query_params.get('doctor_id')  
             if not doctor_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             

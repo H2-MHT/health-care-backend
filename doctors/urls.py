@@ -43,9 +43,9 @@ urlpatterns = [
     # Doctor's consultation settings
     path('consultation-settings/', ConsultationSettingsAPIView.as_view(), name='create_consultation_settings'),
     # Appointment preferences (Doctor sets availability)
-    path('preferences/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
+    path('create-appointment-and-generate-slot/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('doctor-schedule/<int:doctor_id>/', AppointmentManagementAPIView.as_view(), name='doctor-schedule'),
-    path("get-slots/", GetSlotsAPIView.as_view(), name="get-slots"),
+    path("get-all-slots/", GetSlotsAPIView.as_view(), name="get-slots"),
 
     # Get All Day Slots for a Doctor
     # path("all-slots/", AllDaySlotsAPIView.as_view(), name="all-slots"),
@@ -54,9 +54,9 @@ urlpatterns = [
     # path('available-slots/', AvailableSlotsAPIView.as_view(), name='available-slots'),
     
     # Book an appointment (Patient)
-    path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
-    path("patient-appointment/", PatientAppointmentAPIView.as_view(), name="patient-appointment"),
-    path("doctor-appointment/", DoctorAppointmentAPIView.as_view(), name="doctor-appointment"),
+    path('book-and-get-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
+    path("patient-booked-appointment/", PatientAppointmentAPIView.as_view(), name="patient-appointment"),
+    path("doctor-booked-appointment/", DoctorAppointmentAPIView.as_view(), name="doctor-appointment"),
     # View booked appointments
     path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
     
