@@ -100,7 +100,8 @@ class DoctorSchedule(models.Model):
 
 class PatientBookAppointment(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, null=True, blank=True)  # Add patient field
+    # patient = models.ForeignKey(Patient, on_delete=models.CASCADE, null=True, blank=True)  # Add patient field
+    patient = models.IntegerField(help_text="Consider patient as User id")
     appointment = models.OneToOneField(Appointment, on_delete=models.CASCADE, null=True, blank=True)
     schedule = models.JSONField(default=dict)  # Stores appointments as JSON { "YYYY-MM-DD": { "slots": [...] } }
     date = models.DateField(auto_now_add=True)  # Date when the appointment was recorded
