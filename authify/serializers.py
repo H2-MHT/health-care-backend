@@ -71,11 +71,11 @@ class OTPVerificationSerializer(serializers.Serializer):
 class SignInSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
     def validate(self, data):
         email = data.get("email")
         password = data.get("password")
-
+        role = data.get("role")
         # Get the user model
         User = get_user_model()
 
@@ -87,7 +87,11 @@ class SignInSerializer(serializers.Serializer):
         # Check the user's password
         if not user.check_password(password):
             raise serializers.ValidationError("Invalid email or password.")
-
+        
+        # Check the user's role
+        if role!= user.role:
+            raise serializers.ValidationError(f"Invalid role. User's role is {user.role}")
+        
         # Reactivate the account if it's inactive
         if not user.is_active:
             user.is_active = True
