@@ -45,6 +45,8 @@ from .serializers import (
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
     PaymentSummarySerializer,
+    DoctorScheduleSerializer,
+
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -117,7 +119,8 @@ class AppointmentManagementAPIView(APIView):
                 appointment = serializer.save(doctor=doctor)
 
                 # Generate slots immediately after saving appointment preferences
-                self.generate_slots(appointment)
+                appointment_type = request.data.get("appointment_type")
+                self.generate_slots(appointment, appointment_type)
 
                 logger.info(
                     f"User {request.user} successfully created an appointment with ID {serializer.instance.id}.")
@@ -136,38 +139,45 @@ class AppointmentManagementAPIView(APIView):
             logger.exception(f"Error creating appointment for user {request.user}: {str(e)}")
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def generate_slots(self, appointment):
+    def generate_slots(self, appointment, appointment_type):
         try:
-            print(f"Generating slots for Doctor {appointment.doctor.id} on {appointment.days}")
             # Fetch consultation settings for the doctor
             settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.doctor).first()
             if not settings:
-                print("No consultation settings found for this doctor!")
                 return
 
             # Check if the doctor has defined separate session lengths for planned and urgent slots
             session_length = None
-
-            if settings.planned_session_length and settings.urgent_session_length:
-                # Determine slot type dynamically if both session lengths exist
-                session_length = settings.planned_session_length if appointment.appointment_type == "Planned" else settings.urgent_session_length
-                slot_type = "Planned" if appointment.appointment_type == "Planned" else "Urgent"
-            elif settings.planned_session_length:
+            slot_type = appointment_type
+            
+            if slot_type == "Planned":
                 session_length = settings.planned_session_length
-                slot_type = "Planned"
-            elif settings.urgent_session_length:
+                if(session_length == ""):
+                    return Response({'message': 'please submit your planned session'})
+            
+            if slot_type == "Urgent":
                 session_length = settings.urgent_session_length
-                slot_type = "Urgent"
-            else:
-                print("No valid session length found!")
-                return
+                if(session_length == ""):
+                    return Response({'message': 'please submit your urgent session'})
 
-            print(f"Session Length: {session_length} for slot type: {slot_type}")
+            # if settings.planned_session_length and settings.urgent_session_length:
+            #     # Determine slot type dynamically if both session lengths exist
+            #     session_length = settings.planned_session_length if appointment.appointment_type == "Planned" else settings.urgent_session_length
+            #     slot_type = "Planned" if appointment.appointment_type == "Planned" else "Urgent"
+            # elif settings.planned_session_length:
+            #     session_length = settings.planned_session_length
+            #     slot_type = "Planned"
+            # elif settings.urgent_session_length:
+            #     session_length = settings.urgent_session_length
+            #     slot_type = "Urgent"
+            # else:
+            #     print("No valid session length found!")
+            #     return
+
 
             buffer_time = settings.buffer_time
 
-            if session_length is None or buffer_time is None:
-                print("Session length or buffer time is not set!")
+            if session_length is None:
                 return
 
             if not isinstance(session_length, timedelta):
@@ -190,7 +200,6 @@ class AppointmentManagementAPIView(APIView):
                     break
 
                 slot_str = f"{current_time.strftime('%H:%M')} - {next_time.strftime('%H:%M')}"
-                print(f"Adding slot: {slot_str}")
                 slots.append(slot_str)
 
                 current_time = buffer_next_time
@@ -215,15 +224,13 @@ class AppointmentManagementAPIView(APIView):
                 }
                 for slot in slots
             ]
-
-            print(formatted_slots, "---------------------------------- formatted_slots")
+            
             new_schedule = {
                 appointment.days: {
                     slot_type:formatted_slots
                 }
             }
 
-            print(new_schedule, ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> new_schedule")
             self.update_schedule(appointment.doctor.id, new_schedule)
             # slot_data = [
             #     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
@@ -304,7 +311,6 @@ class AppointmentManagementAPIView(APIView):
             # Save updated schedule
             doctor_schedule.schedule = existing_schedule
             doctor_schedule.save()
-            print("Schedule updated successfully.")
 
         except Exception as e:
             print(f"Error: {str(e)}")
@@ -511,6 +517,28 @@ class AppointmentManagementAPIView(APIView):
 #             status=200,
 #         )
 
+class GetSlotsAPIView(APIView):
+    def get(self, request):
+       try:
+            doctor_id = request.data.get('doctor_id')  
+            if not doctor_id:
+                return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            doctor = Doctor.objects.filter(pk=doctor_id).first()  
+            if not doctor:
+                return Response({'message': 'Doctor not found'})
+            
+            slots = DoctorSchedule.objects.filter(doctor=doctor)    
+            if not slots.exists():
+                return Response({'message': 'slot does not exist'}, status=status.HTTP_404_NOT_FOUND)
+            
+            serialized_slots = DoctorScheduleSerializer(slots, many=True).data
+
+            return Response({'data': serialized_slots}, status=status.HTTP_200_OK)
+        
+       except Exception as e:
+           return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class BookAppointmentAPIView(APIView):
     """
@@ -637,8 +665,8 @@ class BookAppointmentAPIView(APIView):
         
     def get(self, request):
         try:
-            doctor_id = request.data.get('doctor_id')
-            date = request.data.get('date')
+            doctor_id = request.query_params.get('doctor_id')
+            date = request.query_params.get('date')
             print('Date',date)
             if not doctor_id or not date:
                 return Response({'message':'Doctor id and Date is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -671,7 +699,7 @@ class PatientAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
-            patient_id = request.data.get('patient_id')
+            patient_id = request.query_params.get('patient_id')
             if not patient_id:
                 return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -693,7 +721,7 @@ class DoctorAppointmentAPIView(APIView):
      permission_classes = [IsAuthenticated]
      def get(self, request):
         try:
-            doctor_id = request.data.get('doctor_id')
+            doctor_id = request.query_params.get('doctor_id')
             if not doctor_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
