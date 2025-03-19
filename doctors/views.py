@@ -665,8 +665,8 @@ class BookAppointmentAPIView(APIView):
         
     def get(self, request):
         try:
-            doctor_id = request.data.get('doctor_id')
-            date = request.data.get('date')
+            doctor_id = request.query_params.get('doctor_id')
+            date = request.query_params.get('date')
             print('Date',date)
             if not doctor_id or not date:
                 return Response({'message':'Doctor id and Date is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -699,7 +699,7 @@ class PatientAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
-            patient_id = request.data.get('patient_id')
+            patient_id = request.query_params.get('patient_id')
             if not patient_id:
                 return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -721,7 +721,7 @@ class DoctorAppointmentAPIView(APIView):
      permission_classes = [IsAuthenticated]
      def get(self, request):
         try:
-            doctor_id = request.data.get('doctor_id')
+            doctor_id = request.query_params.get('doctor_id')
             if not doctor_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
