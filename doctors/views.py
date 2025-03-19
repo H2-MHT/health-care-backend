@@ -530,7 +530,7 @@ class GetSlotsAPIView(APIView):
             
             slots = DoctorSchedule.objects.filter(doctor=doctor)    
             if not slots.exists():
-                return Response({'message': 'slot does not exist'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message': 'slot does not exist', 'data': []}, status=status.HTTP_200_OK)
             
             serialized_slots = DoctorScheduleSerializer(slots, many=True).data
 
@@ -562,7 +562,7 @@ class BookAppointmentAPIView(APIView):
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
             
-            patient = Patient.objects.filter(pk=patient_id).first()
+            patient = User.objects.filter(pk=patient_id).first()
             if not patient:
                 return Response({'error':'Invalid patient ID'}, status=404)
              # doctor_user_obj = User.objects.get(id=doctor.user_id)
@@ -591,7 +591,7 @@ class BookAppointmentAPIView(APIView):
 
             appointment = BookedAppointment.objects.create(
                 doctor=doctor,
-                patient=patient,
+                patient=patient_id,
                 appointment_type=appointment_type,
                 slot=slot,
                 status="Pending",
@@ -680,7 +680,7 @@ class BookAppointmentAPIView(APIView):
             appiontments = BookedAppointment.objects.filter(doctor=doctor, date=date_obj)
             
             if not appiontments.exists():
-                return Response({'message':'No appintment found'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
             bookedAppiontment = []
             for appintment in appiontments:
@@ -703,13 +703,13 @@ class PatientAppointmentAPIView(APIView):
             if not patient_id:
                 return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            patient = Patient.objects.filter(pk=patient_id).first()
+            patient = User.objects.filter(pk=patient_id).first()
             if not patient:
                 return Response({'message':'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontmtents = BookedAppointment.objects.filter(patient=patient)
+            appiontmtents = BookedAppointment.objects.filter(patient=patient_id)
             if not appiontmtents.exists():
-                return Response({'message':'No appintment found'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
             serializer = BookedAppointmentSerializer(appiontmtents, many=True)
             return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
