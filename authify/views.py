@@ -38,7 +38,7 @@ from .serializers import (
 from clinics.models import Clinic
 from clinics.serializers import ClinicInfoSerializer
 import logging
-
+from sendgrid.helpers.mail import Mail, Email, To, Personalization
 from django.dispatch import receiver
 from django.utils.timezone import now
 
@@ -81,17 +81,30 @@ class SignUpView(APIView):
         logger.info(f"Generated OTP: {otp}")
         return otp
 
-    def send_otp_email(self, email, otp):
+    def send_otp_email(self, email, otp, name):
         """
-        Send the OTP to the user's email via SendGrid.
+        Send the OTP to the user's email with SendGrid Dynamic Template.
         """
         logger.info(f"Sending OTP to email: {email}")
+
+        # email message
         message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject="Your OTP Code",
-            plain_text_content=f"Your OTP code is {otp}",
+            from_email=Email(settings.SENDGRID_FROM_EMAIL),
         )
+
+        # dynamic template ID
+        message.template_id = settings.SENDGRID_TEMPLATE_ID
+
+        # Personalization instance
+        personalization = Personalization()
+        personalization.add_to(To(email))  # recipient
+        personalization.dynamic_template_data = {
+            "name": name,
+            "otp": otp,
+            # "image_url":"http://cdn.mcauto-images-production.sendgrid.net/dfcd8f3f9616c668/c74a987d-d57e-4bfb-9715-053eba5fa1f6/62x62.png"
+        }
+
+        message.add_personalization(personalization)
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
@@ -109,12 +122,12 @@ class SignUpView(APIView):
             if serializer.is_valid():
                 user = serializer.save()
                 logger.info(f"User registered successfully: {user.email}")
-
+                name = user.first_name if user.first_name else "User"
                 # Generate OTP
                 otp = self.generate_otp()
 
                 # Send OTP to user's email
-                email_response = self.send_otp_email(user.email, otp)
+                email_response = self.send_otp_email(user.email, otp, name)
 
                 if isinstance(email_response, str):
                     logger.error(f"Failed to send OTP to {user.email}: {email_response}")
