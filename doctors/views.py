@@ -667,6 +667,50 @@ class BookAppointmentAPIView(APIView):
         except Exception as e:
              return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class PatientAppointmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            patient_id = request.data.get('patient_id')
+            if not patient_id:
+                return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            patient = Patient.objects.filter(pk=patient_id).first()
+            if not patient:
+                return Response({'message':'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            appiontmtents = BookedAppointment.objects.filter(patient=patient)
+            if not appiontmtents.exists():
+                return Response({'message':'No appintment found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = BookedAppointmentSerializer(appiontmtents, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            return Response({'error':str(e)},status=status.HTTP_400_BAD_REQUEST)
+
+class DoctorAppointmentAPIView(APIView):
+     permission_classes = [IsAuthenticated]
+     def get(self, request):
+        try:
+            doctor_id = request.data.get('doctor_id')
+            if not doctor_id:
+                return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            doctor = Doctor.objects.filter(pk=doctor_id).first()
+            if not doctor:
+                return Response({'message':'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            appiontmtents = BookedAppointment.objects.filter(doctor=doctor)
+            if not appiontmtents.exists():
+                return Response({'message':'No appintment found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = BookedAppointmentSerializer(appiontmtents, many=True)
+            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            return Response({'error':str(e)},status=status.HTTP_400_BAD_REQUEST)
+    
 
 class MyAppointmentsAPIView(APIView):
     """

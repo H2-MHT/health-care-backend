@@ -16,6 +16,8 @@ from .views import (
     ConsultationSettingsAPIView,
     # AllDaySlotsAPIView,
     BookAppointmentAPIView,
+    PatientAppointmentAPIView,
+    DoctorAppointmentAPIView,
     MyAppointmentsAPIView,
     RescheduleAppointmentAPIView,
     CancelAppointmentAPIView,
@@ -51,6 +53,8 @@ urlpatterns = [
     
     # Book an appointment (Patient)
     path('book-appointment/', BookAppointmentAPIView.as_view(), name='book-appointment'),
+    path("patient-appointment/", PatientAppointmentAPIView.as_view(), name="patient-appointment"),
+    path("doctor-appointment/", DoctorAppointmentAPIView.as_view(), name="doctor-appointment"),
     # View booked appointments
     path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
     
