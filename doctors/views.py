@@ -718,8 +718,8 @@ class PatientAppointmentAPIView(APIView):
             return Response({'error':str(e)},status=status.HTTP_400_BAD_REQUEST)
 
 class DoctorAppointmentAPIView(APIView):
-     permission_classes = [IsAuthenticated]
-     def get(self, request):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
         try:
             doctor_id = request.query_params.get('doctor_id')
             if not doctor_id:
@@ -731,7 +731,7 @@ class DoctorAppointmentAPIView(APIView):
             
             appiontmtents = BookedAppointment.objects.filter(doctor=doctor)
             if not appiontmtents.exists():
-                return Response({'message':'No appintment found'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_404_NOT_FOUND)
             
             serializer = BookedAppointmentSerializer(appiontmtents, many=True)
             return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
