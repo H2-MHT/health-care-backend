@@ -45,6 +45,7 @@ urlpatterns = [
     # Appointment preferences (Doctor sets availability)
     path('create-appointment-and-generate-slot/', AppointmentManagementAPIView.as_view(), name='appointment-preferences'),
     path('doctor-schedule/<int:doctor_id>/', AppointmentManagementAPIView.as_view(), name='doctor-schedule'),
+    path('delete-appointment-and-generated-slot/', AppointmentManagementAPIView.as_view(), name='delete-preferences'),
     path("get-all-slots/", GetSlotsAPIView.as_view(), name="get-slots"),
 
     # Get All Day Slots for a Doctor
