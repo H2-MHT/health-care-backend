@@ -1,8 +1,6 @@
 import logging
 from datetime import timedelta
 import stripe
-import calendar
-
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -10,14 +8,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from sendgrid.helpers.mail import Content, Email, Mail, To
-from appointments.models import Appointment
 from users.models import User
 from users.serializers import UserSerializer
-from payments.models import Payment
 from patients.models import Patient
 from django.utils.dateparse import parse_time
-from collections import defaultdict
-
 from .models import (
     AppointmentManagement,
     CancellationPolicy,
@@ -44,7 +38,6 @@ from .serializers import (
     ReschedulePolicySerializer,
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
-    PaymentSummarySerializer,
     DoctorScheduleSerializer,
 
 )
@@ -82,7 +75,6 @@ class DoctorListAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-from django.utils.timezone import now
 
 class AppointmentManagementAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -101,7 +93,6 @@ class AppointmentManagementAPIView(APIView):
 
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
         
     def post(self, request):
         """Create a new appointment and generate slots"""
@@ -346,38 +337,42 @@ class AppointmentManagementAPIView(APIView):
             logger.error(f"Error while updating appointment: {str(e)}", exc_info=True)
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # def delete(self, request):
-    #     try:
-    #         day = request.data.get("day")  # Expecting day name (e.g., "Wednesday" or "Wed")
-    #         if not day:
-    #             return Response({"message": "Day is required."}, status=status.HTTP_400_BAD_REQUEST)
+    def delete(self, request):
+        try:
+            day_to_delete = request.query_params.get("day")
+            doctor_id = request.query_params.get("doctor_id")
+            if not day_to_delete:
+                return Response({"message": "Please provide a valid day to delete slots."}, status=status.HTTP_400_BAD_REQUEST)
 
-    #         DAY_ID_MAP = {
-    #             "Monday": 1, "Mon": 1,
-    #             "Tuesday": 2, "Tue": 2,
-    #             "Wednesday": 3, "Wed": 3,
-    #             "Thursday": 4, "Thu": 4,
-    #             "Friday": 5, "Fri": 5,
-    #             "Saturday": 6, "Sat": 6,
-    #             "Sunday": 7, "Sun": 7
-    #         }
+            appointments = AppointmentManagement.objects.filter(doctor_id=doctor_id, days=day_to_delete)
 
-    #         day_id = DAY_ID_MAP.get(day)
-    #         if not day_id:
-    #             return Response({"message": "Invalid day provided."}, status=status.HTTP_400_BAD_REQUEST)
+            if not appointments.exists():
+                return Response({"message": f"No appointments found for {day_to_delete}."}, status=status.HTTP_404_NOT_FOUND)
 
-    #         doctor = request.user.doctor
+            doctor = Doctor.objects.filter(pk=doctor_id).first()
+            user = User.objects.filter(doctor=doctor).first()
+            if not doctor:
+                return Response({"message":"Doctor Not Found"}, status=status.HTTP_404_NOT_FOUND)
+            try:
+                schedule_obj = DoctorSchedule.objects.get(user=user)
+            except schedule_obj.DoesNotExist:
+                return Response({"message":" Doctor Schedule not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    #         # Delete all slots for the specified day and doctor
-    #         deleted_count, _ = Slot.objects.filter(doctor=doctor, day=day).delete()
+            # Delete the appointments
+            appointments.delete()
 
-    #         if deleted_count > 0:
-    #             return Response({"message": f"Successfully deleted {deleted_count} slots for {day}."}, status=status.HTTP_200_OK)
-    #         else:
-    #             return Response({"message": "No slots found for the given day."}, status=status.HTTP_404_NOT_FOUND)
+            schedule = schedule_obj.schedule
+            # print(schedule)
+            if day_to_delete in schedule:
+                del schedule[day_to_delete]
+                schedule_obj.save()
 
-    #     except Exception as e:
-    #         return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": f"All slots for {day_to_delete} have been deleted successfully."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 # class AllDaySlotsAPIView(APIView):
 #     """
@@ -1130,7 +1125,7 @@ class InviteUserView(APIView):
                     invited_user=request.user,
                 )
 
-                # Update the inviter's invited users count
+                # Update the invites invited users count
                 referral.invited_users_count = Invitation.objects.filter(
                     invited_by=referral
                 ).count()
@@ -1167,7 +1162,7 @@ class InviteUserView(APIView):
 
 @api_view(["POST"])
 def redeem_invitation(request, invitation_code):
-    """Redeem the invitation and increase the inviter's stats."""
+    """Redeem the invitation and increase the inviters stats."""
     try:
         logger.info(
             "User %s attempting to redeem invitation code: %s",
