@@ -95,7 +95,8 @@ class AppointmentManagement(models.Model):
     #     return f"{self.doctor} - {self.day} {self.start_time}-{self.end_time} ({self.slot_type})"
     
 class DoctorSchedule(models.Model):
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
+    # doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)  # Ensures only 1 record per doctor
     schedule = models.JSONField(default=dict)  # Stores full schedule as JSON
 
 class PatientBookAppointment(models.Model):
@@ -127,8 +128,9 @@ class BookedAppointment(models.Model):
         ("Failed", "Failed"),
         ]
 
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
+    # doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
     # patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="patient_appointments")
+    doctor = models.IntegerField(help_text="Consider patient as User id")
     patient = models.IntegerField(help_text="Consider patient as User id")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
