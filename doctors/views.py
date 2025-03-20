@@ -836,36 +836,32 @@ class AppointmentReminderAPIView(APIView):
         return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
 
 
-# class AppointmentSummaryAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
+class AppointmentSummaryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
-#     def get(self, request, appointment_id):
-#         """Retrieve appointment summary"""
-#         try:
-#             # Get the booked appointment
-#             appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+    def get(self, request, appointment_id):
+        """Retrieve appointment summary"""
+        try:
+            # Get the booked appointment
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user.id)
+            # Get the doctor's specialty (category)
+            doctor = get_object_or_404(Doctor, user=appointment.doctor)
+            # Get consultation fee from ConsultationSettings
+            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
+            subtotal = consultation_settings.planned_fees or consultation_settings.urgent_fees
+            # Build response
+            response_data = {
+                "category": doctor.specialty,  # General medicine (example)
+                "date": appointment.date.strftime("%d %b, %Y"),  # Format date
+                "time": appointment.slot,  # Slot time (e.g., "11:00AM")
+                "subtotal": f"${subtotal:.2f}" if subtotal else "$0.00",
+                "discount": "$0.00",
+                "total": f"${subtotal:.2f}" if subtotal else "$0.00",
+            }
 
-#             # Get the doctor's specialty (category)
-#             doctor = get_object_or_404(Doctor, user=appointment.doctor.user)
-
-#             # Get consultation fee from ConsultationSettings
-#             consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
-#             subtotal = consultation_settings.planned_fee or consultation_settings.urgent_fee
-
-#             # Build response
-#             response_data = {
-#                 "category": doctor.specialty,  # General medicine (example)
-#                 "date": appointment.date.strftime("%d %b, %Y"),  # Format date
-#                 "time": appointment.slot,  # Slot time (e.g., "11:00AM")
-#                 "subtotal": f"${subtotal:.2f}" if subtotal else "$0.00",
-#                 "discount": "$0.00",  # You can modify this if discounts apply
-#                 "total": f"${subtotal:.2f}" if subtotal else "$0.00",
-#             }
-
-#             return Response(response_data, status=200)
-
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=400)
+            return Response(response_data, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
 
 
 # Payment Confirmation API
