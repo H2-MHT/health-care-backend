@@ -26,7 +26,7 @@ from .views import (
     CreateStripeCheckoutSession,
     PaymentSuccessView,
     GetSlotsAPIView,
-    # AppointmentSummaryAPIView,
+    AppointmentSummaryAPIView,
     # AvailableSlotsAPIView,
     redeem_invitation,
     )
@@ -65,7 +65,7 @@ urlpatterns = [
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
     path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
-    # path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
+    path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
 
     path("payment-success/", PaymentSuccessView.as_view(), name="payment-success"),
 
