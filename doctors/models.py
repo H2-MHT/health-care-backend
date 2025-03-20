@@ -100,8 +100,7 @@ class DoctorSchedule(models.Model):
 
 class PatientBookAppointment(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)  # Ensures only 1 record per doctor
-    # patient = models.ForeignKey(Patient, on_delete=models.CASCADE, null=True, blank=True)  # Add patient field
-    patient = models.IntegerField(help_text="Consider patient as User id")
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, null=True, blank=True)  # Add patient field
     appointment = models.OneToOneField(Appointment, on_delete=models.CASCADE, null=True, blank=True)
     schedule = models.JSONField(default=dict)  # Stores appointments as JSON { "YYYY-MM-DD": { "slots": [...] } }
     date = models.DateField(auto_now_add=True)  # Date when the appointment was recorded
@@ -129,7 +128,8 @@ class BookedAppointment(models.Model):
         ]
 
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="patient_appointments")
+    # patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="patient_appointments")
+    patient = models.IntegerField(help_text="Consider patient as User id")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
