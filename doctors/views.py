@@ -524,8 +524,8 @@ class AppointmentManagementAPIView(APIView):
 
 class GetSlotsAPIView(APIView):
     def get(self, request):
-       try:
-            user_id = request.query_params.get('user_id')
+        try:
+            user_id = request.query_params.get('doctor_user_id')
             if not user_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -540,9 +540,8 @@ class GetSlotsAPIView(APIView):
             serialized_slots = DoctorScheduleSerializer(slots, many=True).data
 
             return Response({'data': serialized_slots}, status=status.HTTP_200_OK)
-        
-       except Exception as e:
-           return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class BookAppointmentAPIView(APIView):
