@@ -120,7 +120,8 @@ class AppointmentManagementAPIView(APIView):
 
                 # Generate slots immediately after saving appointment preferences
                 appointment_type = request.data.get("appointment_type")
-                self.generate_slots(appointment, appointment_type)
+                user_id = request.data.get("user_id")
+                self.generate_slots(appointment, appointment_type, user_id)
 
                 logger.info(
                     f"User {request.user} successfully created an appointment with ID {serializer.instance.id}.")
@@ -139,7 +140,7 @@ class AppointmentManagementAPIView(APIView):
             logger.exception(f"Error creating appointment for user {request.user}: {str(e)}")
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def generate_slots(self, appointment, appointment_type):
+    def generate_slots(self, appointment, appointment_type, user_id):
         try:
             # Fetch consultation settings for the doctor
             settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.doctor).first()
@@ -231,7 +232,7 @@ class AppointmentManagementAPIView(APIView):
                 }
             }
 
-            self.update_schedule(appointment.doctor.id, new_schedule)
+            self.update_schedule(appointment.doctor.id, new_schedule, user_id)
             # slot_data = [
             #     {"time_slot": slot.time_slot, "status": "Booked" if slot.is_booked else "Available"}
             #     for slot in slots
@@ -286,13 +287,16 @@ class AppointmentManagementAPIView(APIView):
     #     except Exception as e:
     #         print(f"Doctor Not Found: {str(e)}")
 
-    def update_schedule(self, doctor_id, new_schedule):
+    def update_schedule(self, doctor_id, new_schedule, user_id):
         try:
             # Fetch the Doctor instance
-            doctor_instance = Doctor.objects.get(id=doctor_id)
+            # doctor_instance = Doctor.objects.get(id=doctor_id)
+            user_instance = User.objects.get(id=user_id)
 
             # Get or create the DoctorSchedule instance
-            doctor_schedule, created = DoctorSchedule.objects.get_or_create(doctor=doctor_instance, defaults={"schedule": {}})
+            # doctor_schedule, created = DoctorSchedule.objects.get_or_create(doctor=doctor_instance, defaults={"schedule": {}})
+
+            doctor_schedule, created = DoctorSchedule.objects.get_or_create(user=user_instance, defaults={"schedule": {}})
 
             # Get existing schedule (ensure it's a valid dictionary)
             existing_schedule = doctor_schedule.schedule or {}
@@ -309,6 +313,7 @@ class AppointmentManagementAPIView(APIView):
                     existing_schedule[day] = categories  # Add new day
 
             # Save updated schedule
+            # doctor_schedule.schedule = existing_schedule
             doctor_schedule.schedule = existing_schedule
             doctor_schedule.save()
 
@@ -520,15 +525,15 @@ class AppointmentManagementAPIView(APIView):
 class GetSlotsAPIView(APIView):
     def get(self, request):
        try:
-            doctor_id = request.query_params.get('doctor_id')  
-            if not doctor_id:
+            user_id = request.query_params.get('user_id')
+            if not user_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            doctor = Doctor.objects.filter(pk=doctor_id).first()  
-            if not doctor:
+            user = User.objects.filter(pk=user_id).first()
+            if not user:
                 return Response({'message': 'Doctor not found'})
             
-            slots = DoctorSchedule.objects.filter(doctor=doctor)    
+            slots = DoctorSchedule.objects.filter(user=user)
             if not slots.exists():
                 return Response({'message': 'slot does not exist', 'data': []}, status=status.HTTP_200_OK)
             
@@ -548,8 +553,8 @@ class BookAppointmentAPIView(APIView):
     
     def post(self, request):
         try:
-            doctor_id = request.data.get("doctor_id")
-            patient_id = request.data.get("patient_id")
+            doctor_user_id = request.data.get("doctor_user_id")
+            patient_user_id = request.data.get("patient_user_id")
             slot = request.data.get("slot")  # format: "10:00 - 10:30"
             appointment_type = request.data.get("appointment_type")
             date = request.data.get("date")  # (DD-MM-YYYY)
@@ -558,11 +563,11 @@ class BookAppointmentAPIView(APIView):
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
             appointment_day = date_obj.strftime("%a")
 
-            doctor = Doctor.objects.filter(pk=doctor_id).first()
+            doctor = User.objects.filter(pk=doctor_user_id).first()
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
             
-            patient = User.objects.filter(pk=patient_id).first()
+            patient = User.objects.filter(pk=patient_user_id).first()
             if not patient:
                 return Response({'error':'Invalid patient ID'}, status=404)
              # doctor_user_obj = User.objects.get(id=doctor.user_id)
@@ -583,15 +588,15 @@ class BookAppointmentAPIView(APIView):
 
             # Ensure slot is not already booked
             is_booked = BookedAppointment.objects.filter(
-                doctor=doctor, slot=slot, date=date_obj
+                doctor=doctor_user_id, slot=slot, date=date_obj
             ).exists()
 
             if is_booked:
                 return Response({"error": "Selected slot is already booked"}, status=400)
 
             appointment = BookedAppointment.objects.create(
-                doctor=doctor,
-                patient=patient_id,
+                doctor=doctor_user_id,
+                patient=patient_user_id,
                 appointment_type=appointment_type,
                 slot=slot,
                 status="Pending",
@@ -665,19 +670,19 @@ class BookAppointmentAPIView(APIView):
         
     def get(self, request):
         try:
-            doctor_id = request.query_params.get('doctor_id')
+            doctor_user_id = request.query_params.get('doctor_user_id')
             date = request.query_params.get('date')
             print('Date',date)
-            if not doctor_id or not date:
+            if not doctor_user_id or not date:
                 return Response({'message':'Doctor id and Date is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
-            doctor = Doctor.objects.filter(pk=doctor_id).first()
+            doctor = User.objects.filter(pk=doctor_user_id).first()
         
             if not doctor:
                 return Response({'message':'doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontments = BookedAppointment.objects.filter(doctor=doctor, date=date_obj)
+            appiontments = BookedAppointment.objects.filter(doctor=doctor_user_id, date=date_obj)
             
             if not appiontments.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
@@ -721,15 +726,15 @@ class DoctorAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
-            doctor_id = request.query_params.get('doctor_id')
-            if not doctor_id:
+            doctor_user_id = request.query_params.get('doctor_user_id')
+            if not doctor_user_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            doctor = Doctor.objects.filter(pk=doctor_id).first()
+            doctor = Doctor.objects.filter(pk=doctor_user_id).first()
             if not doctor:
                 return Response({'message':'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontmtents = BookedAppointment.objects.filter(doctor=doctor)
+            appiontmtents = BookedAppointment.objects.filter(doctor=doctor_user_id)
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_404_NOT_FOUND)
             

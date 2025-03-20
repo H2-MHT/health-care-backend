@@ -62,7 +62,7 @@ class AppointmentManagementSerializer(serializers.ModelSerializer):
 class DoctorScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorSchedule
-        fields = ['doctor', 'schedule']
+        fields = ['user', 'schedule']
         
 
 class ConsultationSettingsSerializer(serializers.ModelSerializer):
