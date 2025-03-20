@@ -898,20 +898,30 @@ class CreateStripeCheckoutSession(APIView):
         """
         try:
             appointment_id = request.data.get("appointment_id")
+            patient_user_id = request.data.get("patient_user_id")
+            doctor_user_id = request.data.get("doctor_user_id")
 
             # Get the appointment object
-            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=request.user)
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=patient_user_id)
 
             if appointment.payment_status == "Paid":
                 return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Ensure doctor is a valid instance of Doctor
-            if isinstance(appointment.doctor, Doctor):
-                doctor = appointment.doctor
-            else:
-                doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
-                if not doctor:
-                    return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
+            # if isinstance(appointment.doctor, Doctor):
+            #     doctor = appointment.doctor
+            # else:
+            #     doctor = Doctor.objects.filter(user__email=appointment.doctor).first()
+            #     if not doctor:
+            #         return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
+            # user = User.objects.filter(pk=doctor_user_id)
+            
+            # doctor = Doctor.objects.filter(user=user).first()
+            
+            doctor = Doctor.objects.filter(user_id=doctor_user_id).first()
+
+            if not doctor:
+                return Response({"error": "Doctor not found"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Fetch the doctor's consultation settings
             consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor).first()
@@ -920,9 +930,9 @@ class CreateStripeCheckoutSession(APIView):
 
             # Determine fee based on appointment type
             if appointment.appointment_type == "urgent":
-                amount = int(consultation_settings.urgent_fee * 100) if consultation_settings.urgent_fee else 0
+                amount = int(consultation_settings.urgent_fees * 100) if consultation_settings.urgent_fees else 0
             else:
-                amount = int(consultation_settings.planned_fee * 100) if consultation_settings.planned_fee else 0
+                amount = int(consultation_settings.planned_fees * 100) if consultation_settings.planned_fees else 0
 
             try:
                 checkout_session = stripe.checkout.Session.create(
