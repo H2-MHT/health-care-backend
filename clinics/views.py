@@ -16,6 +16,7 @@ from sendgrid.helpers.mail import Mail
 from doctors.models import Doctor
 from django.utils import timezone
 from django.utils.timezone import now
+from utils.pagination import pagination_view,create_paginated_response
 
 # Create your views here.
 
@@ -26,8 +27,10 @@ class ClinicAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             clinic = Clinic.objects.all()
-            serializer = ClinicSerializer(clinic, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            paginated_data, headers = pagination_view(clinic, request)
+            serializer = ClinicSerializer(paginated_data, many=True)
+            return create_paginated_response("Clinic list retrieved successfully.",serializer.data,headers)
+        
         except Exception as e:
             return Response(
                 {"error": f"{e}"}, status=status.HTTP_417_EXPECTATION_FAILED

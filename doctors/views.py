@@ -50,8 +50,8 @@ from django.conf import settings
 import sendgrid
 from rest_framework.exceptions import NotFound
 from django.contrib.auth.hashers import make_password
-
 from rest_framework.decorators import api_view
+from utils.pagination import pagination_view, create_paginated_response
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -64,10 +64,10 @@ class DoctorListAPIView(APIView):
         logger.info("User %s is requesting the doctor list.", request.user.email)
         try:
             doctors = User.objects.filter(role="Doctor")
-            serializer = UserSerializer(doctors, many=True)
-            return Response(
-                {"message": "Doctor list retrieved successfully.", "data": serializer.data}
-            )
+            paginated_data, headers = pagination_view(doctors, request)
+            serializer = UserSerializer(paginated_data, many=True)      
+            return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)
+            
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
