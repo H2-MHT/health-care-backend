@@ -8,6 +8,7 @@ from .serializers import EducationSerializer, SkillSerializer, NotesSerializer
 from .models import Education, User, TwoFactorMethod, Skill, Notes
 import json
 from django.http import QueryDict
+from utils.search import search
 logger = logging.getLogger(__name__)
 
 class ViewSkills(APIView):
@@ -346,6 +347,22 @@ class NotesAPIView(APIView):
 
             note.delete()
             return Response({"message": "Note deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+class SearchAPIView(APIView):
+    def get(self, request):
+        try:
+            query = request.query_params.get("q", "").strip()
+            search_role = request.query_params.get("search_role","").strip()
+            if not query or not search_role:
+                return Response({"message":"No data found"},status=status.HTTP_404_NOT_FOUND)
+            user_role = getattr(request.user, "role", None) or request.query_params.get(request.user, "role")   # calling search function from utils
+            results = search(query, user_role, search_role)
+            return Response(results)
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
