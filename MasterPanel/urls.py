@@ -9,23 +9,12 @@ from .views import(
     DoctorBlockUnblockView,
     UserListAPIView,
     DetailOfUser,
-BlockUser,
-DeleteUser
-    # Patient_Record,
-    # Doctor_Record,
-    # StatusUser,
-    # SearchDoctorByName,
-    # PatientSearchView,
-    # DoctorSearchView,
-    # PatientFilterView,
-    # DoctorFilterView,
-    # BlockuserAPI
+    BlockUser,
+    DeleteUser
 )
 
 urlpatterns = [
     # Define your URL patterns here, for example:
-
-
     path("total-count/", TotalPatientAndDoctorsView.as_view(), name="signup"),
     # path("total-patient/", Patient_Record.as_view(), name="taker_get"),
     # path("patient-post/", Patient_Record.as_view(), name="taker_get"),
@@ -62,13 +51,4 @@ urlpatterns = [
     path("user_detail/<int:pk>/",  DetailOfUser.as_view(), name="user_detail"),
     path("user_block/<int:id>/", BlockUser.as_view(), name="user_block"),
     path("user_delete/<int:pk>/", DeleteUser.as_view(), name="user_delete"),
-
-
-
-
-
-
-
-
-
 ]
