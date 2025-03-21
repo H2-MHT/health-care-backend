@@ -26,6 +26,7 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from utils.pagination import pagination_view, create_paginated_response
 
 
 # Create your views here.
@@ -295,9 +296,10 @@ class ListFavouriteDoctors(APIView):
             except AttributeError:
                 return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND) 
 
-            fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False)    
-            serializer = FavouriteDoctorSerializer(fav_doctors, many=True)
-            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+            fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False) 
+            paginated_data, headers = pagination_view(fav_doctors, request)
+            serializer = FavouriteDoctorSerializer(paginated_data, many=True)
+            return create_paginated_response(" Favourite doctors list retrieved successfully.",serializer.data,headers)
         
        except Exception as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
@@ -313,9 +315,10 @@ class ListFavouriteClinics(APIView):
             except AttributeError:
                 return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND)  
 
-            fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)    
-            serializer = FavouriteClinicSerializer(fav_clinics, many=True)
-            return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)
+            fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)   
+            paginated_data, headers = pagination_view(fav_clinics, request)
+            serializer = FavouriteClinicSerializer(paginated_data, many=True)
+            return create_paginated_response("Favourite clinics retrieved successfully.",serializer.data,headers)
         
        except Exception as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
