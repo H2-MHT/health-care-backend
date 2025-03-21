@@ -9,7 +9,7 @@ from doctors.models import Doctor
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
-from .serializers import PatientSerializer, DoctorSerializer
+from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
 from django.db.models import Q
 from users.models import User
 
@@ -197,3 +197,86 @@ class DoctorBlockUnblockView(APIView):
             return Response({"message": f"Doctor {status_message} successfully"}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"message": "Doctor not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class UserListAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def post(self, request):
+        role = request.data.get("role")
+        user = User.objects.filter(role=role, is_deleted=False)
+        serializer = PatientListSerializer(user, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class DetailOfUser(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def post(self, request, pk):
+        role = request.data.get("role")
+        user = get_object_or_404(User, id=pk, role=role, is_deleted=False)
+        serializer = PatientDetailSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class BlockUser(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def put(self, request, id):
+        try:
+            # Ensure the user exists
+            role = request.query_params.get("role")
+            user = get_object_or_404(User, pk=id, role=role)
+
+            is_active = request.data.get("is_active")
+
+            if is_active is None:
+                return Response({"error": "is_active field is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(is_active, bool):
+                return Response({"error": "is_active must be a boolean (true or false)"},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+
+            user.is_active = is_active
+            user.save()
+
+            status_message = "User has been blocked." if not user.is_active else "User is now active."
+            return Response({"message": status_message, "is_active": user.is_active}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class DeleteUser(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def put(self, request, pk):
+        try:
+            # Ensure the user exists and is a Patient
+            role = request.query_params.get("role")
+            user = get_object_or_404(User, pk=pk, role=role)
+
+
+            is_deleted = request.data.get("is_deleted")
+
+            if is_deleted is None:
+                return Response({"error": "is_deleted field is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not isinstance(is_deleted, bool):
+                return Response({"error": "is_deleted must be a boolean (true or false)"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+            user.is_deleted = is_deleted
+            user.save()
+
+            status_message = "Patient has been marked as deleted." if is_deleted else "Patient is now active."
+            return Response({"message": status_message, "is_deleted": user.is_deleted}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
+

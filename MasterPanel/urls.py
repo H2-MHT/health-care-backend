@@ -7,6 +7,10 @@ from .views import(
     PatientBlockUnblockAPIView,
     DoctorManagementView,
     DoctorBlockUnblockView,
+    UserListAPIView,
+    DetailOfUser,
+BlockUser,
+DeleteUser
     # Patient_Record,
     # Doctor_Record,
     # StatusUser,
@@ -52,5 +56,19 @@ urlpatterns = [
     path("doctors/", DoctorManagementView.as_view(), name="manage-doctors"),
     path("doctors/<int:doctor_id>/", DoctorManagementView.as_view(), name="edit-doctor"),
     path("doctors/<int:doctor_id>/block-unblock/", DoctorBlockUnblockView.as_view(), name="block-unblock-doctor"),
+
+
+    path("user_list/",  UserListAPIView.as_view(), name="user_list"),
+    path("user_detail/<int:pk>/",  DetailOfUser.as_view(), name="user_detail"),
+    path("user_block/<int:id>/", BlockUser.as_view(), name="user_block"),
+    path("user_delete/<int:pk>/", DeleteUser.as_view(), name="user_delete"),
+
+
+
+
+
+
+
+
 
 ]
