@@ -167,8 +167,8 @@ stages:
                   build_folders=($(ls -1 $build_dir | grep -E '^[0-9]+$' | sort -n))
                     # Check if there are more than 3 folders
                     if [ ${#build_folders[@]} -gt 3 ]; then
-                      # Get the oldest 3 folders to delete
-                      oldest_folders=("${build_folders[@]:0:3}")
+                      # Get the oldest 2 folders to delete
+                      oldest_folders=("${build_folders[@]:0:2}")
                       # Loop through and delete the oldest 3 folders
                       for folder in "${oldest_folders[@]}"; do
                         echo "Deleting folder: $build_dir/$folder"
