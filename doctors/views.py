@@ -63,7 +63,12 @@ class DoctorListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         logger.info("User %s is requesting the doctor list.", request.user.email)
         try:
-            doctors = User.objects.filter(role="Doctor")
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                doctors = User.objects.filter(first_name__istartswith=search_key) | \
+                          User.objects.filter(last_name__istartswith=search_key)
+            else:
+                doctors = User.objects.filter(role="Doctor")
             paginated_data, headers = pagination_view(doctors, request)
             serializer = UserSerializer(paginated_data, many=True)      
             return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)

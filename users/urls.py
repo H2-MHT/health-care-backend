@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import EducationAPIView, UpdateEducationAPIView, SelectMethodsAPIView, AvailableMethodsAPIView,  ViewSkills, NotesAPIView, SearchAPIView
+from .views import EducationAPIView, UpdateEducationAPIView, SelectMethodsAPIView, AvailableMethodsAPIView,  ViewSkills, NotesAPIView
 
 urlpatterns = [
         path('education/', EducationAPIView.as_view(), name='add-education'),
@@ -13,5 +13,4 @@ urlpatterns = [
         # notes
         path("notes/", NotesAPIView.as_view(), name="notes-list-create"),
         path("notes/<int:pk>/", NotesAPIView.as_view(), name="notes-detail"),
-        path("search/", SearchAPIView.as_view(), name="search-user"),
 ]

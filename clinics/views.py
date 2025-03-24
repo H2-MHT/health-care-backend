@@ -26,7 +26,12 @@ class ClinicAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         try:
-            clinic = Clinic.objects.all()
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                clinic = Clinic.objects.filter(user__first_name__istartswith=search_key) | \
+                         Clinic.objects.filter(user__last_name__istartswith=search_key)
+            else:
+                clinic = Clinic.objects.all()
             paginated_data, headers = pagination_view(clinic, request)
             serializer = ClinicSerializer(paginated_data, many=True)
             return create_paginated_response("Clinic list retrieved successfully.",serializer.data,headers)
