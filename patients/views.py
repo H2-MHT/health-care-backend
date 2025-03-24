@@ -295,8 +295,12 @@ class ListFavouriteDoctors(APIView):
                 patient = user.patient_profile
             except AttributeError:
                 return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND) 
-
-            fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False) 
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                fav_doctors = Favourite.objects.filter(fav_doc__user__first_name__istartswith=search_key,patient=patient, fav_doc__isnull=False) | \
+                          Favourite.objects.filter(fav_doc__user__last_name__istartswith=search_key,patient=patient, fav_doc__isnull=False)
+            else:
+                fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False) 
             paginated_data, headers = pagination_view(fav_doctors, request)
             serializer = FavouriteDoctorSerializer(paginated_data, many=True)
             return create_paginated_response(" Favourite doctors list retrieved successfully.",serializer.data,headers)
@@ -313,9 +317,14 @@ class ListFavouriteClinics(APIView):
             try:
                 patient = user.patient_profile
             except AttributeError:
-                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND)  
-
-            fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)   
+                return Response({"error": "User has no patient."}, status=status.HTTP_404_NOT_FOUND) 
+            
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                fav_clinics = Favourite.objects.filter(fav_clinic__user__first_name__istartswith=search_key, patient=patient, fav_clinic__isnull=False) | \
+                          Favourite.objects.filter(fav_clinic__user__last_name__istartswith=search_key, patient=patient, fav_clinic__isnull=False)
+            else:
+                fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)   
             paginated_data, headers = pagination_view(fav_clinics, request)
             serializer = FavouriteClinicSerializer(paginated_data, many=True)
             return create_paginated_response("Favourite clinics retrieved successfully.",serializer.data,headers)

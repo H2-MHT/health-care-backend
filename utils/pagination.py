@@ -19,13 +19,15 @@ def get_pagination_headers(total_result, per_page, page, paginator):
     if page  > total_pages:
         page = total_pages
         
+    actual_max_returned = min(per_page, total_result - (page - 1) * per_page)
+        
     start_record = ((page - 1) * per_page) + 1
     end_record = min((start_record-1) + per_page, total_result)
     remaining_records = max(total_result - end_record, 0)
         
     return {
         "Total-Records": str(total_result),
-        "Max-Returned": str(per_page),
+        "Max-Returned": str(actual_max_returned),
         "Current-Page": str(page),
         "Total-Pages": str(total_pages),
         "Start-Record": str(start_record),
