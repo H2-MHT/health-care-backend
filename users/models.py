@@ -70,6 +70,7 @@ class User(AbstractUser):
     password = models.CharField(max_length=128, null=False)
     otp_created_at = models.DateTimeField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
 
     # Personal Information
     first_name = models.CharField(max_length=150, null=False, blank=False)
