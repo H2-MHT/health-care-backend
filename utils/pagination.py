@@ -41,4 +41,6 @@ def create_paginated_response(message, data, headers):
     })
     for key, value in headers.items():
         response[key] = value
+        
+    response["Access-Control-Expose-Headers"] = ", ".join(headers.keys())     
     return response
