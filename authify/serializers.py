@@ -81,6 +81,7 @@ class SignInSerializer(serializers.Serializer):
 
         # Retrieve the user by email
         user = User.objects.filter(email=email).first()
+
         if not user:
             raise serializers.ValidationError("Invalid email or password.")
 
@@ -91,6 +92,9 @@ class SignInSerializer(serializers.Serializer):
         # Check the user's role
         if role!= user.role:
             raise serializers.ValidationError(f"Invalid role. User's role is {user.role}")
+        
+        if not user.is_verified:
+            raise serializers.ValidationError("You are not Verified. Request new OTP to verify your account.")
         
         # Reactivate the account if it's inactive
         if not user.is_active:
