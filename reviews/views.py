@@ -150,6 +150,7 @@ class ReviewPIView(APIView):
 
 
 class DoctorReviewsAPIView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = ReviewSerializer
 
     def get_queryset(self, doctor_id):
@@ -164,13 +165,11 @@ class DoctorReviewsAPIView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-            doctor_id = self.kwargs.get('doctor_id')
-            doctor = Doctor.objects.filter(id=doctor_id).first()
 
-            if doctor.user != request.user:
+            if hasattr(request.user, 'Doctor'):
                 return Response({'message': 'only associated doctor can view reviews'})
 
-            # Get the queryset (reviews related to the specified doctor)
+            doctor_id = request.user.doctor.id
             queryset = self.get_queryset(doctor_id)
             total_reviews = queryset.count()
             # Serialize the data
