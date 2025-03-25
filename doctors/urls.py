@@ -18,7 +18,7 @@ from .views import (
     BookAppointmentAPIView,
     PatientAppointmentAPIView,
     DoctorAppointmentAPIView,
-    MyAppointmentsAPIView,
+    # MyAppointmentsAPIView,
     RescheduleAppointmentAPIView,
     CancelAppointmentAPIView,
     AppointmentReminderAPIView,
@@ -59,10 +59,10 @@ urlpatterns = [
     path("patient-booked-appointment/", PatientAppointmentAPIView.as_view(), name="patient-appointment"),
     path("doctor-booked-appointment/", DoctorAppointmentAPIView.as_view(), name="doctor-appointment"),
     # View booked appointments
-    path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
+    # path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
     
-    path("appointment/reschedule/<int:pk>/", RescheduleAppointmentAPIView.as_view(), name="reschedule-appointment"),
-    path("appointment/cancel/<int:pk>/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
+    path("appointment/reschedule/", RescheduleAppointmentAPIView.as_view(), name="reschedule-appointment"),
+    path("appointment/cancel/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
     path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
