@@ -16,13 +16,12 @@ class ReviewPIView(APIView):
     # Create a new review
     def post(self, request, *args, **kwargs):
         # Ensure the user is logged in and is a patient
-        if not hasattr(request.user, 'patient'):
+        if not hasattr(request.user, 'patient_profile'):
             return Response(
                 {"detail": "Only patients can create reviews."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        patient = request.user.patient
+        patient = request.user.patient_profile
         doctor_id = request.data.get('doctor')  # doctor ID is passed in the request data
 
         if not doctor_id:
