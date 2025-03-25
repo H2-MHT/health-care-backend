@@ -17,6 +17,6 @@ urlpatterns = [
     # get a list of all the reviews and their replies
     path('replies/', ReplyAPIView.as_view(), name='view-all-reply-to-review'),
     # get a list of all the reviews related to the specific doctor
-    path('doctor/<int:doctor_id>/', DoctorReviewsAPIView.as_view(), name='doctor-reviews'),
+    path('doctor/', DoctorReviewsAPIView.as_view(), name='doctor-reviews'),
 
 ]
