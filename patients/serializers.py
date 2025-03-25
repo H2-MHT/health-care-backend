@@ -60,7 +60,7 @@ class FavouriteClinicSerializer(serializers.ModelSerializer):
 class FamilyMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = FamilyMember
-        fields = ["id", "member_name", "member_email", "family_status", "is_verified"]
+        fields = ["id", "member_name", "member_email", "family_status", "member_profile", "is_verified"]
 
 class OTPVerificationSerializer(serializers.ModelSerializer):
     class Meta:
