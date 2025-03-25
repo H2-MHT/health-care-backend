@@ -46,5 +46,8 @@ urlpatterns = [
     
     # include the urls from the adminApps app
     path('MasterPanel/', include('MasterPanel.urls')),
+    
+    # include the urls from the notifications app
+    path('notifications/', include('notifications.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

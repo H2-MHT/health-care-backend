@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'dashboard',
     'chat',
     'MasterPanel',              # Admin Api
+    'notifications',
 ]
 
 REST_FRAMEWORK = {
@@ -390,3 +391,9 @@ CSRF_TRUSTED_ORIGINS = [
     'http://h2.doctor',
     'https://h2.doctor',
 ]
+
+# Twillio 
+ACCOUNT_SID = os.getenv("ACCOUNT_SID")
+AUTH_TOKEN = os.getenv("AUTH_TOKEN")
+TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
+

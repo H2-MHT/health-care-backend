@@ -12,6 +12,15 @@ from users.models import User
 from users.serializers import UserSerializer
 from patients.models import Patient
 from django.utils.dateparse import parse_time
+from utils.whatsapp import (
+    send_whatsapp_message_patient,
+    send_whatsapp_message_doctor,
+    appointment_cancel_notification_patient,
+    appointment_cancel_notification_doctor,
+    appointment_reschedule_notification_patient,
+    appointment_reschedule_notification_doctor,
+)
+from utils.notifications import send_notification
 from .models import (
     AppointmentManagement,
     CancellationPolicy,
@@ -29,6 +38,7 @@ from .models import (
     DoctorSchedule,
     PatientBookAppointment,
 )
+from notifications.models import Notification
 from .serializers import (
     AppointmentManagementSerializer,
     CancellationPolicySerializer,
@@ -66,7 +76,7 @@ class DoctorListAPIView(APIView):
             search_key = request.query_params.get("search_key", "").strip()
             if search_key:
                 doctors = User.objects.filter(first_name__istartswith=search_key) | \
-                          User.objects.filter(last_name__istartswith=search_key)
+                        User.objects.filter(last_name__istartswith=search_key)
             else:
                 doctors = User.objects.filter(role="Doctor")
             paginated_data, headers = pagination_view(doctors, request)
@@ -601,8 +611,61 @@ class BookAppointmentAPIView(APIView):
                 status="Pending",
                 date=date_obj,
                 payment_status="Pending", 
-    
             )
+            
+            # WhatsApp Notification Message
+            message = (
+                f"Hello {patient.first_name},\n"
+                f"Your appointment has been successfully booked.\n"
+                f"Date: {date}\n"
+                f"Time: {slot}\n"
+                f"Doctor: {doctor.first_name} {doctor.last_name}\n"
+                f"Location: Online/Clinic\n"
+                f"Thank you for choosing our service!"
+            )
+            
+            
+            doctor = User.objects.get(id=appointment.doctor)  # get doctor as a User object
+            doctor_name = f"{doctor.first_name} {doctor.last_name}"  # access first_name
+            # print(doctor_name, "----------DOCTOR NAME----------")
+
+            patient = User.objects.get(id=appointment.patient)  # get patient as a User object
+            patient_name = f"{patient.first_name} {patient.last_name}"
+            # print(patient_name, "----------PATIENT NAME----------")
+            
+            # Send WhatsApp Notification to patient
+            send_whatsapp_message_patient(
+                to=patient.phone_number,
+                patient_name=patient_name,
+                date=appointment.date.strftime("%Y-%m-%d"),
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment.appointment_type
+            )
+            
+            # Send WhatsApp Notification to doctor
+            send_whatsapp_message_doctor(
+                to=doctor.phone_number,
+                patient_name=patient_name,
+                date=appointment.date.strftime("%Y-%m-%d"),
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment.appointment_type
+            )
+            
+             # Send **In-App Notifications**
+            send_notification(
+                user_id=doctor.id,
+                message=f"You have a new appointment with {patient_name} on {date} at {slot}."
+            )
+
+            send_notification(
+                user_id=patient.id,
+                message=f"Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
+            )
+            # Update appointment status to "Pending"
+            appointment.status = "Pending"
+            appointment.save()
             return Response({
                 "message": "Appointment booked successfully",
                 "data": {
@@ -658,7 +721,7 @@ class BookAppointmentAPIView(APIView):
             doctor_schedule.schedule = existing_schedule
             doctor_schedule.save()  
 
-            return {"success": True, "message": "Appointment booked successfully.", 'appointment':doctor_schedule.appointment}
+            return {"success": True, "message": "Appointment booked successfully.", 'appointment': doctor_schedule.appointment}
 
         except Doctor.DoesNotExist:
             return {"success": False, "message": "Doctor not found."}
@@ -744,80 +807,180 @@ class DoctorAppointmentAPIView(APIView):
             return Response({'error':str(e)},status=status.HTTP_400_BAD_REQUEST)
     
 
-class MyAppointmentsAPIView(APIView):
+# class MyAppointmentsAPIView(APIView):
+#     """
+#     Allows patients to view their booked appointments.
+#     """
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         try:
+#             user = request.user
+#             if user.role != "Patient":
+#                 return Response({"error": "Only patients can view their appointments"}, status=403)
+
+#             appointments = BookedAppointment.objects.filter(patient=user).order_by("slot")
+#             data = [{
+#                 "appointment_id": appt.id,
+#                 "doctor_name": f"{appt.doctor.first_name} {appt.doctor.last_name}",
+#                 "appointment_type": appt.appointment_type,
+#                 "slot": appt.slot,
+#                 "status": appt.status
+#             } for appt in appointments]
+
+#             return Response({"message": "Appointments retrieved successfully", "appointments": data})
+
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=400)
+
+
+# Reschedule Appointment API
+class RescheduleAppointmentAPIView(APIView):
     """
-    Allows patients to view their booked appointments.
+    Allows a patient to reschedule their appointment.
     """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def patch(self, request):
         try:
-            user = request.user
-            if user.role != "Patient":
-                return Response({"error": "Only patients can view their appointments"}, status=403)
+            appointment_id = request.data.get("appointment_id")
+            new_slot = request.data.get("new_slot")
+            new_date = request.data.get("date")  # Ensure date format matches
 
-            appointments = BookedAppointment.objects.filter(patient=user).order_by("slot")
-            data = [{
-                "appointment_id": appt.id,
-                "doctor_name": f"{appt.doctor.first_name} {appt.doctor.last_name}",
-                "appointment_type": appt.appointment_type,
-                "slot": appt.slot,
-                "status": appt.status
-            } for appt in appointments]
+            if not appointment_id or not new_slot or not new_date:
+                return Response({"error": "Missing required fields."}, status=400)
 
-            return Response({"message": "Appointments retrieved successfully", "appointments": data})
+            date_obj = datetime.strptime(new_date, "%d-%m-%Y").date()
+
+            appointment = BookedAppointment.objects.filter(
+                id=appointment_id, patient=request.user.id
+            ).first()
+
+            if not appointment:
+                return Response({"error": "Appointment not found."}, status=404)
+
+            if appointment.status in ["Canceled", "Completed"]:
+                return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=400)
+
+            is_booked = BookedAppointment.objects.filter(
+                doctor=appointment.doctor, slot=new_slot, date=date_obj
+            ).exists()
+
+            if is_booked:
+                return Response({"error": "Selected slot is already booked"}, status=400)
+
+            patient_name = request.user.get_full_name()
+            doctor = User.objects.get(id=appointment.doctor)
+            doctor_name = doctor.get_full_name()
+            old_slot = appointment.slot
+            old_date = appointment.date.strftime("%d-%m-%Y")
+
+            appointment.slot = new_slot
+            appointment.date = date_obj
+            appointment.status = "Rescheduled"
+            appointment.save()
+
+            # Send WhatsApp Notifications
+            appointment_reschedule_notification_patient(
+                to=request.user.phone_number,
+                old_date=old_date,
+                old_slot=old_slot,
+                new_date=new_date,
+                new_slot=new_slot,
+                doctor_name=doctor_name,
+                patient_name=patient_name
+            )
+
+            appointment_reschedule_notification_doctor(
+                to=doctor.phone_number,
+                old_date=old_date,
+                old_slot=old_slot,
+                new_date=new_date,
+                new_slot=new_slot,
+                doctor_name=doctor_name,
+                patient_name=patient_name
+            )
+
+            return Response({
+                "message": "Appointment rescheduled successfully",
+                "data": {
+                    "appointment_id": appointment.id,
+                    "old_date": old_date,
+                    "new_date": new_date,
+                    "old_slot": old_slot,
+                    "new_slot": new_slot,
+                    "status": "Rescheduled"
+                }
+            }, status=200)
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
 
 
-# Reschedule Appointment API
-class RescheduleAppointmentAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, *args, **kwargs):
-        """
-        Allows a patient to reschedule their appointment.
-        """
-        appointment_id = kwargs.get("pk")
-        new_slot = request.data.get("new_slot")
-
-        try:
-            appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
-
-            if appointment.status in ["Canceled"]:
-                return Response({"error": "Cannot reschedule a canceled appointment."}, status=status.HTTP_400_BAD_REQUEST)
-
-            appointment.slot = new_slot
-            appointment.status = "Rescheduled"
-            appointment.save()
-
-            return Response({"message": "Appointment rescheduled successfully"}, status=status.HTTP_200_OK)
-        except BookedAppointment.DoesNotExist:
-            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
-
 # Cancel Appointment API
 class CancelAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, *args, **kwargs):
-        """
-        Allows a patient to cancel their appointment.
-        """
-        appointment_id = kwargs.get("pk")
+    def post(self, request, *args, **kwargs):
+        appointment_id = request.data.get("appointment_id")
+
+        if not appointment_id:
+            return Response({"error": "Appointment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
+            # Retrieve the appointment
+            appointment = BookedAppointment.objects.filter(id=appointment_id).first()
+            if not appointment:
+                return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            if appointment.status == "Canceled":
-                return Response({"error": "Appointment is already canceled."}, status=status.HTTP_400_BAD_REQUEST)
+            # Ensure the appointment is pending before canceling
+            if appointment.status != "Pending":
+                return Response({"error": "Only pending appointments can be canceled."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Extract patient and doctor details
+            patient = appointment.patient
+            doctor = appointment.doctor
+
+            doctor = User.objects.get(id=appointment.doctor)  # Fetch doctor as a User object
+            doctor_name = f"{doctor.first_name} {doctor.last_name}"  # Now you can access first_name
+            # print(doctor_name, "----------DOCTOR NAME----------")
+
+            patient = User.objects.get(id=appointment.patient)  # Fetch patient as a User object
+            patient_name = f"{patient.first_name} {patient.last_name}"
+            # print(patient_name, "----------PATIENT NAME----------")
+            # Format date and slot
+            appointment_date = appointment.date.strftime("%Y-%m-%d")
+            slot = appointment.slot
+
+            # Cancel the appointment
             appointment.status = "Canceled"
             appointment.save()
 
-            return Response({"message": "Appointment canceled successfully"}, status=status.HTTP_200_OK)
-        except BookedAppointment.DoesNotExist:
-            return Response({"error": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+            # Send WhatsApp Notification to Patient
+            appointment_cancel_notification_patient(
+                to=patient.phone_number,
+                date=appointment_date,
+                slot=slot,
+                patient_name=patient_name,
+                doctor_name=doctor_name
+            )
+
+            # Send WhatsApp Notification to Doctor
+            appointment_cancel_notification_doctor(
+                to=doctor.phone_number,
+                date=appointment_date,
+                slot=slot,
+                patient_name=patient_name,
+                doctor_name=doctor_name
+            )
+
+            return Response({
+                "message": "Appointment canceled successfully.",
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # Appointment Reminder API
 class AppointmentReminderAPIView(APIView):
