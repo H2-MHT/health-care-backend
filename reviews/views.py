@@ -8,6 +8,7 @@ from doctors.models import Doctor
 from appointments.models import Appointment
 from rest_framework.generics import get_object_or_404
 from patients.models import Patient
+from utils.pagination import pagination_view, create_paginated_response
 # Create your views here.
 
 class ReviewPIView(APIView):
@@ -67,13 +68,27 @@ class ReviewPIView(APIView):
         if not hasattr(request.user, 'patient_profile'):
             return Response({'message': 'Only patient can view reviews'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            patient = request.user.patient_profile
-            reviews = Review.objects.filter(patient=patient).order_by('-created_at')
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(
-                    {"message": "Review retrieved successfully!", "data": serializer.data},
-                    status=status.HTTP_200_OK
-                )
+            patient = request.user.patient_profile          
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                search_words = search_key.split()
+
+                if len(search_words) == 2:
+                    first_name, last_name = search_words
+                    reviews = Review.objects.filter(
+                        patient=patient,
+                        doctor__user__first_name__istartswith=first_name,
+                        doctor__user__last_name__istartswith=last_name
+                    )
+                else:
+                    reviews = Review.objects.filter(patient=patient, doctor__user__first_name__istartswith=search_key) | \
+                              Review.objects.filter(patient=patient, doctor__user__last_name__istartswith=search_key)
+
+            else:
+                reviews = Review.objects.filter(patient=patient).order_by('-created_at')
+            paginated_data, headers = pagination_view(reviews, request)
+            serializer = ReviewSerializer(paginated_data, many=True)
+            return create_paginated_response("Review retrieved successfully!", serializer.data, headers)
         except Exception as e:
             return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
