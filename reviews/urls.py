@@ -9,7 +9,7 @@ urlpatterns = [
     # create review
     path('review/', ReviewPIView.as_view(), name='review'),
     # update review
-    path('review/<int:review_id>', ReviewPIView.as_view(), name='review'),
+    path('review/', ReviewPIView.as_view(), name='review-update-delete'),
     # reply to the specific review
     path('replies/<int:review_id>/', ReplyAPIView.as_view(), name='reply-to-review'),
     # delete reply

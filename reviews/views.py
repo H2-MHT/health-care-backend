@@ -77,7 +77,12 @@ class ReviewPIView(APIView):
         except Exception as e:
             return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, review_id):
+    def patch(self, request):
+        review_id = request.query_params.get("review_id")
+
+        if not review_id:
+            return Response({'message': 'Review ID is required in query parameters'}, status=status.HTTP_400_BAD_REQUEST)
+        
         if request.user.role != 'Patient':
             return Response({'message': 'only patients can update the review'}, status=status.HTTP_403_FORBIDDEN)
 
@@ -86,7 +91,7 @@ class ReviewPIView(APIView):
         except Review.DoesNotExist:
             return Response({'message': 'Review does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
-        patient = request.user.patient
+        patient = request.user.patient_profile
         if review.patient != patient:
             return Response({'message': 'review does not belong to the requested user'},
                             status=status.HTTP_403_FORBIDDEN)
@@ -99,16 +104,20 @@ class ReviewPIView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, review_id):
+    def delete(self, request):
         if request.user.role != 'Patient':
             return Response({'message': 'only patients can update the review'}, status=status.HTTP_403_FORBIDDEN)
+        
+        review_id = request.data.get("review_id")
+        if not review_id:
+            return Response({'message': 'Review ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             review = Review.objects.get(id=review_id)
         except Review.DoesNotExist:
             return Response({'message': 'Review does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
-        patient = request.user.patient
+        patient = request.user.patient_profile
         if review.patient != patient:
             return Response({'message': 'review does not belong to the requested user'}, status=status.HTTP_403_FORBIDDEN)
 
