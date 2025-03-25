@@ -63,52 +63,19 @@ class ReviewPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request):
-        review_id = request.query_params.get('review_id')
-        doctor_id = request.query_params.get('doctor_id')
-
-        # If a specific review ID is provided, return that review
-        if review_id:
-            try:
-                review = Review.objects.get(id=review_id)
-                return Response(
-                    {"message": "Review retrieved successfully!", "data": ReviewSerializer(review).data},
+       
+        if not hasattr(request.user, 'patient_profile'):
+            return Response({'message': 'Only patient can view reviews'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            patient = request.user.patient_profile
+            reviews = Review.objects.filter(patient=patient).order_by('-created_at')
+            serializer = ReviewSerializer(reviews, many=True)
+            return Response(
+                    {"message": "Review retrieved successfully!", "data": serializer.data},
                     status=status.HTTP_200_OK
                 )
-            except Review.DoesNotExist:
-                return Response({"detail": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        # If a doctor ID is provided, return all reviews for that doctor
-        if doctor_id:
-            reviews = Review.objects.filter(doctor__id=doctor_id)
-            if not reviews:
-                return Response({'message':' Does not have any review'}, status=status.HTTP_404_NOT_FOUND)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(
-                {"message": "Review retrieved successfully!", "data": serializer.data},
-                status=status.HTTP_200_OK
-            )
-
-        # If the user is a patient, return all reviews they have written for different doctors
-        if hasattr(request.user, 'patient'):
-            patient = request.user.patient
-            reviews = Review.objects.filter(patient=patient)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(
-                {"message": "Review retrieved successfully!", "data": serializer.data},
-                status=status.HTTP_200_OK
-            )
-
-        # If the user is a doctor, return all reviews they have received from different patients
-        if hasattr(request.user, 'doctor'):
-            doctor = request.user.doctor
-            reviews = Review.objects.filter(doctor=doctor)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response(
-                {"message": "Review retrieved successfully!", "data": serializer.data},
-                status=status.HTTP_200_OK
-            )
-
-        return Response({"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, review_id):
         if request.user.role != 'Patient':
