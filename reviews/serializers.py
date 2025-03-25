@@ -24,10 +24,10 @@ class ReviewSerializer(serializers.ModelSerializer):
         user = request.user
 
         # Ensure the user is a patient
-        if not hasattr(user, 'patient'):
+        if not hasattr(user, 'patient_profile'):
             raise serializers.ValidationError("Only patients can create reviews.")
 
-        patient = user.patient
+        patient = user.patient_profile
         doctor = data.get('doctor')
 
         # Ensure the doctor is assigned to the patient via an active appointment
