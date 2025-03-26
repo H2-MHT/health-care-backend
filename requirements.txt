@@ -85,3 +85,4 @@ zope.interface==7.2
 zopfli==0.2.3.post1
 django-storages[azure]
 channels==4.0.0
+firebase-admin==6.7.0
