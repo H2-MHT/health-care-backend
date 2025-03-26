@@ -734,7 +734,6 @@ class BookAppointmentAPIView(APIView):
         try:
             doctor_user_id = request.query_params.get('doctor_user_id')
             date = request.query_params.get('date')
-            print('Date',date)
             if not doctor_user_id or not date:
                 return Response({'message':'Doctor id and Date is required'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -766,15 +765,19 @@ class PatientAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
-            patient_id = request.query_params.get('patient_id')
-            if not patient_id:
+            patient_user_id = request.query_params.get('patient_user_id')
+            
+            if not patient_user_id:
                 return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            patient = User.objects.filter(pk=patient_id).first()
+            if int(patient_user_id) != request.user.id:
+                return Response({'message':'You are not authorized to access this resource'}, status=status.HTTP_403_FORBIDDEN)
+            
+            patient = User.objects.filter(pk=patient_user_id).first()
             if not patient:
                 return Response({'message':'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontmtents = BookedAppointment.objects.filter(patient=patient_id)
+            appiontmtents = BookedAppointment.objects.filter(patient=patient_user_id)
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
@@ -789,16 +792,20 @@ class DoctorAppointmentAPIView(APIView):
     def get(self, request):
         try:
             doctor_user_id = request.query_params.get('doctor_user_id')
+            
             if not doctor_user_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            doctor = Doctor.objects.filter(pk=doctor_user_id).first()
+            if int(doctor_user_id) != request.user.id:
+                return Response({'message':'You are not authorized to access this data'}, status=status.HTTP_403_FORBIDDEN)         
+            
+            doctor = User.objects.filter(pk=doctor_user_id).first()
             if not doctor:
                 return Response({'message':'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
             appiontmtents = BookedAppointment.objects.filter(doctor=doctor_user_id)
             if not appiontmtents.exists():
-                return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
             serializer = BookedAppointmentSerializer(appiontmtents, many=True)
             return Response({'message':'Retrieved successfully','data':serializer.data}, status=status.HTTP_200_OK)

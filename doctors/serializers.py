@@ -96,7 +96,27 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
 class BookedAppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookedAppointment
-        fields = '__all__'
+        fields = ['id', 'appointment_type', 'status', 'date', 'slot', 'created_at']
+        
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        patient_user = User.objects.filter(id=instance.patient).first()
+        data["patient"] = {
+            "id": instance.patient,
+            "name": patient_user.get_full_name() if patient_user else "Unknown",
+            "profile_picture": patient_user.profile_picture.url if patient_user and patient_user.profile_picture else None
+        }
+
+        doctor_user = User.objects.filter(id=instance.doctor).first()
+        data["doctor"] = {
+            "id": instance.doctor,
+            "name": doctor_user.get_full_name() if doctor_user else "Unknown",
+            "profile_picture": doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
+        }
+
+        return data
+        
 
 
 class PaymentSummarySerializer(serializers.ModelSerializer):
