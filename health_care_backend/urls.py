@@ -49,5 +49,8 @@ urlpatterns = [
     
     # include the urls from the notifications app
     path('notifications/', include('notifications.urls')),
+    
+    # include the urls from the video_call apps
+    path('video-call/', include('video_call.urls'))
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

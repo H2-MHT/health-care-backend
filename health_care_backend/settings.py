@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'chat',
     'MasterPanel',              # Admin Api
     'notifications',
+    'video_call'
 ]
 
 REST_FRAMEWORK = {
