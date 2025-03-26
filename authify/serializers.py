@@ -93,9 +93,9 @@ class SignInSerializer(serializers.Serializer):
         if role!= user.role:
             raise serializers.ValidationError(f"Invalid role. User's role is {user.role}")
         
-        if not user.is_verified:
-            raise serializers.ValidationError("You are not Verified. Request new OTP to verify your account.")
-        
+        if user.role in ["Patient", "Doctor"] and not user.is_verified:
+            raise serializers.ValidationError("You are not verified. Request new OTP to verify your account.")
+
         # Reactivate the account if it's inactive
         if not user.is_active:
             user.is_active = True
