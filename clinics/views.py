@@ -561,14 +561,27 @@ class ClinicDoctorsAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             user = request.user
-            # Get all doctors of the clinic
-            all_doctors = User.objects.filter(role="Doctor", work_place__user=user)
-            serializer = ClinicDoctorSerializer(all_doctors, many=True)
-
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK,
-            )
+            # Get all doctors of the clinic    
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                search_words = search_key.split()
+                
+                if len(search_words) == 2:
+                    first_name, last_name = search_words
+                    all_doctors = User.objects.filter(
+                       role="Doctor", 
+                       work_place__user=user,
+                       first_name__istartswith=first_name,
+                       last_name__istartswith=last_name
+                    )
+                else:
+                    all_doctors = User.objects.filter(role="Doctor", work_place__user=user, first_name__istartswith=search_key) | \
+                            User.objects.filter(role="Doctor", work_place__user=user, last_name__istartswith=search_key)
+            else:
+                all_doctors = User.objects.filter(role="Doctor", work_place__user=user)
+            paginated_data, headers = pagination_view(all_doctors, request)
+            serializer = ClinicDoctorSerializer(paginated_data, many=True)
+            return create_paginated_response("Retrieved successfully.",serializer.data,headers)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
