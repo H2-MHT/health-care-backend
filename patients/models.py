@@ -74,9 +74,8 @@ class FamilyMember(models.Model):
     family_status = models.CharField(max_length=100)
     member_profile = models.FileField(upload_to="family_profiles/", null=True, blank=True)
     is_verified = models.BooleanField(default=False)
-
     def __str__(self):
-        return f"{self.patient.name} added {self.family_member.name} as {self.family_status} ({'Verified' if self.is_verified else 'Pending'})"
+        return f"Family Member - {self.patient.user.get_full_name()}"
 
 class OTPVerification(models.Model):
     family_member = models.OneToOneField(FamilyMember, on_delete=models.CASCADE, related_name="otp_verification")
@@ -87,6 +86,3 @@ class OTPVerification(models.Model):
     def generate_otp():
         """Generate a 6-digit random OTP."""
         return ''.join(random.choices(string.digits, k=6))
-
-    def __str__(self):
-        return f"OTP for {self.family_member.family_member.email} - {self.otp}"

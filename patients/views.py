@@ -456,3 +456,75 @@ class VerifyFamilyMemberOTPAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
+
+class UpdateFamilyMemberView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        # Extract family_member_id from query parameters
+        member_id = request.query_params.get("family_member_id")
+
+        if not member_id:
+            return Response({"error": "Family member ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get the authenticated user's patient profile
+        patient = get_object_or_404(Patient, user=request.user)
+
+        # Ensure the family member belongs to the current user
+        family_member = get_object_or_404(FamilyMember, id=member_id, patient=patient)
+
+        # Get updated data from request
+        member_name = request.data.get("member_name", family_member.member_name)
+        family_status = request.data.get("family_status", family_member.family_status)
+        member_profile = request.FILES.get("member_profile")
+
+        # Update the fields
+        family_member.member_name = member_name
+        family_member.family_status = family_status
+
+        if member_profile:
+            family_member.member_profile = member_profile  # Update profile picture
+
+        family_member.save()
+
+        # Prepare response
+        updated_data = {
+            "id": family_member.id,
+            "member_name": family_member.member_name,
+            "family_status": family_member.family_status,
+            "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
+            "is_verified": family_member.is_verified
+        }
+
+        return Response(
+            {"message": "Family member updated successfully.", "family_member": updated_data},
+            status=status.HTTP_200_OK
+        )
+
+    
+    
+class GetFamilyMembersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Get the authenticated user's patient profile
+        patient = get_object_or_404(Patient, user=request.user)
+
+        # Fetch only the family members of the current user
+        family_members = FamilyMember.objects.filter(patient=patient, is_verified=True)
+
+        # Serialize the data
+        family_members_data = [
+            {
+                "id": member.id,
+                "member_name": member.member_name,
+                "family_status": member.family_status,
+                "member_profile": request.build_absolute_uri(member.member_profile.url) if member.member_profile else None,
+                "is_verified": member.is_verified
+            }
+            for member in family_members
+        ]
+
+        return Response({"family_members": family_members_data}, status=status.HTTP_200_OK)
+
+    

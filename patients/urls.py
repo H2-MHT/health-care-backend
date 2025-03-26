@@ -6,9 +6,13 @@ from .views import(
     MedicalDocumentUploadView,
     AddFamilyMemberView,
     VerifyFamilyMemberOTPAPIView,
+    UpdateFamilyMemberView,
     ListFavouriteDoctors,
-    ListFavouriteClinics
+    ListFavouriteClinics,
+    GetFamilyMembersView
 )
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('', PatientListView.as_view()),
@@ -20,5 +24,6 @@ urlpatterns = [
     
     path("add-family-member/", AddFamilyMemberView.as_view(), name="add-family-member"),
     path("verify-family-member/", VerifyFamilyMemberOTPAPIView.as_view(), name="verify-family-member"),
-
-]
+    path('update-family-member/', UpdateFamilyMemberView.as_view(), name='update-family-member'),
+    path('get-family-members/', GetFamilyMembersView.as_view(), name='get-family-members'),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
