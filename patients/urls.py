@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import(
+from .views import (
     PatientListView,
     AddToFavouriteView,
     MedicalDocumentUploadView,
@@ -9,7 +9,7 @@ from .views import(
     UpdateFamilyMemberView,
     ListFavouriteDoctors,
     ListFavouriteClinics,
-    GetFamilyMembersView
+    GetFamilyMembersView, AllergyDocumentUploadView
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -20,7 +20,7 @@ urlpatterns = [
     path('fav-doctor/', ListFavouriteDoctors.as_view(), name='fav_doc'),
     path('fav-clinic/', ListFavouriteClinics.as_view(), name='fav_clinic'),
     path("upload/medical-document/", MedicalDocumentUploadView.as_view(), name="upload-medical-document"),
-    path("upload/allergy-document/", MedicalDocumentUploadView.as_view(), name="upload-allergy-document"),
+    path("upload/allergy-document/",AllergyDocumentUploadView.as_view(), name="upload-allergy-document"),
     
     path("add-family-member/", AddFamilyMemberView.as_view(), name="add-family-member"),
     path("verify-family-member/", VerifyFamilyMemberOTPAPIView.as_view(), name="verify-family-member"),

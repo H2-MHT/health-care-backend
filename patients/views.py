@@ -1,6 +1,10 @@
 import logging
+
+from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from tinycss2 import serialize
+
 from .serializers import(
     PatientUserSerializer,
     MedicalDocumentSerializer,
@@ -176,10 +180,19 @@ class MedicalDocumentUploadView(APIView):
         serializer = MedicalDocumentSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(patient=patient)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def get(self, request):
+        try:
+            medical_documents = MedicalHistory.objects.all()  # ✅ Get all medical docs
+            serializer = MedicalDocumentSerializer(medical_documents, many=True)  # ✅ Correct serializer usage
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except:
+            return Response({"error":"the record does not exists"},status=status.HTTP_404_NOT_FOUND)
 
 class AllergyDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -199,6 +212,25 @@ class AllergyDocumentUploadView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def get(self,request):
+        try:
+            allergy_documents=AllergyDocument.objects.all()
+            serializer=AllergyDocumentSerializer(allergy_documents,many=True)
+            return Response(serializer.data)
+        except:
+            return Response({"error":"no record exists"},status=status.HTTP_404_NOT_FOUND)
+
+
+
+
+
+
+
+
+
+
             
 
 class AddToFavouriteView(APIView):
@@ -331,7 +363,7 @@ class ListFavouriteClinics(APIView):
         
        except Exception as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
-    
+
 class AddFamilyMemberView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -341,10 +373,11 @@ class AddFamilyMemberView(APIView):
         member_name = request.data.get("member_name")
         family_status = request.data.get("family_status")
         member_profile = request.FILES.get("member_profile")
+        member_email=request.data.get("member_email")
 
         if not (member_name and family_status):
             return Response(
-                {"error": "Member name and family status are required."}, 
+                {"error": "Member name and family status are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -353,7 +386,8 @@ class AddFamilyMemberView(APIView):
             patient=patient,
             member_name=member_name,
             family_status=family_status,
-            member_profile=member_profile
+            member_profile=member_profile,
+            member_email=member_email
         )
 
         # Delete any old OTPs for this family member
@@ -374,6 +408,7 @@ class AddFamilyMemberView(APIView):
                 "message": "Family member added. OTP sent to patient email for verification.",
                 "family_member": {
                     "id": family_member.id,
+                    "member_email":family_member.member_email,
                     "member_name": family_member.member_name,
                     "family_status": family_member.family_status,
                     "member_profile": request.build_absolute_uri(family_member.member_profile.url) if family_member.member_profile else None,
@@ -527,4 +562,6 @@ class GetFamilyMembersView(APIView):
 
         return Response({"family_members": family_members_data}, status=status.HTTP_200_OK)
 
-    
+
+
+
