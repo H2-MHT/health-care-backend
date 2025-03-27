@@ -70,7 +70,7 @@ class Favourite(models.Model):
 class FamilyMember(models.Model):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="family_members")
     member_name = models.CharField(max_length=100)
-    member_email = models.EmailField()
+    member_email = models.EmailField(max_length=100, null=True,blank=True)
     family_status = models.CharField(max_length=100)
     member_profile = models.FileField(upload_to="family_profiles/", null=True, blank=True)
     is_verified = models.BooleanField(default=False)
