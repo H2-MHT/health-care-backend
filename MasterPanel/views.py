@@ -10,8 +10,11 @@ from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
 from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
+from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from django.db.models import Q
 from users.models import User
+from payments.models import Transaction, AccountDetail
+from rest_framework import status
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -274,9 +277,64 @@ class DeleteUser(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class DoctorWithdrawAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        try:
+            if request.user.role == 'SuperAdmin':
+                transaction = Transaction.objects.all()
+                transaction_serializer = TransactionSerializer(transaction, many=True)
+                return Response(
+                    {
+                        "message": "Account details fetched successfully.",
+                        # "accounts": account_serializer.data,
+                        "transactions": transaction_serializer.data
+                    },status=status.HTTP_200_OK
+                )
+            else:
+                return Response({"error": "You are not authorized to access this data"}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
+    def put (self, request, *args, **kwargs):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "Only SuperAdmin can approve or reject requests."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            transaction_id = request.data.get("transaction_id")
+            new_status = request.data.get("status", "").strip()
+            rejection_reason = request.data.get("rejection_reason", "").strip()
 
+            if not transaction_id:
+                return Response({"error": "Transaction ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
 
+            if new_status not in ["Success", "Failed"]:
+                return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            transaction = Transaction.objects.filter(id=transaction_id).first()
+         
+            if not transaction:
+                return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if new_status == "Failed" and not rejection_reason:
+                return Response({"error": "Rejection reason is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if new_status == "Failed":
+                transaction.rejection_reason = rejection_reason
+            else:
+                transaction.rejection_reason = ""
 
+            transaction.status = new_status
+            transaction.save()
 
-
+            return Response(
+            {
+                "message": f"Transaction {new_status} successfully.",
+                "transaction_id": transaction.id,
+                "new_status": transaction.status,
+                "rejection_reason": transaction.rejection_reason
+            },status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

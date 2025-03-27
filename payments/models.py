@@ -14,8 +14,8 @@ class Payment(models.Model):
     method = models.CharField(max_length=50)
     status = models.CharField(
         max_length=20,
-        choices=[("0", "Pending"), ("1", "Success"), ("2", "Failed")],
-        default="0"
+        choices=[("Pending", "Pending"), ("Success", "Success"), ("Failed", "Failed")],
+        default="Pending"
     )
     payment_notes = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -28,7 +28,8 @@ class AccountDetail(models.Model):
     confirm_account_number = models.CharField(max_length=30)
     full_name = models.CharField(max_length=100)
     ifsc_code = models.CharField(max_length=20)
-    status = models.CharField(max_length=20, choices=[("0", "Pending"), ("1", "Success"), ("2", "Failed")], default="0", null=True)
+    status = models.CharField(max_length=20, choices=[("Pending", "Pending"), ("Success", "Success"), ("Failed", "Failed")], default="Pending", null=True)
+
 
     def __str__(self):
         return self.account_number + self.full_name
@@ -41,9 +42,10 @@ class AccountDetail(models.Model):
 class Transaction(models.Model):
     account = models.ForeignKey(AccountDetail, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    transaction_type = models.CharField(max_length=50, choices=[("0", "Deposit"), ("1", "Withdrawal")])
-    status = models.CharField(max_length=20, choices=[("0", "Pending"), ("1", "Success"), ("2", "Failed")], default="0", null=True)
+    transaction_type = models.CharField(max_length=50, choices=[("Deposit", "Deposit"), ("Withdrawal", "Withdrawal")])
+    status = models.CharField(max_length=20, choices=[("Pending", "Pending"), ("Success", "Success"), ("Failed", "Failed")], default="Pending", null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    rejection_reason = models.TextField(null=True, blank=True)
     
     
     class Meta:

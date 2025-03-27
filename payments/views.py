@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 import stripe
 from django.conf import settings
-from .models import Payment
+from .models import Payment, User
 from appointments.models import Appointment
 from rest_framework.permissions import IsAuthenticated
 from doctors.models import Doctor
@@ -183,7 +183,7 @@ class AddAccountDetailAPIView(APIView):
                 # Create a transaction record for the existing account
                 transaction=Transaction.objects.create(
                     account=account,
-                    transaction_type="1",
+                    transaction_type="Withdrawal",
                     amount=request.data.get('amount'),
                 )
                 transaction_serializer = TransactionSerializer(transaction)
@@ -202,7 +202,7 @@ class AddAccountDetailAPIView(APIView):
                 # Optionally create a transaction for the new account
                 Transaction.objects.create(
                     account=account,
-                    transaction_type="1",
+                    transaction_type="Withdrawal",
                     amount=request.data.get('amount'),
                 )
                 return Response(
@@ -225,27 +225,30 @@ class AddAccountDetailAPIView(APIView):
         Fetch all account details for the current logged-in doctor.
         """
         try:
-            # Check if the user is a doctor
-            if not hasattr(request.user, 'doctor'):
-                return Response(
-                    {"error": "Only doctors can view their account details."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            if request.user.role in ['Doctor', 'SuperAdmin']:
+                user_id = request.query_params.get("user_id")
 
-            # Fetch all account details for the logged-in doctor
-            accounts = AccountDetail.objects.filter(user=request.user)
-            serializer = AccountDetailSerializer(accounts, many=True)
-            return Response(
-                {
-                    "message": "Account details fetched successfully.",
-                    "data": serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
+                if not user_id:
+                    return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                user = User.objects.filter(pk=user_id).first()
+                if not user:
+                    return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                if request.user.role == 'Doctor' and request.user.id != user.id:
+                    return Response({"error": "only associated doctor to access this data"}, status=status.HTTP_403_FORBIDDEN)
+
+                transaction = Transaction.objects.filter(account__user=user)
+                transaction_serializer = TransactionSerializer(transaction, many=True)
+                return Response(
+                    {
+                        "message": "Doctor Account details fetched successfully.",
+                        # "accounts": account_serializer.data,
+                        "transactions": transaction_serializer.data
+                    },status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-            
-            
