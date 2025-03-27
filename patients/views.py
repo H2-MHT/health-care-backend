@@ -187,8 +187,8 @@ class MedicalDocumentUploadView(APIView):
 
     def get(self, request):
         try:
-            medical_documents = MedicalHistory.objects.all()  # ✅ Get all medical docs
-            serializer = MedicalDocumentSerializer(medical_documents, many=True)  # ✅ Correct serializer usage
+            medical_documents = MedicalHistory.objects.all()
+            serializer = MedicalDocumentSerializer(medical_documents, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except:
@@ -205,7 +205,6 @@ class AllergyDocumentUploadView(APIView):
         except Patient.DoesNotExist:
             return Response({"error": "Patient profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Serialize the data
         serializer = AllergyDocumentSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(patient=patient)
@@ -222,16 +221,6 @@ class AllergyDocumentUploadView(APIView):
         except:
             return Response({"error":"no record exists"},status=status.HTTP_404_NOT_FOUND)
 
-
-
-
-
-
-
-
-
-
-            
 
 class AddToFavouriteView(APIView):
     permission_classes = [IsAuthenticated]
@@ -394,7 +383,7 @@ class AddFamilyMemberView(APIView):
         OTPVerification.objects.filter(family_member=family_member).delete()
 
         # Generate a new OTP
-        otp_code = ''.join(random.choices(string.digits, k=6))  # 6-digit OTP
+        otp_code = ''.join(random.choices(string.digits, k=6))
         print(f"Generated OTP: {otp_code}")
 
         # Save OTP in the database
@@ -518,7 +507,7 @@ class UpdateFamilyMemberView(APIView):
         family_member.family_status = family_status
 
         if member_profile:
-            family_member.member_profile = member_profile  # Update profile picture
+            family_member.member_profile = member_profile
 
         family_member.save()
 
