@@ -766,8 +766,8 @@ class BookAppointmentAPIView(APIView):
             if request.user.role != 'Doctor':
                 return Response({'message':'Only Doctor can update the appointment'}, status=status.HTTP_403_FORBIDDEN)
             
-            appointment_id = request.query_params.get('appointment_id')
-            appointement_status = request.query_params.get('status')
+            appointment_id = request.data.get('appointment_id')
+            appointement_status = request.data.get('status')
 
             if not appointment_id or not appointement_status:
                 return Response({'message':'Appointment id and status are required'}, status=status.HTTP_400_BAD_REQUEST)
