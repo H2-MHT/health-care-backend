@@ -773,7 +773,7 @@ class BookAppointmentAPIView(APIView):
                 return Response({'message':'Appointment id and status are required'}, status=status.HTTP_400_BAD_REQUEST)
             
             appointement_status = appointement_status.capitalize()
-            if appointement_status not in ['Confirmed', 'Canceled']:
+            if appointement_status not in ['Confirmed', 'Cancelled']:
                 return Response({'message':'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
             
             try:
@@ -898,7 +898,7 @@ class RescheduleAppointmentAPIView(APIView):
             if not appointment:
                 return Response({"error": "Appointment not found."}, status=404)
 
-            if appointment.status in ["Canceled", "Completed"]:
+            if appointment.status in ["Cancelled", "Completed"]:
                 return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=400)
 
             is_booked = BookedAppointment.objects.filter(
@@ -974,7 +974,7 @@ class CancelAppointmentAPIView(APIView):
 
             # Ensure the appointment is pending before canceling
             if appointment.status != "Pending":
-                return Response({"error": "Only pending appointments can be canceled."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Only pending appointments can be cancelled."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Extract patient and doctor details
             patient = appointment.patient
@@ -992,7 +992,7 @@ class CancelAppointmentAPIView(APIView):
             slot = appointment.slot
 
             # Cancel the appointment
-            appointment.status = "Canceled"
+            appointment.status = "Cancelled"
             appointment.save()
 
             # Send WhatsApp Notification to Patient
@@ -1014,7 +1014,7 @@ class CancelAppointmentAPIView(APIView):
             )
 
             return Response({
-                "message": "Appointment canceled successfully.",
+                "message": "Appointment cancelled successfully.",
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1032,7 +1032,7 @@ class AppointmentReminderAPIView(APIView):
         today = datetime.now()
         reminder_time = today + timedelta(days=1)
 
-        reminders = BookedAppointment.objects.filter(patient=request.user, created_at__lte=reminder_time).exclude(status="Canceled")
+        reminders = BookedAppointment.objects.filter(patient=request.user, created_at__lte=reminder_time).exclude(status="Cancelled")
         serializer = BookedAppointmentSerializer(reminders, many=True)
 
         return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
@@ -1080,7 +1080,7 @@ class PaymentConfirmationAPIView(APIView):
         try:
             appointment = BookedAppointment.objects.get(id=appointment_id, patient=request.user)
 
-            if payment_status not in ["Pending", "Paid"]:
+            if payment_status not in ["Pending", "Completed"]:
                 return Response({"error": "Invalid payment status"}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment.payment_status = payment_status
@@ -1106,7 +1106,7 @@ class CreateStripeCheckoutSession(APIView):
             # Get the appointment object
             appointment = get_object_or_404(BookedAppointment, id=appointment_id, patient=patient_user_id)
 
-            if appointment.payment_status == "Paid":
+            if appointment.payment_status == "Completed":
                 return Response({"error": "Appointment is already paid"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Ensure doctor is a valid instance of Doctor
@@ -1189,9 +1189,9 @@ class UpdatePaymentStatus(APIView):
         appointment = get_object_or_404(BookedAppointment, stripe_session_id=session_id)
 
         if status_param == "success":
-            appointment.payment_status = "Paid"
-        elif status_param == "canceled":
-            appointment.payment_status = "Canceled"
+            appointment.payment_status = "Completed"
+        elif status_param == "cancelled":
+            appointment.payment_status = "Cancelled"
         else:
             appointment.payment_status = "Failed"
 
@@ -1217,7 +1217,7 @@ class PaymentSuccessView(APIView):
 
             # Update payment status
             appointment = BookedAppointment.objects.get(id=appointment_id)
-            appointment.payment_status = "Paid"
+            appointment.payment_status = "Completed"
             appointment.save()
 
             return Response("Payment was successful!", status=200)
