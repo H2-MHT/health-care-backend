@@ -9,7 +9,8 @@ from .views import (
     UpdateFamilyMemberView,
     ListFavouriteDoctors,
     ListFavouriteClinics,
-    GetFamilyMembersView, AllergyDocumentUploadView
+    GetFamilyMembersView,
+    AllergyDocumentUploadView,
 )
 from django.conf import settings
 from django.conf.urls.static import static
