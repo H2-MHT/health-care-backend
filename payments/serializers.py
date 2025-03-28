@@ -29,7 +29,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
         ordered_data = OrderedDict([
             ('account', data['account']),
-            ('id', data['id']),  # id ko account ke baad rakha
+            ('id', data['id']),
             ('Doctor_name', doctor_name),
             ('transaction_type', transaction_type),
         ])
