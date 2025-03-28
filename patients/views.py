@@ -11,12 +11,10 @@ from .serializers import(
     AllergyDocumentSerializer,
     FavouriteSerializer,
     FavouriteDoctorSerializer,
-    FavouriteClinicSerializer
+    FavouriteClinicSerializer,
+    ReminderSerializer,
 )
-from sendgrid import SendGridAPIClient
-
-from sendgrid.helpers.mail import Mail
-
+from doctors.models import BookedAppointment
 from rest_framework.permissions import IsAuthenticated
 from appointments.models import Appointment
 from rest_framework import status
@@ -31,6 +29,11 @@ from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from utils.pagination import pagination_view, create_paginated_response
+from .tasks import(
+    send_email_reminder,
+    send_whatsapp_reminder,
+)
+from datetime import timedelta, datetime
 
 
 # Create your views here.
@@ -552,5 +555,88 @@ class GetFamilyMembersView(APIView):
         return Response({"family_members": family_members_data}, status=status.HTTP_200_OK)
 
 
+class AppointmentDetailAPIView(APIView):
+    """API to fetch appointment details with doctor info, restricted to the patient."""
+    permission_classes = [IsAuthenticated]
+    def get(self, request, appointment_id):
+        """Retrieve appointment details if the user is the patient."""
+        appointment = get_object_or_404(BookedAppointment, id=appointment_id)
 
+        # Check if the logged-in user is the patient
+        if appointment.patient != request.user.id:  
+            return Response({"error": "You can only access your own appointments."}, status=status.HTTP_403_FORBIDDEN)
 
+        # Fetch doctor details
+        doctor = get_object_or_404(User, id=appointment.doctor)
+        doctor_specialty = get_object_or_404(Doctor, user=doctor)
+        
+        data = {
+            "doctor_name": doctor.get_full_name(),
+            "doctor_specialty": doctor_specialty.specialty,  # Adjust based on your model
+            "experience": f"{doctor_specialty.experience_years} years practice",
+            # "location": f"{doctor_specialty.city}, {doctor_specialty.country}",  # Adjust
+            "appointment_time": appointment.slot,  # Assuming slot stores time
+            "appointment_date": appointment.date.strftime("%d/%m/%Y"),
+            # "doctor_image": request.build_absolute_uri(doctor_specialty.profile_picture.url) if doctor_specialty.profile_picture else None,
+        }
+        return Response(data, status=status.HTTP_200_OK)
+    
+    
+class AppointmentReminderAPIView(APIView):
+    """API to set reminders for a specific appointment."""
+    
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Set a reminder for a specific appointment."""
+        appointment_id = request.data.get("appointment_id")
+
+        if not appointment_id:
+            return Response({"error": "Appointment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        appointment = get_object_or_404(BookedAppointment, id=appointment_id)
+        # Ensure the appointment belongs to the logged-in user
+        if appointment.patient != request.user.id:
+            return Response(
+                {"error": "You can only set reminders for your own appointments."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = ReminderSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            reminder = serializer.save(appointment=appointment)
+
+            # Extract start time from slot
+            try:
+                start_time_str = appointment.slot.split(" - ")[0]  # Extract 'HH:MM' from '15:30 - 16:00'
+                appointment_datetime = datetime.combine(
+                    appointment.date, 
+                    datetime.strptime(start_time_str, "%H:%M").time()
+                )
+            except ValueError:
+                return Response({"error": "Invalid slot format. Expected 'HH:MM - HH:MM'."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Calculate reminder time
+            reminder_time = None
+            if reminder.notification_time_type == "days":
+                reminder_time = timezone.make_aware(
+                    appointment_datetime, timezone.get_current_timezone()
+                ) - timedelta(days=reminder.notification_time)
+            elif reminder.notification_time_type == "hours":
+                reminder_time = timezone.make_aware(
+                    appointment_datetime, timezone.get_current_timezone()
+                ) - timedelta(hours=reminder.notification_time)
+            elif reminder.notification_time_type == "minutes":
+                reminder_time = timezone.make_aware(
+                    appointment_datetime, timezone.get_current_timezone()
+                ) - timedelta(minutes=reminder.notification_time)
+                
+            # Schedule the reminder task
+            if reminder_time and reminder_time > timezone.now():  # Ensure it's scheduled in the future
+                send_email_reminder.apply_async(args=[reminder.id], utc=reminder_time)
+                send_whatsapp_reminder.apply_async(args=[reminder.id], utc=reminder_time)
+                print(f"Email Reminder scheduled for {reminder_time}")
+                print(f"WhatsApp Reminder scheduled for {reminder_time}")
+                
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

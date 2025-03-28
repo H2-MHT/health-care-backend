@@ -86,3 +86,42 @@ class OTPVerification(models.Model):
     def generate_otp():
         """Generate a 6-digit random OTP."""
         return ''.join(random.choices(string.digits, k=6))
+
+
+
+class Reminder(models.Model):
+    NOTIFICATION_METHODS = [
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+        ('whatsapp', 'WhatsApp'),
+    ]
+    
+    TIME_TYPES = [
+        ('days', 'Days'),
+        ('hours', 'Hours'),
+        ('minutes', 'Minutes'),
+    ]
+
+    appointment = models.ForeignKey('doctors.BookedAppointment', on_delete=models.CASCADE)
+
+    notification_method = models.CharField(max_length=20, choices=NOTIFICATION_METHODS)
+    notification_time = models.PositiveIntegerField()
+    notification_time_type = models.CharField(max_length=10, choices=TIME_TYPES)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Prevents duplicate reminders for the same appointment and method
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[ 'appointment', 'notification_method'],
+                name='unique_reminder_per_method'
+            )
+        ]
+        
+        verbose_name = "Reminder"
+        verbose_name_plural = "Reminders"
+    
+    def __str__(self):
+        return f"Reminder for Appointment {self.appointment.id}"

@@ -11,6 +11,9 @@ from .views import (
     ListFavouriteClinics,
     GetFamilyMembersView,
     AllergyDocumentUploadView,
+    GetFamilyMembersView,
+    AppointmentReminderAPIView,
+    AppointmentDetailAPIView,
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -27,4 +30,7 @@ urlpatterns = [
     path("verify-family-member/", VerifyFamilyMemberOTPAPIView.as_view(), name="verify-family-member"),
     path('update-family-member/', UpdateFamilyMemberView.as_view(), name='update-family-member'),
     path('get-family-members/', GetFamilyMembersView.as_view(), name='get-family-members'),
+    path('appointments/<int:appointment_id>/', AppointmentDetailAPIView.as_view(), name="appointment-detail"),
+    path('reminders/', AppointmentReminderAPIView.as_view(), name='set-reminder'),
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
