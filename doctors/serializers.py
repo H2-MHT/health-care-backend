@@ -10,6 +10,8 @@ from .models import (
     CommunicationPreferences,
     BookedAppointment,
     DoctorSchedule,
+    LicenceCertificate,
+    LicenceAndCertificate,
     # Slot,
 )
 from payments.models import Payment
@@ -237,4 +239,12 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
         return value
 
     
-    
+class LicenceCertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LicenceCertificate
+        fields = ['id','attachment_name','document','is_verified']
+
+class LicenceAndCertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LicenceAndCertificate
+        fields = ['id','attachment_name','attachment_file','is_verified']
