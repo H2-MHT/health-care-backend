@@ -19,17 +19,22 @@ def validate_document_file(value):
         raise serializers.ValidationError("Only PDF, JPG, and PNG files are allowed.")
 
 class MedicalDocumentSerializer(serializers.ModelSerializer):
-    patient = serializers.PrimaryKeyRelatedField(read_only=True)  # Make patient read-only
-
+    patient = serializers.SerializerMethodField()
     class Meta:
         model = MedicalHistory
-        fields = '__all__'  # Keep all fields, but patient is not required in input
+        fields = ["id", "Name", "document_link", "date", "patient"]
+
+    def get_patient(self, obj):
+        return obj.patient.id if obj.patient else None
 
 class AllergyDocumentSerializer(serializers.ModelSerializer):
-    patient = serializers.PrimaryKeyRelatedField(read_only=True)
+    patient=serializers.SerializerMethodField()
     class Meta:
         model = AllergyDocument
-        fields = '__all__'
+        fields = ["id","Name","document_link","date","patient"]
+
+    def get_patient(self, obj):
+        return obj.patient.id if obj.patient else None
         
 
 class FavouriteSerializer(serializers.ModelSerializer):
@@ -55,7 +60,6 @@ class FavouriteClinicSerializer(serializers.ModelSerializer):
         model = Favourite
         fields = ["id", "patient", "clinic_status", "fav_clinic"]
         read_only_fields = ["patient"]
-
 
 class FamilyMemberSerializer(serializers.ModelSerializer):
     class Meta:
