@@ -170,59 +170,77 @@ class PatientListView(APIView):
 
 class MedicalDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
-        # Get the patient linked to the logged-in user
-        try:
-            patient = Patient.objects.get(user=request.user)
-        except Patient.DoesNotExist:
-            return Response({"error": "Patient profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        # Serialize the data
         serializer = MedicalDocumentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(patient=patient)
-
+            serializer.save(patient=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def get(self, request):
-        try:
-            medical_documents = MedicalHistory.objects.all()
-            serializer = MedicalDocumentSerializer(medical_documents, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
 
-        except:
-            return Response({"error":"the record does not exists"},status=status.HTTP_404_NOT_FOUND)
+    def get(self, request):
+        medical_documents = MedicalHistory.objects.filter(patient=request.user)
+        serializer = MedicalDocumentSerializer(medical_documents, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self,request,pk):
+       try:
+           patient=MedicalHistory.objects.get(pk=pk)
+       except MedicalHistory.DoesNotExist:
+           return Response({"message:","Document not found"},status=status.HTTP_404_NOT_FOUND)
+
+       serializer= MedicalDocumentSerializer(instance=patient,data=request.data,partial=True)
+       if serializer.is_valid():
+           serializer.save()
+           return Response(serializer.data,status=status.HTTP_200_OK)
+       return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        try:
+            patient = MedicalHistory.objects.get(pk=pk)
+        except MedicalHistory.DoesNotExist:
+            return Response({"message": "Document not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        patient.delete()
+        return Response({"message": "Document removed successfully"},
+                        status=status.HTTP_200_OK)
 
 class AllergyDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = (MultiPartParser, FormParser)
-
     def post(self, request, *args, **kwargs):
-        # Get the patient linked to the logged-in user
-        try:
-            patient = Patient.objects.get(user=request.user)
-        except Patient.DoesNotExist:
-            return Response({"error": "Patient profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = AllergyDocumentSerializer(data=request.data)
+        serializer=AllergyDocumentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(patient=patient)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+            serializer.save(patient=request.user)
+            return Response(serializer.data,status=status.HTTP_201_CREATED)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
 
     def get(self,request):
+        allergy_documents=AllergyDocument.objects.filter(patient=request.user)
+        serializer=AllergyDocumentSerializer(allergy_documents,many=True)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
+    def put(self,request,pk):
         try:
-            allergy_documents=AllergyDocument.objects.all()
-            serializer=AllergyDocumentSerializer(allergy_documents,many=True)
-            return Response(serializer.data)
-        except:
-            return Response({"error":"no record exists"},status=status.HTTP_404_NOT_FOUND)
+            patient=AllergyDocument.objects.get(pk=pk)
+        except AllergyDocument.DoesNotExist:
+            return Response({"message:","Document not found"},status=status.HTTP_404_NOT_FOUND)
+        serializer=AllergyDocumentSerializer(instance=patient,data=request.data,partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data,status=status.HTTP_200_OK)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self,request,pk):
+        try:
+            patient=AllergyDocument.objects.get(pk=pk)
+        except AllergyDocument.DoesNotExist:
+            return Response({"message":"Document not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+        patient.delete()
+        return Response({"message":"Document removed successfully"},
+                        status=status.HTTP_200_OK)
 
 
 class AddToFavouriteView(APIView):
