@@ -4,8 +4,6 @@ from django.db import models
 from users.models import User
 from django.core.exceptions import ValidationError
 from django.utils.timezone import now
-from django.core.exceptions import ValidationError
-from django.utils.timezone import now
 
 # Create your models here.
 
