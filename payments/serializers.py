@@ -14,7 +14,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Transaction
-        fields = ['account', 'amount', 'transaction_type', 'status', 'rejection_reason', 'timestamp']
+        fields = ['id', 'account', 'amount', 'transaction_type', 'status', 'rejection_reason', 'timestamp']
 
     # def get_status(self, obj):
     #     return obj.account.get_status_display()
@@ -25,9 +25,17 @@ class TransactionSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         doctor_name = instance.account.full_name
-        ordered_data = OrderedDict()
-        ordered_data['account'] = data['account']
-        ordered_data['Doctor_name'] = doctor_name  
-        ordered_data.update(data)
-        
+        transaction_type = instance.get_transaction_type_display()
+
+        ordered_data = OrderedDict([
+            ('account', data['account']),
+            ('id', data['id']),
+            ('Doctor_name', doctor_name),
+            ('transaction_type', transaction_type),
+        ])
+
+        for key, value in data.items():
+            if key not in ordered_data:
+                ordered_data[key] = value
+
         return ordered_data
