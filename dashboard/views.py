@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 
 from appointments.models import Appointment
 from doctors.models import Doctor
-from patients.models import MedicalHistory
+from patients.models import DashboardMedicalHistory
 from reviews.models import Review
 from users.models import User
 from patients.models import Patient
@@ -125,7 +125,7 @@ class DashboardAPIView(APIView):
             doctor_notes_data = doctor_notes_serializer.data
                 
             # Diagnoses Data
-            diagnoses = MedicalHistory.objects.filter(
+            diagnoses = DashboardMedicalHistory.objects.filter(
                 patient__in=Patient.objects.filter(appointment__doctor=doctor)).select_related("patient__user")[:5]
 
             diagnoses_data = [
@@ -144,7 +144,7 @@ class DashboardAPIView(APIView):
             patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
             last_reports_data = []
             for patient in patients:
-                last_diagnosis = MedicalHistory.objects.filter(patient=patient).order_by("-diagnosis_date").first()
+                last_diagnosis = DashboardMedicalHistory.objects.filter(patient=patient).order_by("-diagnosis_date").first()
                 last_reports_data.append(
                     {
                         "patient_name": f"{patient.user.first_name} {patient.user.last_name}",

@@ -25,6 +25,16 @@ class Patient(models.Model):
         return self.user.get_full_name()
 
 
+class DashboardMedicalHistory(models.Model):
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="medical_documents")
+    file = models.FileField(upload_to="medical_documents/", null=True, blank=True )
+    title = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    condition = models.TextField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    diagnosis_date = models.TextField(null=True, blank=True)
+    
+    
 class MedicalHistory(models.Model):
     patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="medical_documents")
     name = models.CharField(max_length=255, null=True, blank=True)
