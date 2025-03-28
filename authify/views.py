@@ -1055,4 +1055,30 @@ class GetUserProfileAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
+class UserDeviceTokenAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def put(self ,request):
+        try:
+            user_id = request.data.get('user_id')
+            firebase_token = request.data.get("device_token", None)
+            
+            if not user_id or not firebase_token:
+                return Response({'message': 'User ID and device token are required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if user_id != request.user.id:
+                return Response({'message': 'User ID does not match the authenticated user.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:        
+                 user = User.objects.get(pk=user_id)
+            except User.DoesNotExist:
+                return Response({'message': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if str(user.device_token) == str(firebase_token):
+                return Response({'message': 'Device token already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user.device_token = firebase_token
+            user.save()
+            return Response({'message': 'Device token updated successfully.'}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
