@@ -117,7 +117,10 @@ class User(AbstractUser):
     is_online = models.BooleanField(default=False)
     rating = models.PositiveSmallIntegerField(null=True, default=0)
     reviews = models.PositiveBigIntegerField(null=True, default=0)
-
+    
+    # firebase device token
+    device_token = models.TextField(unique=True, blank=True, null=True)
+    
     # Set email as the unique identifier
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
