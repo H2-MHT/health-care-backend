@@ -14,7 +14,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Transaction
-        fields = ['account', 'amount', 'transaction_type', 'status', 'rejection_reason']
+        fields = ['account', 'amount', 'transaction_type', 'status', 'rejection_reason', 'timestamp']
 
     # def get_status(self, obj):
     #     return obj.account.get_status_display()
