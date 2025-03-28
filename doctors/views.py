@@ -798,6 +798,8 @@ class PatientAppointmentAPIView(APIView):
     def get(self, request):
         try:
             patient_user_id = request.query_params.get('patient_user_id')
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
             
             if not patient_user_id:
                 return Response({'message':'Patient id is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -805,11 +807,17 @@ class PatientAppointmentAPIView(APIView):
             if int(patient_user_id) != request.user.id:
                 return Response({'message':'You are not authorized to access this resource'}, status=status.HTTP_403_FORBIDDEN)
             
+            if not start_date or not end_date:
+                return Response({'message':'Start and end date is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
             patient = User.objects.filter(pk=patient_user_id).first()
             if not patient:
                 return Response({'message':'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontmtents = BookedAppointment.objects.filter(patient=patient_user_id)
+            start__date = datetime.strptime(start_date, "%d-%m-%Y").date()
+            end__date = datetime.strptime(end_date, "%d-%m-%Y").date()
+            
+            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, patient=patient_user_id)
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
@@ -824,9 +832,14 @@ class DoctorAppointmentAPIView(APIView):
     def get(self, request):
         try:
             doctor_user_id = request.query_params.get('doctor_user_id')
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
             
             if not doctor_user_id:
                 return Response({'message':'Doctor id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not start_date or not end_date:
+                return Response({'message':'Start and end date is required'}, status=status.HTTP_400_BAD_REQUEST)
             
             if int(doctor_user_id) != request.user.id:
                 return Response({'message':'You are not authorized to access this data'}, status=status.HTTP_403_FORBIDDEN)         
@@ -835,7 +848,10 @@ class DoctorAppointmentAPIView(APIView):
             if not doctor:
                 return Response({'message':'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontmtents = BookedAppointment.objects.filter(doctor=doctor_user_id)
+            start__date = datetime.strptime(start_date, "%d-%m-%Y").date()
+            end__date = datetime.strptime(end_date, "%d-%m-%Y").date()
+            
+            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, doctor=doctor_user_id)
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
