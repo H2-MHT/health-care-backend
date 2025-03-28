@@ -13,6 +13,7 @@ from .views import (
     DeleteProfilePictureAPIView,
     GetUserProfileAPIView,
     AccountDeactivateDeleteView,
+    UserDeviceTokenAPIView
 )
 
 urlpatterns = [
@@ -31,6 +32,9 @@ urlpatterns = [
     path("login/apple/", AppleLoginView.as_view(), name="apple-login"),
     path("update-profile/", UpdateUserProfileAPIView.as_view(), name="update-profile"),
     path('delete-profile-picture/', DeleteProfilePictureAPIView.as_view(), name='delete-profile-picture'),
+    
+    # firebase device token
+    path('firebase-device-token/', UserDeviceTokenAPIView.as_view(), name='firebase-device-token'),
 
     path("view-profile/", GetUserProfileAPIView.as_view(), name="view-profile"),
 ]
