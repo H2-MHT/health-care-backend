@@ -12,6 +12,7 @@ from users.models import User
 from users.serializers import UserSerializer
 from patients.models import Patient
 from django.utils.dateparse import parse_time
+from django.db.models import Q
 from utils.whatsapp import (
     send_whatsapp_message_patient,
     send_whatsapp_message_doctor,
@@ -892,7 +893,7 @@ class DoctorAppointmentAPIView(APIView):
 # Reschedule Appointment API
 class RescheduleAppointmentAPIView(APIView):
     """
-    Allows a patient to reschedule their appointment.
+    Allows patient and doctor to reschedule their appointment.
     """
     permission_classes = [IsAuthenticated]
 
@@ -908,7 +909,7 @@ class RescheduleAppointmentAPIView(APIView):
             date_obj = datetime.strptime(new_date, "%d-%m-%Y").date()
 
             appointment = BookedAppointment.objects.filter(
-                id=appointment_id, patient=request.user.id
+                Q(patient=request.user.id) | Q(doctor=request.user.id), id=appointment_id 
             ).first()
 
             if not appointment:
@@ -924,7 +925,8 @@ class RescheduleAppointmentAPIView(APIView):
             if is_booked:
                 return Response({"error": "Selected slot is already booked"}, status=400)
 
-            patient_name = request.user.get_full_name()
+            patient = User.objects.get(id=appointment.patient)
+            patient_name = patient.get_full_name()
             doctor = User.objects.get(id=appointment.doctor)
             doctor_name = doctor.get_full_name()
             old_slot = appointment.slot
@@ -960,6 +962,8 @@ class RescheduleAppointmentAPIView(APIView):
                 "message": "Appointment rescheduled successfully",
                 "data": {
                     "appointment_id": appointment.id,
+                    "patient": patient_name,
+                    "doctor": doctor_name,
                     "old_date": old_date,
                     "new_date": new_date,
                     "old_slot": old_slot,
