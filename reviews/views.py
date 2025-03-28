@@ -194,7 +194,6 @@ class ReplyAPIView(APIView):
             
             patient = getattr(user, 'patient_profile', None)
             doctor = Doctor.objects.filter(user=user).first()
-            # print(doctor,"----------")
             if patient:
                 if review.patient != patient:
                     return Response(
