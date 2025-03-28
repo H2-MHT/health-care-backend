@@ -20,7 +20,7 @@ class NotificationListView(APIView):
             page = request.GET.get("page", 1)  # Pagination
 
             # Get notifications (filter unread if requested)
-            notifications = Notification.objects.filter(user=user).order_by("-created_at")
+            notifications = Notification.objects.filter(user=user, is_deleted=False).order_by("-created_at")
             if unread_only:
                 notifications = notifications.filter(is_read=False)
 
@@ -79,7 +79,8 @@ class DeleteNotificationView(generics.DestroyAPIView):
         notification = Notification.objects.filter(id=notification_id, user=request.user).first()
 
         if notification:
-            notification.delete()
+            notification.is_deleted = True
+            notification.save()
             return Response({"success": True, "message": "Notification deleted successfully."})
 
         return Response({"success": False, "error": "Notification not found."}, status=404)
