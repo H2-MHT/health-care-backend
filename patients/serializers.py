@@ -1,6 +1,13 @@
 from rest_framework import serializers
 from users.models import User
-from .models import AllergyDocument, MedicalHistory, Favourite, FamilyMember, OTPVerification
+from .models import(
+    AllergyDocument,
+    MedicalHistory,
+    Favourite,
+    FamilyMember,
+    OTPVerification,
+    Reminder,
+)
 from clinics.serializers import ClinicSerializer
 from doctors.models import Doctor
 import os
@@ -66,3 +73,11 @@ class OTPVerificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = OTPVerification
         fields = ["family_member", "otp"]
+        
+        
+class ReminderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reminder
+        fields = ["notification_method", "notification_time", "notification_time_type"]
+        read_only_fields = ['user_patient_name', 'appointment']  
+        

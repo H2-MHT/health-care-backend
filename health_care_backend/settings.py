@@ -57,7 +57,8 @@ INSTALLED_APPS = [
     'chat',
     'MasterPanel',              # Admin Api
     'notifications',
-    'video_call'
+    'video_call',
+    'django_celery_beat',
 ]
 
 REST_FRAMEWORK = {
@@ -398,3 +399,8 @@ ACCOUNT_SID = os.getenv("ACCOUNT_SID")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://209.38.123.166:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
