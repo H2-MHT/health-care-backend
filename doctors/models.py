@@ -122,11 +122,11 @@ class BookedAppointment(models.Model):
     ]
 
     PAYMENT_STATUS_CHOICES = [
-        ("pending", "Pending"),
-        ("completed", "Completed"),
-        ("refunded", "Refunded"),
-        ("failed", "Failed"),
-        ("cancelled", "Cancelled"),
+        ("Pending", "Pending"),
+        ("Completed", "Completed"),
+        ("Refunded", "Refunded"),
+        ("Failed", "Failed"),
+        ("Cancelled", "Cancelled"),
         ]
 
     # doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
