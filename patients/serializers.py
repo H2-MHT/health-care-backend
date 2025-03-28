@@ -29,7 +29,7 @@ class MedicalDocumentSerializer(serializers.ModelSerializer):
     patient = serializers.SerializerMethodField()
     class Meta:
         model = MedicalHistory
-        fields = ["id", "Name", "document_link", "date", "patient"]
+        fields = ["id", "name", "document_link", "date", "patient"]
 
     def get_patient(self, obj):
         return obj.patient.id if obj.patient else None
@@ -38,7 +38,7 @@ class AllergyDocumentSerializer(serializers.ModelSerializer):
     patient=serializers.SerializerMethodField()
     class Meta:
         model = AllergyDocument
-        fields = ["id","Name","document_link","date","patient"]
+        fields = ["id","name","document_link","date","patient"]
 
     def get_patient(self, obj):
         return obj.patient.id if obj.patient else None
