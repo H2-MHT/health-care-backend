@@ -2,8 +2,16 @@ import random
 import string
 from django.db import models
 from users.models import User
+from django.core.exceptions import ValidationError
+from django.utils.timezone import now
+from django.core.exceptions import ValidationError
+from django.utils.timezone import now
+
 # Create your models here.
 
+def validate_past_date(value):
+    if value >= now().date():
+        raise ValidationError("not the feasible date")
 
 class Patient(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="patient_profile")
@@ -20,31 +28,21 @@ class Patient(models.Model):
 
 
 class MedicalHistory(models.Model):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="medical_documents")
-    file = models.FileField(upload_to="medical_documents/", null=True, blank=True )
-    title = models.CharField(max_length=255, null=True, blank=True)
-    description = models.TextField(null=True, blank=True)
-    condition = models.TextField(null=True, blank=True)
-    notes = models.TextField(null=True, blank=True)
-    diagnosis_date = models.TextField(null=True, blank=True)
+    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="medical_documents")
+    name = models.CharField(max_length=255, null=True, blank=True)
+    document_link= models.TextField(default="")
+    date = models.DateField(validators=[validate_past_date],null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Medical Document - {self.patient.user.get_full_name()}"
-
-
 class AllergyDocument(models.Model):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="allergy_documents")
-    file = models.FileField(upload_to="allergy_documents/", null=True, blank=True )
-    description = models.TextField(null=True, blank=True)
-    medicine_name = models.CharField(max_length=100, blank=True)
+    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="allergy_documents")
+    name = models.CharField(max_length=255, null=True, blank=True)
+    document_link= models.TextField(default="")
+    date = models.DateField(validators=[validate_past_date],null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         verbose_name = "Allergy Document"
         verbose_name_plural = "Allergy Documents"
-
-    def __str__(self):
-        return f"Allergy Document - {self.patient.user.get_full_name()}"
 
 
 class Favourite(models.Model):
