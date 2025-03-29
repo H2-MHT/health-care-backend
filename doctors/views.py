@@ -38,7 +38,7 @@ from .models import (
     # Slot,
     DoctorSchedule,
     PatientBookAppointment,
-    LicenceCertificate,
+    LicenceCertificate, MediaDigest,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -51,7 +51,7 @@ from .serializers import (
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
     DoctorScheduleSerializer,
-    LicenceCertificateSerializer,
+    LicenceCertificateSerializer, MediaDigestSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -2039,4 +2039,44 @@ class LicenceCertificateAPIView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
+
+class MediaDigestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            serializer = MediaDigestSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user_doctor=request.user)
+                return Response({
+                    "msg": "Media_digest successfully added!",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                "msg": "Validation failed.",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "msg": "Something went wrong.",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request):
+        try:
+            media_digest_documents = MediaDigest.objects.filter(user_doctor=request.user)
+            serializer = MediaDigestSerializer(media_digest_documents, many=True)
+            return Response({
+                "msg": "Media_digest fetched successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "msg": "Something went wrong while fetching data.",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
 

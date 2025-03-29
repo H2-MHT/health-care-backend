@@ -11,7 +11,7 @@ from .models import (
     BookedAppointment,
     DoctorSchedule,
     # Slot,
-    LicenceCertificate,
+    LicenceCertificate, MediaDigest,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -242,3 +242,15 @@ class LicenceCertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenceCertificate
         fields = ['id','attachment_name','document','is_verified']
+
+
+class MediaDigestSerializer(serializers.ModelSerializer):
+    doctor = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MediaDigest
+        fields = ["id", "title", "description", "attachment_file", "doctor"]
+
+    def get_doctor(self, obj):
+        return obj.user_doctor.id if obj.user_doctor else None
+
