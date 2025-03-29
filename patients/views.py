@@ -326,12 +326,12 @@ class AddToFavouriteView(APIView):
                 return Response({"message": "Clinic removed from favorites."}, status=status.HTTP_200_OK)
             except Favourite.DoesNotExist:
                 return Response({"error": "Clinic favorite entry not found."}, status=status.HTTP_404_NOT_FOUND)
- 
+
 class ListFavouriteDoctors(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-       try:
+        try:
             user = request.user
             try:
                 patient = user.patient_profile
@@ -340,21 +340,20 @@ class ListFavouriteDoctors(APIView):
             search_key = request.query_params.get("search_key", "").strip()
             if search_key:
                 fav_doctors = Favourite.objects.filter(fav_doc__user__first_name__istartswith=search_key,patient=patient, fav_doc__isnull=False) | \
-                          Favourite.objects.filter(fav_doc__user__last_name__istartswith=search_key,patient=patient, fav_doc__isnull=False)
+                        Favourite.objects.filter(fav_doc__user__last_name__istartswith=search_key,patient=patient, fav_doc__isnull=False)
             else:
                 fav_doctors = Favourite.objects.filter(patient=patient, fav_doc__isnull=False) 
             paginated_data, headers = pagination_view(fav_doctors, request)
             serializer = FavouriteDoctorSerializer(paginated_data, many=True)
             return create_paginated_response(" Favourite doctors list retrieved successfully.",serializer.data,headers)
-        
-       except Exception as e:
+        except Exception as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
         
 class ListFavouriteClinics(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-       try:
+        try:
             user = request.user
             try:
                 patient = user.patient_profile
@@ -364,14 +363,13 @@ class ListFavouriteClinics(APIView):
             search_key = request.query_params.get("search_key", "").strip()
             if search_key:
                 fav_clinics = Favourite.objects.filter(fav_clinic__user__first_name__istartswith=search_key, patient=patient, fav_clinic__isnull=False) | \
-                          Favourite.objects.filter(fav_clinic__user__last_name__istartswith=search_key, patient=patient, fav_clinic__isnull=False)
+                    Favourite.objects.filter(fav_clinic__user__last_name__istartswith=search_key, patient=patient, fav_clinic__isnull=False)
             else:
                 fav_clinics = Favourite.objects.filter(patient=patient, fav_clinic__isnull=False)   
             paginated_data, headers = pagination_view(fav_clinics, request)
             serializer = FavouriteClinicSerializer(paginated_data, many=True)
             return create_paginated_response("Favourite clinics retrieved successfully.",serializer.data,headers)
-        
-       except Exception as e:
+        except Exception as e:
             return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
 
 class AddFamilyMemberView(APIView):
