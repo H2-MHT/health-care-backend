@@ -38,6 +38,7 @@ from .models import (
     # Slot,
     DoctorSchedule,
     PatientBookAppointment,
+    LicenceCertificate,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -50,7 +51,7 @@ from .serializers import (
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
     DoctorScheduleSerializer,
-
+    LicenceCertificateSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -63,7 +64,7 @@ from rest_framework.exceptions import NotFound
 from django.contrib.auth.hashers import make_password
 from rest_framework.decorators import api_view
 from utils.pagination import pagination_view, create_paginated_response
-
+from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -2010,4 +2011,32 @@ class MembershipAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+
+class LicenceCertificateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
+
+    def post(self, request):
+        try:
+            serializer = LicenceCertificateSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                return Response({
+                    "message": "Document uploaded successfully",
+                    "data": serializer.data
+                    }, status=status.HTTP_201_CREATED)
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            licence_certificates = LicenceCertificate.objects.filter(user=request.user)
+            serializer = LicenceCertificateSerializer(licence_certificates, many=True)
+            return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 

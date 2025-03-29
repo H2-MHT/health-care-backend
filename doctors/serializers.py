@@ -11,6 +11,7 @@ from .models import (
     BookedAppointment,
     DoctorSchedule,
     # Slot,
+    LicenceCertificate,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -237,4 +238,7 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
         return value
 
     
-    
+class LicenceCertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LicenceCertificate
+        fields = ['id','attachment_name','document','is_verified']
