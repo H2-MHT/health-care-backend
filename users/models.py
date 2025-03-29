@@ -199,4 +199,10 @@ class Notes(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, help_text="Date and time when the note was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="Date and time when the note was last updated")
     
-    
+
+class DeviceAccess(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='device_accesses')
+    location_name = models.CharField(max_length=255)
+    ip_address = models.GenericIPAddressField()
+    logged_in_time = models.TimeField()
+    platform = models.CharField(max_length=100)

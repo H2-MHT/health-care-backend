@@ -4,10 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 import logging
-from .serializers import EducationSerializer, SkillSerializer, NotesSerializer
-from .models import Education, User, TwoFactorMethod, Skill, Notes
+from .serializers import EducationSerializer, SkillSerializer, NotesSerializer, DeviceAccessSerializer
+from .models import Education, User, TwoFactorMethod, Skill, Notes, DeviceAccess
 import json
 from django.http import QueryDict
+from django.core.exceptions import ValidationError
+from rest_framework.exceptions import NotFound
 logger = logging.getLogger(__name__)
 
 class ViewSkills(APIView):
@@ -351,3 +353,32 @@ class NotesAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+class DeviceAccessListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            devices = DeviceAccess.objects.filter(user=request.user)
+            if not devices.exists():
+                raise NotFound("No device access history found for this user.")
+            serializer = DeviceAccessSerializer(devices, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def post(self, request):
+        try:
+            if isinstance(request.data, list):
+                serializer = DeviceAccessSerializer(data=request.data, many=True)
+            else:
+                serializer = DeviceAccessSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
