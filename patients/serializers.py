@@ -10,6 +10,7 @@ from .models import(
 )
 from clinics.serializers import ClinicSerializer
 from doctors.models import Doctor
+from users.serializers import UserSerializer
 import os
 
 class PatientUserSerializer(serializers.ModelSerializer):
@@ -51,9 +52,10 @@ class FavouriteSerializer(serializers.ModelSerializer):
         read_only_fields = ["patient"]
 
 class DoctorSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
     class Meta:
         model = Doctor
-        fields = '__all__'
+        fields = ["id", "user", "specialty", "qualifications", "experience_years"]
 class FavouriteDoctorSerializer(serializers.ModelSerializer):
     fav_doc = DoctorSerializer()
     class Meta:
