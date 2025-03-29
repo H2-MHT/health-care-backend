@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Education, Skill, Media, TwoFactorMethod
+from .models import User, Education, Skill, Media, TwoFactorMethod, DeviceAccess
 
 # Register your models here.
 
@@ -28,3 +28,5 @@ admin.site.register(Education, EducationAdmin)
 admin.site.register(User, UserAdmin)
 
 admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)
+
+admin.site.register(DeviceAccess)
