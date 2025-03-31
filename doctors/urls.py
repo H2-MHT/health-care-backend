@@ -28,9 +28,9 @@ from .views import (
     GetSlotsAPIView,
     AppointmentSummaryAPIView,
     # AvailableSlotsAPIView,
-    redeem_invitation,
     LicenceCertificateAPIView,
-    LicenceAndCertificateAPIView,
+    redeem_invitation,
+    MediaDigestAPIView,
     )
 
 
@@ -85,7 +85,6 @@ urlpatterns = [
     # Subsciption plan
     path('select-membership/', MembershipAPIView.as_view(), name='select-membership'),
     path('licence-certificate/', LicenceCertificateAPIView.as_view(), name='licence-certificate'),
-
-    path('licence-and-certificate/', LicenceAndCertificateAPIView.as_view(), name='licence-and-certificate'),
+    path("media-digest-document/", MediaDigestAPIView.as_view(), name="media-digest-document"),
 
 ]

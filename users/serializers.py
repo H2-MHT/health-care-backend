@@ -2,7 +2,8 @@ from rest_framework import serializers
 import os
 import base64
 from django.core.files.base import ContentFile
-from .models import Education, Media, Skill, User, Notes
+from django.utils.timesince import timesince
+from .models import Education, Media, Skill, User, Notes, DeviceAccess
 
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
@@ -91,3 +92,10 @@ class NotesSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "note", "created_at", "updated_at", "user"]
         read_only_fields = ["id", "created_at", "updated_at", "user"]
         
+
+class DeviceAccessSerializer(serializers.ModelSerializer):
+    logged_in_time = serializers.TimeField(format='%H:%M:%S')
+
+    class Meta:
+        model = DeviceAccess
+        fields = '__all__'

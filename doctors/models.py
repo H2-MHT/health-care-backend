@@ -1,4 +1,6 @@
+import os
 from django.db import models
+from django.forms import ValidationError
 from  users.models import User
 import random
 import string
@@ -140,6 +142,8 @@ class BookedAppointment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
+    rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
+
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
@@ -256,16 +260,40 @@ class Membership(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.membership_type}"
     
+
 class LicenceCertificate(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="documents")
     attachment_name = models.CharField(max_length=100)
     document = models.FileField(upload_to="documents/", blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_verified = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.attachment_name
     
-class LicenceAndCertificate(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="licence_certificate")
-    attachment_name = models.CharField(max_length=100)
-    attachment_file = models.TextField()
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    is_verified = models.BooleanField(default=False)
+    
+def validate_video_extension(value):
+    """Validate that uploaded file has a video extension."""
+    ext = os.path.splitext(value.name)[1].lower()
+    allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
+    if ext not in allowed_extensions:
+        raise ValidationError("Only video files (.mp4, .avi, .mov, .mkv, .flv, .wmv) are allowed.")
+
+def validate_video_size(value):
+    """Validate that uploaded video size is less than 30MB."""
+    max_size = 30 * 1024 * 1024
+    if value.size > max_size:
+        raise ValidationError("Video size too large. Maximum allowed size is 30MB.")
+
+class MediaDigest(models.Model):
+    user_doctor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="media_digest_documents")
+    title = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(default="")
+    attachment_file = models.FileField(
+        upload_to="media_digest_documents/",
+        validators=[validate_video_extension, validate_video_size]
+    )
+
+    def __str__(self):
+        return self.title if self.title else "Untitled Media"
+

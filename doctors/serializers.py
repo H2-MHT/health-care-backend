@@ -13,6 +13,8 @@ from .models import (
     LicenceCertificate,
     LicenceAndCertificate,
     # Slot,
+    LicenceCertificate,
+    MediaDigest,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
@@ -116,6 +118,13 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
             "name": doctor_user.get_full_name() if doctor_user else "Unknown",
             "profile_picture": doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
         }
+        
+        data["rescheduled_by"] = ""
+
+        # Determine who rescheduled the appointment
+        if instance.status == "Rescheduled" and instance.rescheduled_by:
+            rescheduled_by_user = instance.rescheduled_by
+            data["rescheduled_by"] = "Doctor" if rescheduled_by_user.role == "Doctor" else "Patient"
 
         return data
         
@@ -244,7 +253,14 @@ class LicenceCertificateSerializer(serializers.ModelSerializer):
         model = LicenceCertificate
         fields = ['id','attachment_name','document','is_verified']
 
-class LicenceAndCertificateSerializer(serializers.ModelSerializer):
+
+class MediaDigestSerializer(serializers.ModelSerializer):
+    doctor = serializers.SerializerMethodField()
+
     class Meta:
-        model = LicenceAndCertificate
-        fields = ['id','attachment_name','attachment_file','is_verified']
+        model = MediaDigest
+        fields = ["id", "title", "description", "attachment_file", "doctor"]
+
+    def get_doctor(self, obj):
+        return obj.user_doctor.id if obj.user_doctor else None
+

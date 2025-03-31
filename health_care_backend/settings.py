@@ -404,3 +404,7 @@ CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+
+# Agora video-call
+APP_ID = os.getenv("APP_ID")
+APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
