@@ -759,40 +759,43 @@ class BookAppointmentAPIView(APIView):
                     }
                 )
             return Response({'message':'Retrieved successfully','data':bookedAppiontment}, status=status.HTTP_200_OK)
-                   
-        except Exception as e:
-             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-         
-    def put(self, request):
-        try:
-            if request.user.role != 'Doctor':
-                return Response({'message':'Only Doctor can update the appointment'}, status=status.HTTP_403_FORBIDDEN)
-            
-            appointment_id = request.data.get('appointment_id')
-            appointement_status = request.data.get('status')
-
-            if not appointment_id or not appointement_status:
-                return Response({'message':'Appointment id and status are required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            appointement_status = appointement_status.capitalize()
-            if appointement_status not in ['Confirmed', 'Cancelled']:
-                return Response({'message':'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            try:
-               appointment = BookedAppointment.objects.get(pk=appointment_id)
-            except BookedAppointment.DoesNotExist:
-                return Response({"message": "appointment not found"}, status=status.HTTP_404_NOT_FOUND)
-            
-            if request.user.id != appointment.doctor:
-                return Response({'message':'Only associated doctor can update this appointment'}, status=status.HTTP_403_FORBIDDEN)
-            
-            appointment.status = appointement_status
-            appointment.save()
-            serializer = BookedAppointmentSerializer(appointment)
-            return Response({'message':'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
-                 
+                
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def put(self, request):
+        try:
+            if request.user.role not in ['Doctor', 'Patient']:
+                return Response({'message': 'Only Doctor or Patient can update the appointment'}, status=status.HTTP_403_FORBIDDEN)
+
+            appointment_id = request.data.get('appointment_id')
+            appointment_status = request.data.get('status')
+
+            if not appointment_id or not appointment_status:
+                return Response({'message': 'Appointment ID and status are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment_status = appointment_status.capitalize()
+            if appointment_status not in ['Confirmed', 'Cancelled']:
+                return Response({'message': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                appointment = BookedAppointment.objects.get(pk=appointment_id)
+            except BookedAppointment.DoesNotExist:
+                return Response({"message": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if request.user.id != appointment.doctor and request.user.id != appointment.patient:
+                return Response({'message': 'Only associated doctor or patient can update this appointment'},
+                                status=status.HTTP_403_FORBIDDEN)
+
+            appointment.status = appointment_status
+            appointment.save()
+
+            serializer = BookedAppointmentSerializer(appointment)
+            return Response({'message': 'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         
         
 class PatientAppointmentAPIView(APIView):
