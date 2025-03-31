@@ -11,8 +11,8 @@ from .models import (
     BookedAppointment,
     DoctorSchedule,
     # Slot,
-    LicenceCerti
-    ficate, MediaDigest,
+    LicenceCertificate,
+    MediaDigest,
 )
 from payments.models import Payment
 from datetime import datetime, timedelta
