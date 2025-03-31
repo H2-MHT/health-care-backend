@@ -31,7 +31,7 @@ class FirebaseMessagingService:
         except Exception as e:
             raise Exception(f"Error initializing Firebase: {e}") 
 
-    def send_notification(self, device_token, title, body, caller):
+    def send_notification(self, device_token, title, body, caller, senderUserId, receiverUserId):
         try:
             message = messaging.Message(
                 token=device_token,
@@ -42,7 +42,9 @@ class FirebaseMessagingService:
                 data={
                     "type": "incoming_call",
                     "caller": caller,
-                    "action": "ring"
+                    "action": "ring",
+                    "senderUserId": senderUserId,
+                    "receiverUserId":receiverUserId
                 }
             )
             response = messaging.send(message) 
@@ -61,6 +63,8 @@ class SendNotificationView(View):
             caller = data.get("caller")
             received_title = data.get('title')
             description = data.get('body')
+            senderUserId = data.get("senderUserId")
+            receiverUserId = data.get("receiverUserId")
 
             if not device_token or not caller:
                 return JsonResponse({"success": False, "error": "deviceToken and caller are required"}, status=400)
@@ -68,14 +72,16 @@ class SendNotificationView(View):
             title = "Incoming Video Call"
             body = f"{caller} is calling you."
 
-            response_id = firebase_service.send_notification(device_token, title, body, caller)
+            response_id = firebase_service.send_notification(device_token, title, body, caller, senderUserId, receiverUserId)
 
             return JsonResponse({
                 "success": True,
                 "message": "Notification sent successfully",
                 "title": received_title,
                 "body": description,
-                "message_id": response_id
+                "message_id": response_id,
+                "senderUserId": senderUserId,
+                "receiverUserId":receiverUserId
             }, status=200)
 
         except json.JSONDecodeError:
