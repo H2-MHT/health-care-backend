@@ -38,7 +38,7 @@ from .models import (
     # Slot,
     DoctorSchedule,
     PatientBookAppointment,
-    LicenceCertificate,
+    LicenceCertificate, MediaDigest,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -51,7 +51,7 @@ from .serializers import (
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
     DoctorScheduleSerializer,
-    LicenceCertificateSerializer,
+    LicenceCertificateSerializer, MediaDigestSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -759,40 +759,43 @@ class BookAppointmentAPIView(APIView):
                     }
                 )
             return Response({'message':'Retrieved successfully','data':bookedAppiontment}, status=status.HTTP_200_OK)
-                   
-        except Exception as e:
-             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-         
-    def put(self, request):
-        try:
-            if request.user.role != 'Doctor':
-                return Response({'message':'Only Doctor can update the appointment'}, status=status.HTTP_403_FORBIDDEN)
-            
-            appointment_id = request.data.get('appointment_id')
-            appointement_status = request.data.get('status')
-
-            if not appointment_id or not appointement_status:
-                return Response({'message':'Appointment id and status are required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            appointement_status = appointement_status.capitalize()
-            if appointement_status not in ['Confirmed', 'Cancelled']:
-                return Response({'message':'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            try:
-               appointment = BookedAppointment.objects.get(pk=appointment_id)
-            except BookedAppointment.DoesNotExist:
-                return Response({"message": "appointment not found"}, status=status.HTTP_404_NOT_FOUND)
-            
-            if request.user.id != appointment.doctor:
-                return Response({'message':'Only associated doctor can update this appointment'}, status=status.HTTP_403_FORBIDDEN)
-            
-            appointment.status = appointement_status
-            appointment.save()
-            serializer = BookedAppointmentSerializer(appointment)
-            return Response({'message':'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
-                 
+                
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def put(self, request):
+        try:
+            if request.user.role not in ['Doctor', 'Patient']:
+                return Response({'message': 'Only Doctor or Patient can update the appointment'}, status=status.HTTP_403_FORBIDDEN)
+
+            appointment_id = request.data.get('appointment_id')
+            appointment_status = request.data.get('status')
+
+            if not appointment_id or not appointment_status:
+                return Response({'message': 'Appointment ID and status are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment_status = appointment_status.capitalize()
+            if appointment_status not in ['Confirmed', 'Cancelled']:
+                return Response({'message': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                appointment = BookedAppointment.objects.get(pk=appointment_id)
+            except BookedAppointment.DoesNotExist:
+                return Response({"message": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if request.user.id != appointment.doctor and request.user.id != appointment.patient:
+                return Response({'message': 'Only associated doctor or patient can update this appointment'},
+                                status=status.HTTP_403_FORBIDDEN)
+
+            appointment.status = appointment_status
+            appointment.save()
+
+            serializer = BookedAppointmentSerializer(appointment)
+            return Response({'message': 'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         
         
 class PatientAppointmentAPIView(APIView):
@@ -936,7 +939,6 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.slot = new_slot
             appointment.date = date_obj
             appointment.status = "Rescheduled"
-            appointment.rescheduled_by = request.user
             appointment.save()
 
             # Send WhatsApp Notifications
@@ -970,8 +972,7 @@ class RescheduleAppointmentAPIView(APIView):
                     "new_date": new_date,
                     "old_slot": old_slot,
                     "new_slot": new_slot,
-                    "status": "Rescheduled",
-                    "rescheduled_by": request.user.get_full_name()
+                    "status": "Rescheduled"
                 }
             }, status=200)
 
@@ -2041,4 +2042,44 @@ class LicenceCertificateAPIView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
+
+class MediaDigestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            serializer = MediaDigestSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user_doctor=request.user)
+                return Response({
+                    "msg": "Media_digest successfully added!",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            return Response({
+                "msg": "Validation failed.",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                "msg": "Something went wrong.",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request):
+        try:
+            media_digest_documents = MediaDigest.objects.filter(user_doctor=request.user)
+            serializer = MediaDigestSerializer(media_digest_documents, many=True)
+            return Response({
+                "msg": "Media_digest fetched successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "msg": "Something went wrong while fetching data.",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
 
