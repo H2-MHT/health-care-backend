@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -86,31 +87,38 @@ APP_ID = os.getenv("APP_ID")
 APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
 EXPIRE_TIME_IN_SECONDS = 3600*10 
 class CreateAgoraChatUserAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         
-        email1 = request.data.get("email1")
-        email2 = request.data.get("email2")  
+        senderID = request.data.get("senderID")
+        receiverID = request.data.get("receiverID")  
 
-        if not email1 or not email2:
-            return JsonResponse({"error": "Both user emails are required"}, status=400)
+        if not senderID or not receiverID:
+            return JsonResponse({"error": "Both user IDs are required"}, status=400)
 
-        user1 = User.objects.filter(email=email1).first()
-        user2 = User.objects.filter(email=email2).first()
+        try:
+            sender = User.objects.get(pk=senderID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Sender user does not exist"}, status=404)
+    
+        try:
+           receiver = User.objects.get(pk=receiverID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Receiver user does not exist"}, status=404)
 
-        if not user1 or not user2:
-            return JsonResponse({"error": "Users not found"}, status=404)
-
-        firebase_token1 = user1.device_token
-        firebase_token2 = user2.device_token
+        firebase_token1 = sender.device_token
+        firebase_token2 = receiver.device_token
+        
+        sender_email = sender.email
+        receiver_email = receiver.email
         
         def sanitize_email(email):
           return email.replace("@", "_").replace(".", "_")
 
-        email1_sanitized = sanitize_email(email1)
-        email2_sanitized = sanitize_email(email2)
+        email1_sanitized = sanitize_email(sender_email)
+        email2_sanitized = sanitize_email(receiver_email)
 
         channel_name = f"chat_{min(email1_sanitized, email2_sanitized)}_{max(email1_sanitized, email2_sanitized)}"
-        print('channel name', channel_name)
 
         uid1 = random.randint(1000, 9999)
         uid2 = random.randint(1000, 9999)
@@ -124,14 +132,14 @@ class CreateAgoraChatUserAPIView(APIView):
             APP_ID, APP_CERTIFICATE, channel_name, uid2, 1, expire_timestamp
         )
 
-        user1.agora_channel_name = channel_name
-        user2.agora_channel_name = channel_name
-        user1.save()
-        user2.save()
+        sender.agora_channel_name = channel_name
+        receiver.agora_channel_name = channel_name
+        sender.save()
+        receiver.save()
 
         return JsonResponse({
             "app_id": APP_ID,
             "channel": channel_name,
-            "user1": {"email": email1, "uid": uid1, "token": token1, "firebase_token": firebase_token1},
-            "user2": {"email": email2, "uid": uid2, "token": token2, "firebase_token": firebase_token2}
+            "sender": {"senderName": sender.get_full_name(),"uid": uid1, "token": token1, "firebase_token": firebase_token1},
+            "receiver": {"receiverName": receiver.get_full_name(), "uid": uid2, "token": token2, "firebase_token": firebase_token2}
         })
