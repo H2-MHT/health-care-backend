@@ -971,7 +971,7 @@ class RescheduleAppointmentAPIView(APIView):
                     "old_slot": old_slot,
                     "new_slot": new_slot,
                     "status": "Rescheduled",
-                    "rescheduled_by": request.user.get_full_name()
+                    "rescheduled_by": request.user.role
                 }
             }, status=200)
 
