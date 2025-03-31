@@ -115,6 +115,13 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
             "name": doctor_user.get_full_name() if doctor_user else "Unknown",
             "profile_picture": doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
         }
+        
+        data["rescheduled_by"] = ""
+
+        # Determine who rescheduled the appointment
+        if instance.status == "Rescheduled" and instance.rescheduled_by:
+            rescheduled_by_user = instance.rescheduled_by
+            data["rescheduled_by"] = "Doctor" if rescheduled_by_user.role == "Doctor" else "Patient"
 
         return data
         
