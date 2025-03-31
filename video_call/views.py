@@ -120,16 +120,10 @@ class CreateAgoraChatUserAPIView(APIView):
 
         channel_name = f"chat_{min(email1_sanitized, email2_sanitized)}_{max(email1_sanitized, email2_sanitized)}"
 
-        uid1 = sender.id
-        uid2 = receiver.id
-
         expire_timestamp = int(time.time()) + EXPIRE_TIME_IN_SECONDS
 
-        token1 = RtcTokenBuilder.buildTokenWithUid(
-            APP_ID, APP_CERTIFICATE, channel_name, uid1, 1, expire_timestamp
-        )
-        token2 = RtcTokenBuilder.buildTokenWithUid(
-            APP_ID, APP_CERTIFICATE, channel_name, uid2, 1, expire_timestamp
+        token = RtcTokenBuilder.buildTokenWithUid(
+            APP_ID, APP_CERTIFICATE, channel_name, 0, 1, expire_timestamp
         )
 
         sender.agora_channel_name = channel_name
@@ -140,6 +134,7 @@ class CreateAgoraChatUserAPIView(APIView):
         return JsonResponse({
             "app_id": APP_ID,
             "channel": channel_name,
-            "currentUser": {"currentUserName": sender.get_full_name(),"uid": uid1, "token": token1, "firebase_token": currentUserFirebaseToken},
-            "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": uid2, "token": token2, "firebase_token": remoteUserFirebaseToken}
+            "token": token,
+            "currentUser": {"currentUserName": sender.get_full_name(),"uid": sender.id, "firebase_token": currentUserFirebaseToken},
+            "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"firebase_token": remoteUserFirebaseToken}
         })
