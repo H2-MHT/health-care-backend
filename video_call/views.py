@@ -106,8 +106,8 @@ class CreateAgoraChatUserAPIView(APIView):
         except User.DoesNotExist:
             return JsonResponse({"error": "Receiver user does not exist"}, status=404)
 
-        firebase_token1 = sender.device_token
-        firebase_token2 = receiver.device_token
+        currentUserFirebaseToken = sender.device_token
+        remoteUserFirebaseToken = receiver.device_token
         
         sender_email = sender.email
         receiver_email = receiver.email
@@ -120,8 +120,8 @@ class CreateAgoraChatUserAPIView(APIView):
 
         channel_name = f"chat_{min(email1_sanitized, email2_sanitized)}_{max(email1_sanitized, email2_sanitized)}"
 
-        uid1 = random.randint(1000, 9999)
-        uid2 = random.randint(1000, 9999)
+        uid1 = sender.id
+        uid2 = receiver.id
 
         expire_timestamp = int(time.time()) + EXPIRE_TIME_IN_SECONDS
 
@@ -140,6 +140,6 @@ class CreateAgoraChatUserAPIView(APIView):
         return JsonResponse({
             "app_id": APP_ID,
             "channel": channel_name,
-            "sender": {"senderName": sender.get_full_name(),"uid": uid1, "token": token1, "firebase_token": firebase_token1},
-            "receiver": {"receiverName": receiver.get_full_name(), "uid": uid2, "token": token2, "firebase_token": firebase_token2}
+            "currentUser": {"currentUserName": sender.get_full_name(),"uid": uid1, "token": token1, "firebase_token": currentUserFirebaseToken},
+            "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": uid2, "token": token2, "firebase_token": remoteUserFirebaseToken}
         })
