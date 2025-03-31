@@ -1,4 +1,6 @@
+import os
 from django.db import models
+from django.forms import ValidationError
 from  users.models import User
 import random
 import string
@@ -269,3 +271,29 @@ class LicenceCertificate(models.Model):
     def __str__(self):
         return self.attachment_name
     
+    
+def validate_video_extension(value):
+    """Validate that uploaded file has a video extension."""
+    ext = os.path.splitext(value.name)[1].lower()
+    allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
+    if ext not in allowed_extensions:
+        raise ValidationError("Only video files (.mp4, .avi, .mov, .mkv, .flv, .wmv) are allowed.")
+
+def validate_video_size(value):
+    """Validate that uploaded video size is less than 30MB."""
+    max_size = 30 * 1024 * 1024
+    if value.size > max_size:
+        raise ValidationError("Video size too large. Maximum allowed size is 30MB.")
+
+class MediaDigest(models.Model):
+    user_doctor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="media_digest_documents")
+    title = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(default="")
+    attachment_file = models.FileField(
+        upload_to="media_digest_documents/",
+        validators=[validate_video_extension, validate_video_size]
+    )
+
+    def __str__(self):
+        return self.title if self.title else "Untitled Media"
+
