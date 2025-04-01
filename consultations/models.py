@@ -17,5 +17,6 @@ class Prescription(models.Model):
     medicines = models.JSONField(null=True, blank=True)
     diagnosis = models.TextField(null=True, blank=True)
     additional_instruction = models.TextField(null=True, blank=True)
+    pdf_file = models.FileField(upload_to='prescritpion/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
