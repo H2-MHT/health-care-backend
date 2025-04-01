@@ -262,14 +262,16 @@ class Membership(models.Model):
     
 
 class LicenceCertificate(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="documents")
-    attachment_name = models.CharField(max_length=100)
-    document = models.FileField(upload_to="documents/", blank=True, null=True)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="attachment")
+    name = models.CharField(max_length=250, default="Untitled")
+    description = models.TextField(null=True, blank=True)
+    attachment = models.FileField(upload_to="attachment/", blank=True, null=True)
+    date = models.DateField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.attachment_name
+        return self.name
     
     
 def validate_video_extension(value):
