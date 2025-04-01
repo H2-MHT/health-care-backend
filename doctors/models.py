@@ -275,15 +275,15 @@ class LicenceCertificate(models.Model):
 def validate_video_extension(value):
     """Validate that uploaded file has a video extension."""
     ext = os.path.splitext(value.name)[1].lower()
-    allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
+    allowed_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv','.jpg', '.jpeg', '.png', '.webp']
     if ext not in allowed_extensions:
-        raise ValidationError("Only video files (.mp4, .avi, .mov, .mkv, .flv, .wmv) are allowed.")
+        raise ValidationError("Only accepting this types of files .mp4, .avi, .mov, .mkv, .flv, .wmv, .jpg, .jpeg, .png, .webp")
 
 def validate_video_size(value):
     """Validate that uploaded video size is less than 30MB."""
     max_size = 30 * 1024 * 1024
     if value.size > max_size:
-        raise ValidationError("Video size too large. Maximum allowed size is 30MB.")
+        raise ValidationError("Size too large. Maximum allowed size is 30MB.")
 
 class MediaDigest(models.Model):
     user_doctor = models.ForeignKey(User, on_delete=models.CASCADE, related_name="media_digest_documents")
