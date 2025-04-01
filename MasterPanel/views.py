@@ -329,7 +329,6 @@ class DoctorWithdrawAPIView(APIView):
             transaction.status = new_status
             transaction.save(update_fields=['status', 'rejection_reason'])
 
-            print(f"Updated Transaction {transaction.id}: Status = {transaction.status}, Reason = {transaction.rejection_reason}")
 
             return Response(
             {
