@@ -10,8 +10,8 @@ from .models import (
     CommunicationPreferences,
     BookedAppointment,
     DoctorSchedule,
-    # Slot,
     LicenceCertificate,
+    # Slot,
     MediaDigest,
 )
 from payments.models import Payment
@@ -249,7 +249,7 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
 class LicenceCertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenceCertificate
-        fields = ['id','attachment_name','document','is_verified']
+        fields = ['id','name','description','attachment','date','is_verified']
 
 
 class MediaDigestSerializer(serializers.ModelSerializer):
