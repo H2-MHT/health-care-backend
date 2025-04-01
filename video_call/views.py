@@ -144,3 +144,41 @@ class CreateAgoraChatUserAPIView(APIView):
             "currentUser": {"currentUserName": sender.get_full_name(),"uid": sender.id, "firebase_token": currentUserFirebaseToken},
             "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"firebase_token": remoteUserFirebaseToken}
         })
+
+class AgoraUserReceiverIDAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            receiverUserId = request.data.get('receiverUserId')
+            agoraReceiverUserUid = request.data.get('agoraReceiverUserUid')
+            
+            if not receiverUserId or not agoraReceiverUserUid:
+                return JsonResponse({"error": "Receiver user id and agora receiver user id are required"}, status=400)
+            
+            try: 
+                user = User.objects.get(pk=receiverUserId)
+            except User.DoesNotExist:
+                return JsonResponse({"error": "Receiver user does not exist"}, status=404)
+            
+            user.agoraReceiverUserUid = agoraReceiverUserUid
+            user.save()
+            return JsonResponse({"message": "Agora receiver user id saved successfully"})
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        
+    def get(self, request):
+        try:
+            receiverUserId = request.query_params.get('receiverUserId')
+            
+            if not receiverUserId:
+                return JsonResponse({"error": "Receiver user id is required"}, status=400)
+            try:
+                 user = User.objects.get(pk=receiverUserId)
+            except User.DoesNotExist:
+                return JsonResponse({"error": "Receiver user does not exist"}, status=400)
+            
+            return JsonResponse({"agoraReceiverUserUid": user.agoraReceiverUserUid})
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        
+        
