@@ -3,6 +3,7 @@ from .views import (
     StripePaymentAPIView,
     TransactionHistoryAPIView,
     AddAccountDetailAPIView,
+    WithdrawalAPIView
 )
 
 urlpatterns = [
@@ -12,5 +13,5 @@ urlpatterns = [
     # add account information
     path('add-account-detail/', AddAccountDetailAPIView.as_view(), name='add-account-detail'),
     # view account information
-    path('account-detail/', AddAccountDetailAPIView.as_view(), name='view-account-detail'),
+    path('withdrawal-request/', WithdrawalAPIView.as_view(), name='withdrawal-request'),
 ]

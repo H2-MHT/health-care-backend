@@ -169,57 +169,36 @@ class AddAccountDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
         try:
-            # Ensure the user is a doctor
             if not hasattr(request.user, 'doctor'):
                 return Response(
                     {"error": "Only doctors can add account details."},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            # Check if the account already exists
             account_number = request.data.get('account_number')
             account = AccountDetail.objects.filter(user=request.user, account_number=account_number).first()
             
             if account:
-                # Create a transaction record for the existing account
-                transaction=Transaction.objects.create(
-                    account=account,
-                    transaction_type="Withdrawal",
-                    amount=request.data.get('amount'),
-                )
-                transaction_serializer = TransactionSerializer(transaction)
                 return Response(
-                    {
-                        "message": "Transaction recorded successfully.",
-                        "data": transaction_serializer.data
-                        },
-                    status=status.HTTP_200_OK
-                )
-            
-            # Create a new account if it doesn't exist
+                    {"error":"This account number is already added"},
+                    status=status.HTTP_400_BAD_REQUEST)
+
             serializer = AccountDetailSerializer(data=request.data)
             if serializer.is_valid():
-                account = serializer.save(user=request.user)
-                # Optionally create a transaction for the new account
-                Transaction.objects.create(
-                    account=account,
-                    transaction_type="Withdrawal",
-                    amount=request.data.get('amount'),
-                )
+                serializer.save(user=request.user)
                 return Response(
                     {
-                        "message": "Account detail added successfully.", 
+                        "message": "Account details added successfully.",
                         "data": serializer.data
-                    },
-                    status=status.HTTP_200_OK
+                        },
+                    status=status.HTTP_201_CREATED
                 )
-            
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+    
     def get(self, request, *args, **kwargs):
         """
         Fetch all account details for the current logged-in doctor.
@@ -238,17 +217,108 @@ class AddAccountDetailAPIView(APIView):
                 if request.user.role == 'Doctor' and request.user.id != user.id:
                     return Response({"error": "only associated doctor to access this data"}, status=status.HTTP_403_FORBIDDEN)
 
-                transaction = Transaction.objects.filter(account__user=user)
-                transaction_serializer = TransactionSerializer(transaction, many=True)
+                accounts = AccountDetail.objects.filter(user=user)
+                account_serializer = AccountDetailSerializer(accounts, many=True)
                 return Response(
                     {
                         "message": "Doctor Account details fetched successfully.",
-                        # "accounts": account_serializer.data,
-                        "transactions": transaction_serializer.data
+                        "accounts": account_serializer.data,
                     },status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+class WithdrawalAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            user_id = request.data.get('user_id')
+            account_number = request.data.get('account_number')
+            full_name = request.data.get('full_name')
+            amount = request.data.get('amount')
+
+            if not all([user_id, account_number, full_name, amount]):
+                return Response(
+                    {"error": "user_id, account_number, full_name, and amount are required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                return Response({"error": "Invalid user_id format."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.user.id != user_id:
+                return Response(
+                    {"error": "Authenticated user does not match the doctor_id provided."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            account = AccountDetail.objects.filter(
+                user__id=user_id,
+                account_number=account_number.strip(), 
+                full_name__istartswith=full_name.strip()
+            ).first()
+
+            if not account:
+                print(f"Account not found! Available accounts: {AccountDetail.objects.filter(user__id=user_id).values_list('account_number', 'full_name')}")
+                return Response(
+                    {"error": "Account not found for the given doctor details."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            transaction = Transaction.objects.create(
+                account=account,
+                transaction_type="Withdrawal",
+                amount=amount,
+                status="pending"
+            )
+
+            transaction_serializer = TransactionSerializer(transaction)
+            return Response(
+                {
+                    "message": "Withdrawal request submitted successfully.",
+                    "data": transaction_serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+    def get(self, request, *args, **kwargs):
+        try:
+            user_id = request.user.id
+            
+            transactions = Transaction.objects.filter(
+                account__user_id=user_id,
+                transaction_type="Withdrawal"
+            ).order_by('-timestamp')
+            
+            if not transactions.exists():
+                return Response(
+                    {"message": "No withdrawal transactions found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            transaction_serializer = TransactionSerializer(transactions, many=True)
+            return Response(
+                {
+                    "message": "Withdrawal transactions fetched successfully.",
+                    "data": transaction_serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
