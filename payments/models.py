@@ -23,12 +23,10 @@ class Payment(models.Model):
 
 class AccountDetail(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, null=True)
     account_number = models.CharField(max_length=30)
     confirm_account_number = models.CharField(max_length=30)
     full_name = models.CharField(max_length=100)
     ifsc_code = models.CharField(max_length=20)
-    status = models.CharField(max_length=20, choices=[("Pending", "Pending"), ("Success", "Success"), ("Failed", "Failed")], default="Pending", null=True)
 
 
     def __str__(self):

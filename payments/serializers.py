@@ -6,7 +6,7 @@ from collections import OrderedDict
 class AccountDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = AccountDetail
-        fields = ['amount', 'account_number', 'full_name', 'ifsc_code', 'status']
+        fields = ['account_number','confirm_account_number','full_name', 'ifsc_code']
           
 class TransactionSerializer(serializers.ModelSerializer):
     # status = serializers.SerializerMethodField()

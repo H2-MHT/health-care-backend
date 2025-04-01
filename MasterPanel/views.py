@@ -310,7 +310,7 @@ class DoctorWithdrawAPIView(APIView):
                 return Response({"error": "Transaction ID is required"}, status=status.HTTP_400_BAD_REQUEST)
             
 
-            if new_status not in ["Success", "Failed"]:
+            if new_status not in ["success", "failed"]:
                 return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
             
             transaction = Transaction.objects.filter(id=transaction_id).first()
@@ -318,16 +318,17 @@ class DoctorWithdrawAPIView(APIView):
             if not transaction:
                 return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
             
-            if new_status == "Failed" and not rejection_reason:
+            if new_status == "failed" and not rejection_reason:
                 return Response({"error": "Rejection reason is required"}, status=status.HTTP_400_BAD_REQUEST)
             
-            if new_status == "Failed":
+            if new_status == "failed":
                 transaction.rejection_reason = rejection_reason
             else:
                 transaction.rejection_reason = ""
 
             transaction.status = new_status
-            transaction.save()
+            transaction.save(update_fields=['status', 'rejection_reason'])
+
 
             return Response(
             {
