@@ -11,9 +11,7 @@ from .models import (
     BookedAppointment,
     DoctorSchedule,
     LicenceCertificate,
-    LicenceAndCertificate,
     # Slot,
-    LicenceCertificate,
     MediaDigest,
 )
 from payments.models import Payment
@@ -251,7 +249,7 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
 class LicenceCertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenceCertificate
-        fields = ['id','attachment_name','document','is_verified']
+        fields = ['id','name','description','attachment','date','is_verified']
 
 
 class MediaDigestSerializer(serializers.ModelSerializer):
