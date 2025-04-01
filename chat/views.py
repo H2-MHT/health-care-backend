@@ -11,16 +11,15 @@ class ChatRoomAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        try:
-            user = request.user
-            rooms = ChatRoom.objects.filter(Q(sender=user) | Q(receiver=user)).order_by(
-                "-last_update"
-            )
-            serializer = ChatRoomSerializer(rooms, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+            try:
+                user = request.user
+                rooms = ChatRoom.objects.filter(Q(sender=user) | Q(receiver=user)).order_by(
+                    "-last_update"
+                )
+                serializer = GetChatRoomSerializer(rooms, many=True, context={"request": request})
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     def post(self, request, *args, **kwargs):
         """Create or get a chat room between two users."""
         try:
