@@ -92,6 +92,26 @@ class DoctorListAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+class PublicDoctorListAPIView(APIView):
+
+    def get(self, request, *args, **kwargs):
+        try:
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                doctors = User.objects.filter(role="Doctor",first_name__istartswith=search_key) | \
+                        User.objects.filter(role="Doctor",last_name__istartswith=search_key)
+            else:
+                doctors = User.objects.filter(role="Doctor")
+            paginated_data, headers = pagination_view(doctors, request)
+            serializer = UserSerializer(paginated_data, many=True)      
+            return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)
+            
+        except Exception as e:
+            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 class AppointmentManagementAPIView(APIView):
     permission_classes = [IsAuthenticated]

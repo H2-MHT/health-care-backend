@@ -41,6 +41,24 @@ class ClinicAPIView(APIView):
                 {"error": f"{e}"}, status=status.HTTP_417_EXPECTATION_FAILED
             )
 
+class PublicClinicListAPIView(APIView):
+
+    def get(self, request, *args, **kwargs):
+        try:
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                clinic = Clinic.objects.filter(user__first_name__istartswith=search_key) | \
+                         Clinic.objects.filter(user__last_name__istartswith=search_key)
+            else:
+                clinic = Clinic.objects.all()
+            paginated_data, headers = pagination_view(clinic, request)
+            serializer = ClinicSerializer(paginated_data, many=True)
+            return create_paginated_response("Clinic list retrieved successfully.",serializer.data,headers)
+        
+        except Exception as e:
+            return Response(
+                {"error": f"{e}"}, status=status.HTTP_417_EXPECTATION_FAILED
+            )
 
 class LanguageAPIView(APIView):
     permission_classes = [IsAuthenticated]
