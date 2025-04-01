@@ -18,6 +18,8 @@ from .models import Prescription
 from django.utils.dateparse import parse_date
 from rest_framework.permissions import IsAuthenticated
 from .serializers import PrescriptionSerializer
+from django.urls import reverse
+from django.core.files.base import ContentFile
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -84,7 +86,12 @@ class PrescriptionPDFView(APIView):
                 'medicines': prescription.medicines,
                 'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
             }
+            
             pdf_content, temp_pdf_name = generate_pdf(template_path, context, request)
+            pdf_filename = os.path.basename(temp_pdf_name)
+            if pdf_filename:
+                prescription.pdf_file.save(f'{pdf_filename}', ContentFile(pdf_content))
+                prescription.save()
             # Return PDF response
             response = HttpResponse(pdf_content, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename={temp_pdf_name}'
@@ -222,6 +229,10 @@ class PrescriptionListView(APIView):
                         'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
                         "email": prescription.appointment.patient.user.email,
                     },
+                    'pdf_url': request.build_absolute_uri(
+                        reverse('prescription_template') + f"?appointment_id={prescription.appointment.id}"
+)
+
                 }
                 for prescription in prescriptions
             ]
