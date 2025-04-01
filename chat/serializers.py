@@ -71,7 +71,9 @@ class GetChatRoomSerializer(serializers.ModelSerializer):
 
     def get_profile_picture(self, obj):
         user = self.get_other_user(obj)
-        return user.profile_picture if user else None
+        if user and user.profile_picture:
+            return user.profile_picture.url
+        return None
 
     def get_is_online(self, obj):
         user = self.get_other_user(obj)
