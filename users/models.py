@@ -122,6 +122,9 @@ class User(AbstractUser):
     device_token = models.TextField(unique=True, blank=True, null=True)
     # agora channel name
     agora_channel_name = models.CharField(max_length=250, null=True, blank=True)
+    # Agora receiver user id
+    agoraReceiverUserUid = models.IntegerField(null=True, blank=True)
+    
     # Set email as the unique identifier
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
