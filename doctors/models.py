@@ -265,13 +265,13 @@ class LicenceCertificate(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="attachment")
     name = models.CharField(max_length=250, default="Untitled")
     description = models.TextField(null=True, blank=True)
-    attachment = models.FileField(upload_to="attachment/", blank=True, null=True)
+    attachment = models.FileField(upload_to="Licence_Certificate/attachment/", blank=True, null=True)
     date = models.DateField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} - {self.date}"
     
     
 def validate_video_extension(value):
