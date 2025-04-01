@@ -4,6 +4,7 @@ from clinics.views import *
 urlpatterns = [
     path("clinic_register/", ClinicRegisterAPIView.as_view()),
     path("", ClinicAPIView.as_view()),
+    path("public-clinic-list/", PublicClinicListAPIView.as_view()),
     path("clinic_info/", ClinicInfoAPIView.as_view()),
     path("languages/", LanguageAPIView.as_view()),
     path("services_provided/", ServicesProvidedAPIView.as_view()),
