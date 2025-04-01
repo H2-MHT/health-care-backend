@@ -939,6 +939,7 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.slot = new_slot
             appointment.date = date_obj
             appointment.status = "Rescheduled"
+            appointment.rescheduled_by = request.user
             appointment.save()
 
             # Send WhatsApp Notifications
@@ -972,7 +973,8 @@ class RescheduleAppointmentAPIView(APIView):
                     "new_date": new_date,
                     "old_slot": old_slot,
                     "new_slot": new_slot,
-                    "status": "Rescheduled"
+                    "status": "Rescheduled",
+                    "rescheduled_by": request.user.role
                 }
             }, status=200)
 
