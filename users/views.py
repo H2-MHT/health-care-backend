@@ -357,16 +357,6 @@ class NotesAPIView(APIView):
 class DeviceAccessListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
-    def get(self, request):
-        try:
-            devices = DeviceAccess.objects.filter(user=request.user)
-            if not devices.exists():
-                raise NotFound("No device access history found for this user.")
-            serializer = DeviceAccessSerializer(devices, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
     def post(self, request):
         try:
             if isinstance(request.data, list):
@@ -382,3 +372,65 @@ class DeviceAccessListCreateAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def get(self, request):
+        """
+        Fetch all device access records or filter based on active_sessions status.
+        Use query parameter 'active=true' or 'active=false' to filter.
+        """
+        try:
+            active_param = request.query_params.get('active')
+            if active_param is not None:
+                if active_param.lower() == 'true':
+                    devices = DeviceAccess.objects.filter(user=request.user, active_sessions=True)
+                elif active_param.lower() == 'false':
+                    devices = DeviceAccess.objects.filter(user=request.user, active_sessions=False)
+                else:
+                    return Response(
+                        {"error": "Invalid query parameter. Use 'active=true' or 'active=false'."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                devices = DeviceAccess.objects.filter(user=request.user)  # Get all records
+            if not devices.exists():
+                return Response({"message": "No device access records found."},
+                                status=status.HTTP_404_NOT_FOUND)
+            serializer = DeviceAccessSerializer(devices, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request):
+        # Get data from request
+        data = request.data
+        user_id = data.get('user_id')
+        device_id = data.get('id')
+        active_sessions = data.get('active_sessions')
+
+        if not user_id or not device_id:
+            return Response({"error": "user_id and id are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.user.id != user_id:
+            return Response({"error": "You can only update your own device access record"},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        if request.user.role not in ['Patient', 'Doctor', 'Clinic']:
+            return Response({"error": "You don't have permission to update this record"},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            device_access = DeviceAccess.objects.get(pk=device_id, user_id=user_id)
+        except DeviceAccess.DoesNotExist:
+            return Response({"error": "Device access record not found or you don't have permission to update it"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # Update only the `active_sessions` field if provided
+        if active_sessions is not None:
+            device_access.active_sessions = active_sessions
+            device_access.save()
+            return Response({"message": "Session status updated successfully", 
+                            "data": {"active_sessions": device_access.active_sessions}}, 
+                            status=status.HTTP_200_OK)
+        return Response({"error": "No valid field provided for update"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    
