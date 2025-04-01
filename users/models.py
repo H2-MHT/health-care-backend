@@ -210,3 +210,5 @@ class DeviceAccess(models.Model):
     ip_address = models.GenericIPAddressField()
     logged_in_time = models.TimeField()
     platform = models.CharField(max_length=100)
+    active_sessions = models.BooleanField(null=True, blank=True, default=None)
+
