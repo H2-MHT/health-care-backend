@@ -172,75 +172,200 @@ class MedicalDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        serializer = MedicalDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(patient=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer = MedicalDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(patient=request.user)
+                return Response({"message": "Document Added Successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"message": "Validation Error", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     def get(self, request):
-        medical_documents = MedicalHistory.objects.filter(patient=request.user)
-        serializer = MedicalDocumentSerializer(medical_documents, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        """
+        Retrieve all medical documents associated with the current logged-in patient.
 
-    def put(self,request,pk):
-       try:
-           patient=MedicalHistory.objects.get(pk=pk)
-       except MedicalHistory.DoesNotExist:
-           return Response({"message:","Document not found"},status=status.HTTP_404_NOT_FOUND)
+        Returns:
+            Response: A response with a 200 status if the documents are retrieved
+                    successfully, or a 400 status if an unexpected error occurs.
 
-       serializer= MedicalDocumentSerializer(instance=patient,data=request.data,partial=True)
-       if serializer.is_valid():
-           serializer.save()
-           return Response(serializer.data,status=status.HTTP_200_OK)
-       return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
 
-    def delete(self, request, pk):
         try:
-            patient = MedicalHistory.objects.get(pk=pk)
-        except MedicalHistory.DoesNotExist:
-            return Response({"message": "Document not found"},
-                            status=status.HTTP_404_NOT_FOUND)
+            medical_documents = MedicalHistory.objects.filter(patient=request.user)
+            if not medical_documents.exists():
+                return Response({"message": "No medical documents found", "data": []}, status=status.HTTP_200_OK)
+            serializer = MedicalDocumentSerializer(medical_documents, many=True)
+            return Response({"message": "Documents Retrieved Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        patient.delete()
-        return Response({"message": "Document removed successfully"},
-                        status=status.HTTP_200_OK)
+    def put(self, request, pk):
+        """
+        Update a medical document.
+
+        Parameters:
+            request (Request): The request object.
+            pk (int): The primary key of the document to update.
+
+        Returns:
+            Response: A response with a 200 status if the document is updated
+                    successfully, or a 400 status if the request is invalid.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
+        try:
+            try:
+                medical_document = MedicalHistory.objects.get(pk=pk)
+            except MedicalHistory.DoesNotExist:
+                return Response({"message": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
+            serializer = MedicalDocumentSerializer(instance=medical_document, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Document Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self, request, pk):
+        """
+        Delete a medical document.
+
+        Parameters:
+            request (Request): The request object.
+            pk (int): The primary key of the document to delete.
+
+        Returns:
+            Response: A response with a 200 status if the document is deleted
+                    successfully, or a 404 status if the document is not found.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
+
+        try:
+            try:
+                medical_document = MedicalHistory.objects.get(pk=pk)
+            except MedicalHistory.DoesNotExist:
+                return Response({"message": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
+            medical_document.delete()
+            return Response({"message": "Document removed successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class AllergyDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request, *args, **kwargs):
-        serializer=AllergyDocumentSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(patient=request.user)
-            return Response(serializer.data,status=status.HTTP_201_CREATED)
-        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+        """
+        Post an allergy document
 
-    def get(self,request):
-        allergy_documents=AllergyDocument.objects.filter(patient=request.user)
-        serializer=AllergyDocumentSerializer(allergy_documents,many=True)
-        return Response(serializer.data,status=status.HTTP_200_OK)
+        --
 
-    def put(self,request,pk):
+        Parameters:
+            request (Request): Request object
+
+        Returns:
+            Response: A response with a 201 status if the document is added
+                    successfully, or a 400 status if the request is invalid.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
+
         try:
-            patient=AllergyDocument.objects.get(pk=pk)
-        except AllergyDocument.DoesNotExist:
-            return Response({"message:","Document not found"},status=status.HTTP_404_NOT_FOUND)
-        serializer=AllergyDocumentSerializer(instance=patient,data=request.data,partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data,status=status.HTTP_200_OK)
-        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+            serializer = AllergyDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(patient=request.user)
+                return Response({"message": "Document Added Successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
+            return Response({"message": "Invalid data", "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def delete(self,request,pk):
+    def get(self, request):
+        """
+        Retrieve all allergy documents associated with the current logged-in patient.
+
+        Returns:
+            Response: A response with a 200 status if the documents are retrieved
+                    successfully, or a 400 status if an unexpected error occurs.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
         try:
-            patient=AllergyDocument.objects.get(pk=pk)
-        except AllergyDocument.DoesNotExist:
-            return Response({"message":"Document not found"},
-                            status=status.HTTP_404_NOT_FOUND)
-        patient.delete()
-        return Response({"message":"Document removed successfully"},
-                        status=status.HTTP_200_OK)
+            allergy_documents = AllergyDocument.objects.filter(patient=request.user)
+            if not allergy_documents.exists():
+                return Response({"message": "No allergy documents found", "data": []}, status=status.HTTP_200_OK)
+            serializer = AllergyDocumentSerializer(allergy_documents, many=True)
+            return Response({"message": "Documents Retrieved Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        """
+        Update an allergy document
+
+        --
+
+        Parameters:
+            pk (int): The id of the document to update
+
+        Returns:
+            Response: A response with a 200 status if the document is updated
+                    successfully, or a 400 status if the document is not found
+                    or the request is invalid.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
+        try:
+            try:
+                patient_document = AllergyDocument.objects.get(pk=pk, patient=request.user)
+            except AllergyDocument.DoesNotExist:
+                return Response({"message": "Document not found or access denied"}, status=status.HTTP_404_NOT_FOUND)
+            serializer = AllergyDocumentSerializer(instance=patient_document, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Document Updated Successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def delete(self, request, pk):
+        """
+        Delete an allergy document
+        ---
+
+        Parameters:
+            pk (int): The id of the document to delete
+
+        Returns:
+            Response: A response with a 200 status if the document is deleted
+                    successfully, or a 400 status if the document is not found
+                    or the request is invalid.
+
+        Raises:
+            Exception: If an unexpected error occurs.
+        """
+        try:
+            try:
+                patient_document = AllergyDocument.objects.get(pk=pk, patient=request.user)
+            except AllergyDocument.DoesNotExist:
+                return Response({"message": "Document not found or access denied"},
+                                status=status.HTTP_404_NOT_FOUND)
+            patient_document.delete()
+            return Response({"message": "Document removed successfully"},
+                            status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class AddToFavouriteView(APIView):
