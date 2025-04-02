@@ -113,6 +113,37 @@ class PublicDoctorListAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+class PublicDoctorDetailAPIView(APIView):
+    def get(self, request):
+        try:
+            user_id = request.query_params.get('user_doctor_id')   
+            if not user_id:
+                return Response({"message": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                doctor = Doctor.objects.get(user_id=user_id)
+            except Doctor.DoesNotExist:
+                return Response({"message": "Doctor not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            return Response({"message": "Doctor details retrieved successfully.", 
+                            "data": {
+                                "user_id": doctor.user_id,
+                                "name": doctor.user.get_full_name(),
+                                "email": doctor.user.email,
+                                "phone_number": doctor.user.phone_number,
+                                "residence": doctor.user.residence,
+                                "city": doctor.user.city,
+                                "country": doctor.user.country,
+                                "languages": list(doctor.user.languages.values("id", "title")),
+                                "specialty": doctor.specialty,
+                                "qualifications": doctor.qualifications,
+                                "experience": doctor.experience_years,
+                                "rating": doctor.user.rating
+                            }})
+        
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
 class AppointmentManagementAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
