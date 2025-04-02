@@ -31,13 +31,15 @@ from .views import (
     LicenceCertificateAPIView,
     redeem_invitation,
     MediaDigestAPIView,
-    PublicDoctorListAPIView
+    PublicDoctorListAPIView,
+    PublicDoctorDetailAPIView
     )
 
 
 urlpatterns = [
     path("get-doctors/", DoctorListAPIView.as_view(), name="doctor-list"),
     path('public-doctor-list/', PublicDoctorListAPIView.as_view(), name='public-doctor-list'),
+    path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
     
     # referral and invitation 
     path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
