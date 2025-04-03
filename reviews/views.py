@@ -9,6 +9,7 @@ from appointments.models import Appointment
 from rest_framework.generics import get_object_or_404
 from patients.models import Patient
 from utils.pagination import pagination_view, create_paginated_response
+from rest_framework.exceptions import ValidationError
 # Create your views here.
 
 class ReviewPIView(APIView):
@@ -156,23 +157,40 @@ class DoctorReviewsAPIView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         try:
-
+            # Ensure only the associated doctor can view reviews
             if hasattr(request.user, 'Doctor'):
-                return Response({'message': 'only associated doctor can view reviews'})
+                return Response({'message': 'Only associated doctor can view reviews'},
+                                status=status.HTTP_403_FORBIDDEN)
 
             doctor_id = request.user.doctor.id
             queryset = self.get_queryset(doctor_id)
-            total_reviews = queryset.count()
-            # Serialize the data
-            serializer = self.get_serializer(queryset, many=True)
+
+            # Pagination Parameters
+            if 'limit' not in request.query_params:
+                raise ValidationError({"error": "The 'limit' query parameter is required."})
+            if 'page' not in request.query_params:
+                raise ValidationError({"error": "The 'page' query parameter is required."})
+
+            try:
+                per_page_results = int(request.query_params.get('limit'))
+                page = int(request.query_params.get('page'))
+                if page < 1:
+                    raise ValidationError({"error": "'page' must be 1 or greater."})
+            except ValueError:
+                raise ValidationError({"error": "'limit' and 'page' must be valid integers."})
+
+            # Apply pagination
+            paginated_data, headers = pagination_view(queryset, request)
+
+            # Serialize paginated results
+            serializer = self.get_serializer(paginated_data, many=True)
+
             response_data = {
-                'total_reviews': total_reviews,
+                'total_reviews': queryset.count(),
                 'reviews': serializer.data
             }
-            return Response(
-                {"message": "Retrived successfully!", "data": response_data},
-                status=status.HTTP_200_OK
-            )
+
+            return create_paginated_response("Retrieved successfully!", response_data, headers)
 
         except Exception as e:
             return Response(
