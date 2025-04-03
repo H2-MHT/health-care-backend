@@ -17,6 +17,8 @@ from doctors.models import Doctor
 from django.utils import timezone
 from django.utils.timezone import now
 from utils.pagination import pagination_view,create_paginated_response
+from rest_framework.exceptions import ValidationError
+
 
 # Create your views here.
 
@@ -225,10 +227,34 @@ class ClinicReviewListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        """List all clinic reviews"""
-        reviews = ClinicReview.objects.filter(clinic__user=request.user)
-        serializer = ClinicReviewSerializer(reviews, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        """List all clinic reviews with pagination"""
+
+
+        if 'limit' not in request.query_params:
+            raise ValidationError({"error": "The 'limit' query parameter is required."})
+        if 'page' not in request.query_params:
+            raise ValidationError({"error": "The 'page' query parameter is required."})
+
+        try:
+            per_page_results = int(request.query_params.get('limit'))
+            page = int(request.query_params.get('page'))
+            if page < 1:
+                raise ValidationError({"error": "'page' must be 1 or greater."})
+        except ValueError:
+            raise ValidationError({"error": "'limit' and 'page' must be valid integers."})
+
+        # Fetch reviews efficiently
+
+        reviews = ClinicReview.objects.filter(clinic__user=request.user).select_related('clinic')
+
+        # Apply pagination
+        paginated_data, headers = pagination_view(reviews, request)
+
+        # Serialize paginated results
+        serializer = ClinicReviewSerializer(paginated_data, many=True)
+
+        return create_paginated_response("Reviews retrieved successfully.", serializer.data, headers)
+
 
     def post(self, request, *args, **kwargs):
         """Create a new clinic review"""
