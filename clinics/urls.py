@@ -6,6 +6,7 @@ urlpatterns = [
     path("", ClinicAPIView.as_view()),
     path("public-clinic-list/", PublicClinicListAPIView.as_view()),
     path("clinic_info/", ClinicInfoAPIView.as_view()),
+    path("clinic_detail/", PublicClinicDetailAPIView.as_view()),
     path("languages/", LanguageAPIView.as_view()),
     path("services_provided/", ServicesProvidedAPIView.as_view()),
     path("clinic-reviews/", ClinicReviewListCreateAPIView.as_view()),

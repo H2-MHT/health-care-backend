@@ -60,6 +60,25 @@ class PublicClinicListAPIView(APIView):
                 {"error": f"{e}"}, status=status.HTTP_417_EXPECTATION_FAILED
             )
 
+class PublicClinicDetailAPIView(APIView):
+    def get(self, request):
+        try:
+            clinic_id = request.query_params.get('clinic_id')        
+            if not clinic_id:
+                return Response({'message': 'clinic id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                clinic = Clinic.objects.get(id=clinic_id)
+            except Clinic.DoesNotExist:
+                return Response({'message': 'Clinic not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            serializer = ClinicInfoSerializer(clinic)
+            return Response({'message': "Retreived successfully", 'data': serializer.data})
+        
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+
 class LanguageAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
