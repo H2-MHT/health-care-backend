@@ -249,7 +249,7 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
 class LicenceCertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LicenceCertificate
-        fields = ['id','name','description','attachment','date','is_verified']
+        fields = ['user_id','id','name','description','attachment','date','status', 'rejection_reason', 'is_delete']
 
 
 class MediaDigestSerializer(serializers.ModelSerializer):
