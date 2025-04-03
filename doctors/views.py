@@ -38,7 +38,8 @@ from .models import (
     # Slot,
     DoctorSchedule,
     PatientBookAppointment,
-    LicenceCertificate, MediaDigest,
+    LicenceCertificate, 
+    MediaDigest,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -51,7 +52,8 @@ from .serializers import (
     ConsultationSettingsSerializer,
     BookedAppointmentSerializer,
     DoctorScheduleSerializer,
-    LicenceCertificateSerializer, MediaDigestSerializer,
+    LicenceCertificateSerializer, 
+    MediaDigestSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -2039,7 +2041,7 @@ class MembershipAPIView(APIView):
 
 class LicenceCertificateAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
+    parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
         try:
@@ -2053,17 +2055,42 @@ class LicenceCertificateAPIView(APIView):
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def get(self, request):
         try:
-            licence_certificates = LicenceCertificate.objects.filter(user=request.user)
+            licence_certificates = LicenceCertificate.objects.filter(user=request.user, is_delete=False)
             serializer = LicenceCertificateSerializer(licence_certificates, many=True)
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+class DeleteDocumentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        try:
+            attachment_id = request.data.get("attachment_id")
+            if not attachment_id:
+                return Response({"error": "Please provide attachment id"}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                licence_certificate = LicenceCertificate.objects.get(pk=attachment_id, user=request.user, is_delete=False)
+
+            except LicenceCertificate.DoesNotExist:
+                return Response({"error": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            
+            if licence_certificate.status != "Pending":
+                return Response({"error": "Only pending documents can be deleted"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            licence_certificate.is_delete = True
+            licence_certificate.save()
+            return Response({"message": "Document deleted successfully"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class MediaDigestAPIView(APIView):

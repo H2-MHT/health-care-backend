@@ -11,7 +11,8 @@ from .views import(
     DetailOfUser,
     BlockUser,
     DeleteUser,
-    DoctorWithdrawAPIView
+    DoctorWithdrawAPIView,
+    VerifyDocumentAPIView,
 )
 
 urlpatterns = [
@@ -53,5 +54,6 @@ urlpatterns = [
     path("user_block/<int:id>/", BlockUser.as_view(), name="user_block"),
     path("user_delete/<int:pk>/", DeleteUser.as_view(), name="user_delete"),
     path("get-accounts/", DoctorWithdrawAPIView.as_view(), name='get-accounts'),
-    path("approv-reject-payment/", DoctorWithdrawAPIView.as_view(), name="approv-reject-payment")
+    path("approv-reject-payment/", DoctorWithdrawAPIView.as_view(), name="approv-reject-payment"),
+    path("verify-document/", VerifyDocumentAPIView.as_view(), name="verify-document"),
 ]

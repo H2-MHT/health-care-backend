@@ -11,10 +11,12 @@ from patients.models import Patient
 from rest_framework import status
 from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
+from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
 from users.models import User
 from payments.models import Transaction, AccountDetail
 from rest_framework import status
+from doctors.models import LicenceCertificate
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -279,6 +281,7 @@ class DeleteUser(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class DoctorWithdrawAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
     def get(self, request, *args, **kwargs):
         try:
             if request.user.role == 'SuperAdmin':
@@ -337,5 +340,91 @@ class DoctorWithdrawAPIView(APIView):
                 "new_status": transaction.status,
                 "rejection_reason": transaction.rejection_reason
             },status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+class VerifyDocumentAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(self, request, *args, **kwargs):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response(
+                    {"error": "Only SuperAdmin can verify documents."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            user_id = request.query_params.get("user_id")
+
+            if user_id:
+                licence_certificate = LicenceCertificate.objects.filter(user_id=user_id)
+            else:
+                licence_certificate = LicenceCertificate.objects.all()
+
+            licence_certificate_serializer = LicenceCertificateSerializer(licence_certificate, many=True)
+
+            return Response(
+                {
+                    "message": "Licence Certificate Document(s) Fetched Successfully",
+                    "licence_certificate": licence_certificate_serializer.data
+                }, 
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+
+    def patch(self, request, *args, **kwargs):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "Only SuperAdmin can approve or reject document."}, status=status.HTTP_403_FORBIDDEN)
+            
+            licence_certificate_id = request.data.get("licence_certificate_id")
+            if not licence_certificate_id:
+                return Response({"error": "Licence Certificate ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user_id = request.data.get("user_id")
+            if not user_id:
+                return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                licence_certificate = LicenceCertificate.objects.get(id=licence_certificate_id)
+            except LicenceCertificate.DoesNotExist:
+                return Response({"error": "Licence Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if licence_certificate.user_id != user_id:
+                return Response({"error": "User ID does not match with Licence Certificate"}, status=status.HTTP_400_BAD_REQUEST)
+
+            status_value = request.data.get("status")
+            rejection_reason = request.data.get("rejection_reason", "").strip()
+
+            if not status_value:
+                return Response({"error": "Status is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if status_value == "Rejected" and not rejection_reason:
+                return Response({"error": "Rejection reason is required when rejecting a document"}, status=status.HTTP_400_BAD_REQUEST)
+
+            licence_certificate.status = status_value 
+
+            if status_value == "Rejected":
+                licence_certificate.rejection_reason = rejection_reason
+            else:
+                licence_certificate.rejection_reason = ""
+
+            licence_certificate.save()
+
+            response_data = {
+                "message": "Document verification updated successfully",
+                "licence_certificate_id": licence_certificate.id,
+                "status": licence_certificate.status,  # Use correct DB field
+                "rejection_reason": licence_certificate.rejection_reason
+            }
+
+            return Response({"message": "Licence Certificate updated successfully", "data": response_data}, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
