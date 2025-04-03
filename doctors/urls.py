@@ -32,7 +32,8 @@ from .views import (
     redeem_invitation,
     MediaDigestAPIView,
     PublicDoctorListAPIView,
-    PublicDoctorDetailAPIView
+    PublicDoctorDetailAPIView,
+    DeleteDocumentAPIView,
     )
 
 
