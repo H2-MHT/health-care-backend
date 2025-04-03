@@ -267,7 +267,9 @@ class LicenceCertificate(models.Model):
     description = models.TextField(null=True, blank=True)
     attachment = models.FileField(upload_to="Licence_Certificate/attachment/", blank=True, null=True)
     date = models.DateField(null=True, blank=True)
-    is_verified = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=[("Pending", "Pending"), ("Approved", "Approved"), ("Rejected", "Rejected")], default="Pending", null=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+    is_delete = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
