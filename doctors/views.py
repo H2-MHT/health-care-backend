@@ -57,7 +57,7 @@ from .serializers import (
 )
 from django.utils.crypto import get_random_string
 import pytz
-from datetime import datetime
+from datetime import datetime, date
 from django.contrib.auth.hashers import check_password
 import random
 from django.conf import settings
@@ -67,6 +67,7 @@ from django.contrib.auth.hashers import make_password
 from rest_framework.decorators import api_view
 from utils.pagination import pagination_view, create_paginated_response
 from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
+import re
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -442,6 +443,76 @@ class AppointmentManagementAPIView(APIView):
         except Exception as e:
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class DeleteAppointmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        appointment_id = request.query_params.get('appointment_id')
+        if not appointment_id:
+            return Response({"message": "Please provide a valid appointment ID to delete."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        managed_appointment = AppointmentManagement.objects.filter(pk=appointment_id).first()
+        if not managed_appointment:
+            return Response({"message": "Appointment not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        doctor = managed_appointment.doctor
+        days_list = managed_appointment.days.split(',') 
+        appointment_type = managed_appointment.appointment_type  
+        start_time = managed_appointment.start_time.strftime('%H:%M')
+        end_time = managed_appointment.end_time.strftime('%H:%M')
+
+        start_time_obj = datetime.strptime(start_time, "%H:%M").time()
+        end_time_obj = datetime.strptime(end_time, "%H:%M").time()
+
+        doctor_schedule = DoctorSchedule.objects.filter(user=doctor.user).first()
+        if not doctor_schedule:
+            managed_appointment.delete()
+            return Response({"message": "Appointment deleted successfully, but no schedule found for the doctor."}, status=status.HTTP_200_OK)
+      
+        booked_appointments = BookedAppointment.objects.filter(
+            doctor=doctor.user.id,
+            appointment_type=appointment_type,
+            status__in=["Pending", "Confirmed"],
+        ).values_list("date", flat=True)
+
+        weekdays_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+        
+        today = date.today()
+        protected_days = []
+        
+        for day in days_list:
+            if day in weekdays_map:
+                target_weekday = weekdays_map[day]
+                days_ahead = (target_weekday - today.weekday()) % 7
+                target_date = today + timedelta(days=days_ahead)
+
+                if target_date in booked_appointments:
+                    protected_days.append(target_date)
+
+        if protected_days:
+            return Response({"message": "Your appointment is booked for the same day, you can't delete." }, 
+                               status=status.HTTP_400_BAD_REQUEST)
+
+        schedule_data = doctor_schedule.schedule
+        
+        for day in days_list:
+            if day in schedule_data and appointment_type in schedule_data[day]: 
+                new_slots = []
+                for slot in schedule_data[day][appointment_type]: 
+                    slot_start_time_str = slot["slot"].split(" - ")[0] 
+                    slot_start_time_obj = datetime.strptime(slot_start_time_str, "%H:%M").time()
+                    
+                    if not (start_time_obj <= slot_start_time_obj < end_time_obj):
+                        new_slots.append(slot)
+
+                schedule_data[day][appointment_type] = new_slots 
+
+        doctor_schedule.schedule = schedule_data
+        doctor_schedule.save()
+
+        managed_appointment.delete()
+        
+        return Response({"message": f"{appointment_type} appointment and its slots deleted successfully"}, status=status.HTTP_200_OK)
 
 
 # class AllDaySlotsAPIView(APIView):

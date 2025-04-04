@@ -34,6 +34,7 @@ from .views import (
     PublicDoctorListAPIView,
     PublicDoctorDetailAPIView,
     DeleteDocumentAPIView,
+    DeleteAppointmentAPIView,
     )
 
 
@@ -41,6 +42,8 @@ urlpatterns = [
     path("get-doctors/", DoctorListAPIView.as_view(), name="doctor-list"),
     path('public-doctor-list/', PublicDoctorListAPIView.as_view(), name='public-doctor-list'),
     path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
+    path("delete-appointment/", DeleteAppointmentAPIView.as_view(), name="appointment"),
+
     
     # referral and invitation 
     path('referral/generate/', GenerateReferralCodeView.as_view(), name='generate_referral'),
