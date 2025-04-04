@@ -13,7 +13,8 @@ from .views import (
     DeleteProfilePictureAPIView,
     GetUserProfileAPIView,
     AccountDeactivateDeleteView,
-    UserDeviceTokenAPIView
+    UserDeviceTokenAPIView,
+    ShowPatientEmailPhoneAPIView,
 )
 
 urlpatterns = [
@@ -37,4 +38,5 @@ urlpatterns = [
     path('firebase-device-token/', UserDeviceTokenAPIView.as_view(), name='firebase-device-token'),
 
     path("view-profile/", GetUserProfileAPIView.as_view(), name="view-profile"),
+    path("show-email-phone/", ShowPatientEmailPhoneAPIView.as_view(), name="show-email-phone"),
 ]

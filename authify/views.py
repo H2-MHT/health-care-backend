@@ -34,6 +34,7 @@ from .serializers import (
     UserProfileSerializer,
     UserProfileUpdateSerializer,
     ResetPasswordSerializer,
+    ShowPatientEmailPhoneSerializer,
 )
 from clinics.models import Clinic
 from clinics.serializers import ClinicInfoSerializer
@@ -1011,24 +1012,19 @@ class GetUserProfileAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            serializer = UserProfileSerializer(user)
+            serializer = UserProfileSerializer(user, context={"request": request})
             data = serializer.data
 
             if role == "Doctor":
                 logger.info("Returning doctor profile for user: %s", request.user.email)
 
-                # Fetch clinic data if it exists
                 clinic = Clinic.objects.filter(user=user).first()
                 clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
 
-                # Nested clinic data inside user profile response
                 data["clinic_data"] = clinic_data
 
                 return Response(
-                    {
-                        "message": "Doctor profile.",
-                        "data": data,  # Includes nested clinic info
-                    },
+                    {"message": "Doctor profile.", "data": data},
                     status=status.HTTP_200_OK,
                 )
             elif role == "Patient":
@@ -1053,6 +1049,48 @@ class GetUserProfileAPIView(APIView):
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+class ShowPatientEmailPhoneAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        try:
+            user = request.user
+
+            # Ensure the user is a patient
+            if user.role != "Patient":
+                return Response(
+                    {"message": "Only patients can update visibility preferences."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Get the patient's profile
+            try:
+                patient = user.patient_profile  # related_name="patient_profile"
+            except Patient.DoesNotExist:
+                return Response(
+                    {"message": "Patient profile not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Deserialize and update preferences
+            serializer = ShowPatientEmailPhoneSerializer(patient, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"message": "Preferences updated successfully.", "data": serializer.data},
+                    status=status.HTTP_200_OK,
+                )
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.exception("Error updating patient preferences: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 class UserDeviceTokenAPIView(APIView):

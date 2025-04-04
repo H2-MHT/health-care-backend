@@ -148,25 +148,45 @@ class PatientListView(APIView):
 
     def get(self, request):
         try:
+            # Get all patients who have an appointment with the logged-in doctor
             appointments = Appointment.objects.filter(doctor__user=request.user)
-            
+
             patients_data = []
             for appointment in appointments:
-                if appointment.patient.user.role == 'Patient':
-                    patients_data.append({
+                patient_user = appointment.patient.user  # Patient's User object
+                if patient_user.role == "Patient":
+                    patient_profile = appointment.patient  # Patient Profile (OneToOneField)
+                    
+                    # Prepare patient data, respecting privacy settings
+                    patient_data = {
                         "appointment_id": appointment.id,
-                        "patient": PatientUserSerializer(appointment.patient.user).data
-                    })
-            
+                        "first_name": patient_user.first_name,
+                        "last_name": patient_user.last_name,
+                        "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
+                        "bio": patient_user.bio,
+                        "city": patient_user.city,
+                        "country": patient_user.country,
+                    }
+
+                    # Include email & phone only if patient has allowed it
+                    if patient_profile.show_email:
+                        patient_data["email"] = patient_user.email
+                    if patient_profile.show_phone:
+                        patient_data["phone_number"] = patient_user.phone_number
+
+                    patients_data.append(patient_data)
+
             return Response({
                 "total_assigned_patients": len(patients_data),
                 "assigned_patients": patients_data
-            })
+            }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
 
 class MedicalDocumentUploadView(APIView):
     permission_classes = [IsAuthenticated]

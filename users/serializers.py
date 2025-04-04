@@ -4,7 +4,7 @@ import base64
 from django.core.files.base import ContentFile
 from django.utils.timesince import timesince
 from .models import Education, Media, Skill, User, Notes, DeviceAccess
-
+from doctors.models import ConsultationSessionAndFee
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
@@ -79,12 +79,30 @@ class EducationSerializer(serializers.ModelSerializer):
     
 class UserSerializer(serializers.ModelSerializer):
     speciality = serializers.CharField(source="doctor.specialty", read_only=True)
+    planned_hourly_rate = serializers.CharField(source="doctor.planned_hourly_rate", read_only=True)
+    urgent_hourly_rate = serializers.CharField(source="doctor.urgent_hourly_rate", read_only=True)
     class Meta:
         model = User
-        fields = ["id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture", "bio", "country", "city", "residence", 
-                  "role", "speciality", "rating"
+        fields = [
+            "id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
+            "bio", "country", "city", "residence", "role", "speciality", "rating",
+            "planned_hourly_rate", "urgent_hourly_rate"
         ]
-        
+
+    def get_planned_hourly_rate(self, obj):
+        """Calculate planned hourly rate dynamically."""
+        consultation = ConsultationSessionAndFee.objects.filter(doctor=obj.doctor).first()
+        if consultation and consultation.planned_fees and consultation.planned_session_length:
+            return round((consultation.planned_fees / consultation.planned_session_length) * 60, 2)
+        return None
+
+    def get_urgent_hourly_rate(self, obj):
+        """Calculate urgent hourly rate dynamically."""
+        consultation = ConsultationSessionAndFee.objects.filter(doctor=obj.doctor).first()
+        if consultation and consultation.urgent_fees and consultation.urgent_session_length:
+            return round((consultation.urgent_fees / consultation.urgent_session_length) * 60, 2)
+        return None
+
 
 class NotesSerializer(serializers.ModelSerializer):
     class Meta:

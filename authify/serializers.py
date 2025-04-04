@@ -4,7 +4,7 @@ import json
 from doctors.models import Doctor
 from users.models import User
 import re
-
+from patients.models import Patient
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     confirm_password = serializers.CharField(write_only=True)
@@ -193,8 +193,40 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if exp:
             data['experience_years'] = exp.experience_years
         return data
+    def get_email(self, obj):
+        """Return email only if Patient has show_email=True."""
+        if obj.role == "Patient":
+            try:
+                if not obj.patient_profile.show_email:
+                    return None  # Hide email
+            except Patient.DoesNotExist:
+                return None  # No patient profile found
+        return obj.email  # Show email
+
+    def get_phone_number(self, obj):
+        """Return phone number only if Patient has show_phone=True."""
+        if obj.role == "Patient":
+            try:
+                if not obj.patient_profile.show_phone:
+                    return None  # Hide phone number
+            except Patient.DoesNotExist:
+                return None  # No patient profile found
+        return obj.phone_number  # Show phone number
 
 
+class ShowPatientEmailPhoneSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Patient
+        fields = ["show_email", "show_phone"]
+
+    def update(self, instance, validated_data):
+        """Update the patient's preferences."""
+        instance.show_email = validated_data.get("show_email", instance.show_email)
+        instance.show_phone = validated_data.get("show_phone", instance.show_phone)
+        instance.save()
+        return instance
+    
+    
 class UserProfileUpdateSerializer(UserProfileSerializer):
     profile_picture = serializers.ImageField(
         required=False, validators=[validate_profile_picture]
