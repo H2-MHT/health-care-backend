@@ -357,7 +357,7 @@ class VerifyDocumentAPIView(APIView):
             user_id = request.query_params.get("user_id")
 
             if user_id:
-                licence_certificate = LicenceCertificate.objects.filter(user_id=user_id)
+                licence_certificate = LicenceCertificate.objects.filter(user_id=user_id, is_delete=False)
             else:
                 licence_certificate = LicenceCertificate.objects.all()
 
