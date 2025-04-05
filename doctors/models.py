@@ -17,7 +17,26 @@ class Doctor(models.Model):
     experience_years = models.PositiveIntegerField(null=True, blank=True)
     available_dates = models.JSONField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
-    
+    planned_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    urgent_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def update_hourly_rates(self):
+        """hourly rates based on consultation settings"""
+        consultation = ConsultationSessionAndFee.objects.filter(doctor=self).first()
+        if consultation:
+            planned_hourly = 0
+            urgent_hourly = 0
+
+            if consultation.planned_fees and consultation.planned_session_length:
+                planned_hourly = (consultation.planned_fees / consultation.planned_session_length) * 60
+
+            if consultation.urgent_fees and consultation.urgent_session_length:
+                urgent_hourly = (consultation.urgent_fees / consultation.urgent_session_length) * 60
+
+            self.planned_hourly_rate = round(planned_hourly, 2)
+            self.urgent_hourly_rate = round(urgent_hourly, 2)
+            self.save()
+
     def __str__(self):
         return self.user.get_full_name()
 
@@ -173,6 +192,23 @@ class ConsultationSessionAndFee(models.Model):
     buffer_time = models.DurationField(blank=True, null=True)
     planned_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     urgent_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        """Automatically update doctor's hourly rates when saving consultation fees"""
+        super().save(*args, **kwargs)
+        if self.doctor:
+            planned_hourly = 0
+            urgent_hourly = 0
+
+            if self.planned_fees and self.planned_session_length:
+                planned_hourly = (self.planned_fees / self.planned_session_length) * 60
+
+            if self.urgent_fees and self.urgent_session_length:
+                urgent_hourly = (self.urgent_fees / self.urgent_session_length) * 60
+
+            self.doctor.planned_hourly_rate = round(planned_hourly, 2)
+            self.doctor.urgent_hourly_rate = round(urgent_hourly, 2)
+            self.doctor.save()
 
     def __str__(self):
         return f"Consultation settings for {self.doctor}"
