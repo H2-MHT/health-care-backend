@@ -35,6 +35,7 @@ from .views import (
     PublicDoctorDetailAPIView,
     DeleteDocumentAPIView,
     DeleteAppointmentAPIView,
+    RefundAppointmentPaymentAPIView, 
     )
 
 
@@ -77,6 +78,7 @@ urlpatterns = [
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
     path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
     path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
+    path('refund-payment/',RefundAppointmentPaymentAPIView.as_view(), name="refund-payment"),
 
     path("payment-success/", PaymentSuccessView.as_view(), name="payment-success"),
 
