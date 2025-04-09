@@ -1,9 +1,13 @@
 import logging
 import random
+import time
+import requests
+import jwt
 import re
 import sendgrid
 from datetime import timedelta
 from django.utils import timezone
+from rest_framework.authtoken.models import Token
 
 from django.conf import settings
 from django.utils.timezone import now
@@ -872,50 +876,92 @@ class GoogleLoginView(APIView):
 
 class AppleLoginView(APIView):
     """
-    API view for Apple-based authentication.
-    Handles login or registration using an Apple ID token.
+    API endpoint for handling Sign in with Apple via POST /auth/apple/
     """
 
     def post(self, request):
-        """
-        Handles POST requests for Apple login.
-        """
-        logger.info("Received Apple login request.")
-        strategy = load_strategy(request)  # Load the social authentication strategy
-        token = request.data.get("token")  # Get the Apple ID token from the request
-
-        if not token:
-            logger.warning("Token is missing in the request.")
-            return Response(
-                {"error": "Token is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        code = request.data.get('code')
+        if not code:
+            return Response({"error": "Authorization code is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Use the Apple ID backend to authenticate the user
-            backend = AppleIdAuth(strategy=strategy)
-            user = backend.do_auth(token)
+            # Step 1: Generate client secret
+            client_secret = self._generate_client_secret()
 
-            if user:
-                logger.info("Apple authentication successful for user: %s", user.email)
-                # Generate tokens for the authenticated user
-                jwt_token = get_tokens_for_user(user)
-                return Response(
-                    {"message": "Login successful", "token": jwt_token},
-                    status=status.HTTP_200_OK,
-                )
+            # Step 2: Exchange code for tokens
+            token_response = self._exchange_code_for_token(code, client_secret)
+            id_token = token_response.get('id_token')
 
-            # Return error if authentication fails
-            logger.warning("Apple authentication failed.")
-            return Response(
-                {"error": "Authentication failed"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            if not id_token:
+                return Response({"error": "No ID token received from Apple."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Step 3: Decode and verify ID token
+            user_info = self._decode_id_token(id_token)
+
+            # Step 4: Create or authenticate user
+            user = self._get_or_create_user(user_info)
+
+            # Step 5: Generate DRF auth token
+            token, _ = Token.objects.get_or_create(user=user)
+
+            return Response({"token": token.key}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            logger.exception("Unexpected error during Apple login: %s", str(e))
-            return Response(
-                {"error": "An error occurred. Please try again later."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _generate_client_secret(self):
+        headers = {
+            "kid": settings.APPLE_KEY_ID,
+            "alg": "ES256"
+        }
+        payload = {
+            "iss": settings.APPLE_TEAM_ID,
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 86400 * 180,
+            "aud": "https://appleid.apple.com",
+            "sub": settings.APPLE_CLIENT_ID
+        }
+
+        client_secret = jwt.encode(
+            payload,
+            settings.APPLE_PRIVATE_KEY,
+            algorithm="ES256",
+            headers=headers
+        )
+        return client_secret
+
+    def _exchange_code_for_token(self, code, client_secret):
+        data = {
+            "client_id": settings.APPLE_CLIENT_ID,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": settings.APPLE_REDIRECT_URI,
+        }
+
+        response = requests.post("https://appleid.apple.com/auth/token", data=data)
+        if response.status_code != 200:
+            raise Exception(f"Apple token endpoint error: {response.content}")
+        return response.json()
+
+    def _decode_id_token(self, id_token):
+        decoded = jwt.decode(id_token, options={"verify_signature": False})
+        return decoded
+
+    def _get_or_create_user(self, user_info):
+        sub = user_info.get("sub")
+        email = user_info.get("email")
+
+        if not sub:
+            raise Exception("Apple user ID (sub) missing.")
+
+        user, created = User.objects.get_or_create(apple_sub=sub, defaults={
+            "email": email if email else f"{sub}@appleid.apple.com",
+            "username": email if email else f"user_{sub[:8]}",
+            "is_active": True
+        })
+
+        return user
 
 class UpdateUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
