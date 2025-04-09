@@ -7,6 +7,7 @@ import string
 from payments.models import Payment
 from patients.models import Patient
 from appointments.models import Appointment
+from decimal import Decimal
 # Create your models here.
 
 
@@ -158,10 +159,11 @@ class BookedAppointment(models.Model):
     slot = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2,null=True, default=Decimal('0.00'))
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
     rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
@@ -337,3 +339,8 @@ class MediaDigest(models.Model):
     def __str__(self):
         return self.title if self.title else "Untitled Media"
 
+
+class DoctorWallet(models.Model):
+    doctor = models.ForeignKey(User, on_delete=models.CASCADE)
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.0'))
+    
