@@ -1,12 +1,14 @@
 trigger:
   branches:
     include:
-      - development  # Only trigger on the development branch
+      - development
+      - stage 
 
 pool:
   vmImage: 'ubuntu-latest'
 stages:
 - stage: development
+  condition: eq(variables['Build.SourceBranchName'], 'development')
   displayName: Deploy to development
   jobs:
     - deployment: DeployToVM
@@ -92,18 +94,19 @@ stages:
                       fi
                 displayName: 'remove older folders'
                 
-- stage: production
-  displayName: Deploy to production
+- stage: stage
+  condition: eq(variables['Build.SourceBranchName'], 'stage')
+  displayName: Deploy to qa-stage
   trigger: manual
   jobs:
   - deployment: DeployToVM
-    displayName: web-prod
+    displayName: qa-stage
     workspace:
       clean: all
     environment:
-      name: 'production' 
+      name: 'qa-stage' 
       resourceType: VirtualMachine
-      resourceName: 'Healthcare-backend-prod' 
+      resourceName: 'Health-help-stage-backend' 
     strategy:
         runOnce:
           preDeploy:
