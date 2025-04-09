@@ -212,19 +212,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             except Patient.DoesNotExist:
                 return None  # No patient profile found
         return obj.phone_number  # Show phone number
-
-
-class ShowPatientEmailPhoneSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Patient
-        fields = ["show_email", "show_phone"]
-
-    def update(self, instance, validated_data):
-        """Update the patient's preferences."""
-        instance.show_email = validated_data.get("show_email", instance.show_email)
-        instance.show_phone = validated_data.get("show_phone", instance.show_phone)
-        instance.save()
-        return instance
     
     
 class UserProfileUpdateSerializer(UserProfileSerializer):
@@ -232,6 +219,10 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         required=False, validators=[validate_profile_picture]
     )
     languages = serializers.CharField(required=False)
+    show_email = serializers.BooleanField(required=False)
+    show_phone = serializers.BooleanField(required=False)
+    class Meta(UserProfileSerializer.Meta):
+            fields = UserProfileSerializer.Meta.fields + ['show_email', 'show_phone']
 
     def update(self, instance, validated_data):
         languages = validated_data.pop('languages', [])
@@ -249,6 +240,17 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
                 if doc:
                     doc.experience_years = experience_years
                     doc.save()
+                    
+                # Handle Patient-specific update
+        if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
+            show_email = validated_data.pop('show_email', None)
+            show_phone = validated_data.pop('show_phone', None)
+
+            if show_email is not None:
+                instance.patient_profile.show_email = show_email
+            if show_phone is not None:
+                instance.patient_profile.show_phone = show_phone
+            instance.patient_profile.save()
 
         # Update other fields dynamically
         for attr, value in validated_data.items():
@@ -265,4 +267,10 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         """Customize GET response for languages"""
         data = super().to_representation(instance)
         data['languages'] = list(instance.languages.values_list("id", flat=True))
+
+        # Include patient fields if available
+        if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
+            data['show_email'] = instance.patient_profile.show_email
+            data['show_phone'] = instance.patient_profile.show_phone
+
         return data
