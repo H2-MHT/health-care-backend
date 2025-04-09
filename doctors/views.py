@@ -40,6 +40,7 @@ from .models import (
     PatientBookAppointment,
     LicenceCertificate, 
     MediaDigest,
+    DoctorWallet,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -67,6 +68,11 @@ from django.contrib.auth.hashers import make_password
 from rest_framework.decorators import api_view
 from utils.pagination import pagination_view, create_paginated_response
 from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from django.utils import timezone
+from django.db.models import F
+from decimal import Decimal
 import re
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -697,6 +703,16 @@ class BookAppointmentAPIView(APIView):
             # Convert date to correct format
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
             appointment_day = date_obj.strftime("%a")
+            
+    
+            slot_start_str = slot.split("-")[0].strip()
+            slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()
+            
+    
+            appointment_datetime = datetime.combine(date_obj, slot_start_time)
+            appointment_datetime = timezone.make_aware(appointment_datetime)
+            now = timezone.now()
+            within_24_hours = appointment_datetime - now <= timedelta(hours=24)
 
             doctor = User.objects.filter(pk=doctor_user_id).first()
             if not doctor:
@@ -723,7 +739,7 @@ class BookAppointmentAPIView(APIView):
 
             # Ensure slot is not already booked
             is_booked = BookedAppointment.objects.filter(
-                doctor=doctor_user_id, slot=slot, date=date_obj
+                doctor=doctor_user_id, slot=slot, date=date_obj, status__in = ['Pending', 'Confirmed']
             ).exists()
 
             if is_booked:
@@ -792,8 +808,16 @@ class BookAppointmentAPIView(APIView):
             # Update appointment status to "Pending"
             appointment.status = "Pending"
             appointment.save()
+            
+            message_text = "Appointment booked successfully"
+            if within_24_hours:
+                message_text += (
+                    " (Note: You are booking the appointment within 24 hours. "
+                    "If you cancel, 10% amount will be deducted.)"
+                )
+            
             return Response({
-                "message": "Appointment booked successfully",
+                "message_text": message_text,
                 "data": {
                     "appointment_id": appointment.id,
                     "appointment_type": appointment.appointment_type,
@@ -1307,6 +1331,7 @@ class CreateStripeCheckoutSession(APIView):
 
                 # Save session ID
                 appointment.stripe_session_id = checkout_session.id
+                appointment.amount = amount/100
                 appointment.save()
 
                 return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
@@ -2250,5 +2275,125 @@ class MediaDigestAPIView(APIView):
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+class RefundAppointmentPaymentAPIView(APIView):
+    def post(self, request):
 
+        appointment_id = request.data.get("appointment_id")
+        cancelled_by = request.data.get("cancelled_by")
 
+        appointment = get_object_or_404(BookedAppointment, id=appointment_id)
+        now = timezone.now() 
+
+        slot_start = appointment.slot.split("-")[0].strip()
+        appointment_time = datetime.strptime(slot_start, "%H:%M").time()
+        appointment_datetime = timezone.make_aware(datetime.combine(appointment.date, appointment_time)) 
+
+        time_until_appointment = appointment_datetime - now
+        
+        if time_until_appointment < timedelta(hours=12):
+            return Response({"error": "Cancellation not allowed within 12 hours of appointment."}, status=400)
+        
+        session = stripe.checkout.Session.retrieve(appointment.stripe_session_id)
+        payment_intent = session.payment_intent
+
+        if cancelled_by == "doctor":
+            try:
+                stripe.Refund.create(
+                    payment_intent=payment_intent,
+                )
+            except Exception as e:
+                return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
+            
+            appointment.status = "Cancelled"
+            appointment.payment_status = "Refunded"
+            appointment.save()
+            send_refund_email(appointment, cancelled_by, appointment.amount)
+            return Response({"message": "Doctor cancelled. Full refund issued."}, status=200)
+
+        elif cancelled_by == "patient":
+            if time_until_appointment <= timedelta(hours=24):
+                # Deduct 10%, refund 90%, add 10% to doctor wallet
+                refund_amount = int(appointment.amount * Decimal("0.9"))
+                doctor_earning = int(appointment.amount * Decimal("0.1"))               
+                
+                doctor = User.objects.filter(pk=appointment.doctor).first()
+                
+                wallet, created = DoctorWallet.objects.get_or_create(
+                doctor=doctor,
+                defaults={"balance": doctor_earning}
+                )
+                if not created:
+                    DoctorWallet.objects.filter(doctor=doctor).update(
+                        balance=F('balance') + doctor_earning
+                    )
+                
+                try:
+                    stripe.Refund.create(
+                        payment_intent=payment_intent, 
+                        amount=int(appointment.amount_paid * 0.9 * 100), 
+                    ) 
+                except Exception as e:
+                    return Response({"error": f"Stripe partial refund failed: {str(e)}"}, status=500) 
+
+                appointment.status = "Cancelled"
+                appointment.payment_status = "Refunded"
+                appointment.save()
+                send_refund_email(appointment, cancelled_by, refund_amount)
+                return Response({
+                    "message": "Cancelled within 24 hours. 10% deducted, 90% refunded.",
+                    "refunded_amount": refund_amount,
+                    "doctor_earning": doctor_earning
+                }, status=200)
+
+            else:
+                
+                try:
+                    stripe.Refund.create(
+                        payment_intent=payment_intent, 
+                    )
+                except Exception as e:
+                    return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
+                
+                appointment.status = "Cancelled"
+                appointment.payment_status = "Refunded"
+                appointment.save()
+                
+                send_refund_email(appointment, cancelled_by, appointment.amount)
+                
+                return Response({
+                    "message": "Cancelled more than 24 hours before appointment. Full refund issued."
+                }, status=200)
+
+        else:
+            return Response({"error": "Invalid value for 'cancelled_by'."}, status=400)
+  
+  
+  
+def send_refund_email(appointment, cancelled_by, refund_amount):
+    content = f"""
+    Hello,
+    
+    A refund has been processed.
+    
+    Details:
+    - Appointment ID: {appointment.id}
+    - Cancelled By: {cancelled_by.title()}
+    - Slot: {appointment.slot}
+    - Date: {appointment.date}
+    - refund: {refund_amount}
+
+    Regards,
+    My Health System
+    """
+    message = Mail(
+        from_email=settings.SENDGRID_FROM_EMAIL,
+        to_emails='refund@my-health.today',
+        subject='Refund Processed Notification',
+        plain_text_content=content
+    )
+
+    try:
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+    except Exception as e:
+        print(f"Failed to send refund email: {str(e)}")
