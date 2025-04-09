@@ -1,13 +1,102 @@
 trigger:
   branches:
     include:
-      - development  # Only trigger on the development branch
+      - development
+      - stage 
 
 pool:
   vmImage: 'ubuntu-latest'
 stages:
-- stage: development
-  displayName: Deploy to development
+- stage: staging
+  condition: eq(variables['Build.SourceBranchName'], 'stage')
+  displayName: Deploy to staging
+  jobs:
+  - deployment: DeployToVM
+    displayName: staging deployment
+    workspace:
+      clean: all
+    environment:
+      name: 'qa-stage' 
+      resourceType: VirtualMachine
+      resourceName: 'Health-help-stage-backend' 
+    strategy:
+        runOnce:
+          preDeploy:
+            steps:
+            - checkout: self 
+              workspaceRepo:  true
+            -  script: |
+                  mkdir /home/azureuser/$(Build.BuildId)
+                  mv $(Build.SourcesDirectory)/*  /home/azureuser/$(Build.BuildId)
+          deploy:
+            steps:
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/stable
+                script: |
+                    cp .env /home/azureuser/$(Build.BuildId)/
+              displayName: 'copy .env to new folder'
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/$(Build.BuildId)
+                script: |
+                  if [ ! -d "venv" ]; then
+                    python3 -m venv venv
+                  fi
+                  python3 -m venv venv
+                  source venv/bin/activate
+                  pip3 install -r requirements.txt
+              displayName: 'Install dependencies and Run Migration scripts'
+                  # Step 2: Make migrations (separate step)
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/$(Build.BuildId)
+                script: |
+                  # Make migrations
+                  source venv/bin/activate
+                  echo "starting migration "
+                  python3 manage.py migrate
+                  echo "migration completed "
+                  python3 manage.py collectstatic --noinput
+              displayName: 'Migrates'
+              
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                script: |
+                  echo "copying latest code to stable repo "
+                  cp -r --no-dereference --preserve=links  /home/azureuser/$(Build.BuildId)/* /home/azureuser/stable
+                  echo "restarting gunicorn"
+                  systemctl restart gunicorn.socket gunicorn.service
+              displayName: 'restarting'
+            - task: Bash@3
+              inputs:
+                targetType: 'inline'
+                workingDirectory: /home/azureuser/
+                script: |
+                  echo "deleting older Build Ids"
+                  build_dir="/home/azureuser"
+                  build_folders=($(ls -1 $build_dir | grep -E '^[0-9]+$' | sort -n))
+                    # Check if there are more than 3 folders
+                    if [ ${#build_folders[@]} -gt 3 ]; then
+                      # Get the oldest 2 folders to delete
+                      oldest_folders=("${build_folders[@]:0:2}")
+                      # Loop through and delete the oldest 3 folders
+                      for folder in "${oldest_folders[@]}"; do
+                        echo "Deleting folder: $build_dir/$folder"
+                        rm -rf "$build_dir/$folder"
+                      done
+                    else
+                      echo "Not enough folders to delete. Keeping all existing folders."
+                    fi
+              displayName: 'remove older folders'
+- stage: production
+  condition: eq(variables['Build.SourceBranchName'], 'development')
+  displayName: Deploy to production
+  trigger: manual
   jobs:
     - deployment: DeployToVM
       displayName: web
@@ -92,89 +181,3 @@ stages:
                       fi
                 displayName: 'remove older folders'
                 
-- stage: production
-  displayName: Deploy to production
-  trigger: manual
-  jobs:
-  - deployment: DeployToVM
-    displayName: web-prod
-    workspace:
-      clean: all
-    environment:
-      name: 'production' 
-      resourceType: VirtualMachine
-      resourceName: 'Healthcare-backend-prod' 
-    strategy:
-        runOnce:
-          preDeploy:
-            steps:
-            - checkout: self 
-              workspaceRepo:  true
-            -  script: |
-                  mkdir /home/azureuser/$(Build.BuildId)
-                  mv $(Build.SourcesDirectory)/*  /home/azureuser/$(Build.BuildId)
-          deploy:
-            steps:
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                workingDirectory: /home/azureuser/stable
-                script: |
-                    cp .env /home/azureuser/$(Build.BuildId)/
-              displayName: 'copy .env to new folder'
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                workingDirectory: /home/azureuser/$(Build.BuildId)
-                script: |
-                  if [ ! -d "venv" ]; then
-                    python3 -m venv venv
-                  fi
-                  python3 -m venv venv
-                  source venv/bin/activate
-                  pip3 install -r requirements.txt
-              displayName: 'Install dependencies and Run Migration scripts'
-                  # Step 2: Make migrations (separate step)
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                workingDirectory: /home/azureuser/$(Build.BuildId)
-                script: |
-                  # Make migrations
-                  source venv/bin/activate
-                  echo "starting migration "
-                  python3 manage.py migrate
-                  echo "migration completed "
-                  python3 manage.py collectstatic --noinput
-              displayName: 'Migrates'
-              
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                script: |
-                  echo "copying latest code to stable repo "
-                  cp -r --no-dereference --preserve=links  /home/azureuser/$(Build.BuildId)/* /home/azureuser/stable
-                  echo "restarting gunicorn"
-                  systemctl restart gunicorn.socket gunicorn.service
-              displayName: 'restarting'
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                workingDirectory: /home/azureuser/
-                script: |
-                  echo "deleting older Build Ids"
-                  build_dir="/home/azureuser"
-                  build_folders=($(ls -1 $build_dir | grep -E '^[0-9]+$' | sort -n))
-                    # Check if there are more than 3 folders
-                    if [ ${#build_folders[@]} -gt 3 ]; then
-                      # Get the oldest 2 folders to delete
-                      oldest_folders=("${build_folders[@]:0:2}")
-                      # Loop through and delete the oldest 3 folders
-                      for folder in "${oldest_folders[@]}"; do
-                        echo "Deleting folder: $build_dir/$folder"
-                        rm -rf "$build_dir/$folder"
-                      done
-                    else
-                      echo "Not enough folders to delete. Keeping all existing folders."
-                    fi
-              displayName: 'remove older folders'
