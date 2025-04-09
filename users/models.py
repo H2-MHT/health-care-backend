@@ -68,7 +68,7 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True, null=False)
     password = models.CharField(max_length=128, null=False)
-    currency=models.CharField(max_length=10, default="")
+    currency=models.CharField(max_length=10, default="", help_text="Currency code")
     otp_created_at = models.DateTimeField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
