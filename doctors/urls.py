@@ -44,6 +44,7 @@ urlpatterns = [
     path('public-doctor-list/', PublicDoctorListAPIView.as_view(), name='public-doctor-list'),
     path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
     path("delete-appointment/", DeleteAppointmentAPIView.as_view(), name="appointment"),
+    path('appointment-list/', CompletedAppointmentListView.as_view(), name='appoitment-list'),
 
     
     # referral and invitation 
