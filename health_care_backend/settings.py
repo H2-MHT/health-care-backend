@@ -314,6 +314,12 @@ LOGGING = {
             'filename': os.path.join(BASE_LOG_DIR, 'users.log'),
             'formatter': 'verbose',
         },
+        'video_call': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'video_call.log'),
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'appointments': {
@@ -364,6 +370,11 @@ LOGGING = {
         },
         'users': {
             'handlers': ['users'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'videpo_call': {
+            'handlers': ['video_call'],
             'level': 'DEBUG',
             'propagate': False,
         },
