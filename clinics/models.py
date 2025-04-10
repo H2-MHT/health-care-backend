@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Avg
+from doctors.models import Doctor
 # Create your models here.
 
 
@@ -83,3 +84,9 @@ class ClinicReviewReply(models.Model):
     def __str__(self):
         return f"Reply by {self.user} to review {self.review.id}"
 
+class OtherClinic(models.Model):
+    choices=[('Others','Others')]
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    clinic_name=models.CharField(max_length=255,null=False)
+    address=models.CharField(max_length=255,null=False)
+    website=models.CharField(max_length=255,null=True, blank=True)
