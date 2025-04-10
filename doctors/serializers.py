@@ -15,11 +15,12 @@ from .models import (
     MediaDigest,
 )
 from payments.models import Payment
+from authify.serializers import UserProfileSerializer, UserProfileUpdateSerializer
 from datetime import datetime, timedelta
 from django.contrib.auth.hashers import check_password
 from users.models import User
 from django.utils.timezone import now
-
+from clinics.models import OtherClinic
 # class DoctorNotesSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = DoctorNotes
@@ -261,4 +262,11 @@ class MediaDigestSerializer(serializers.ModelSerializer):
 
     def get_doctor(self, obj):
         return obj.user_doctor.id if obj.user_doctor else None
+
+class OtherClinicSerializer(serializers.ModelSerializer):
+    user =UserProfileUpdateSerializer(read_only=True)
+    class Meta:
+        model=OtherClinic
+        fields=['doctor_id','id','clinic_name','address','website','user']
+
 

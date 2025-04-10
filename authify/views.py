@@ -1,5 +1,6 @@
 import logging
 import random
+import textwrap
 import time
 import requests
 import jwt
@@ -19,7 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, subject, to_email
 from social_core.backends.apple import AppleIdAuth
 from social_django.utils import load_strategy
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -28,6 +29,7 @@ from datetime import timedelta
 from django.contrib.auth import authenticate, login
 from authify.utils import validate_google_id_token
 from doctors.models import Doctor
+from doctors.serializers import OtherClinicSerializer
 from users.models import User
 from patients.models import Patient
 from .serializers import (
@@ -39,7 +41,10 @@ from .serializers import (
     UserProfileUpdateSerializer,
     ResetPasswordSerializer,
 )
-from clinics.models import Clinic
+from clinics.models import(
+    Clinic,
+    OtherClinic,
+)
 from clinics.serializers import ClinicInfoSerializer
 import logging
 from sendgrid.helpers.mail import Mail, Email, To, Personalization
@@ -969,10 +974,53 @@ class UpdateUserProfileAPIView(APIView):
 
     def patch(self, request):
         try:
-            
-            logger.info(
-                "Received request to update user profile for user: %s", request.user.email
-            )
+            logger.info("Received request to update user profile for user: %s", request.user.email)
+
+            if request.user.role != 'Doctor':
+                return Response({'message': 'User must be a doctor'}, status=400)
+
+            data = request.data
+            other_work_place_value = data.get("other_work_place")
+
+            # If explicitly provided and set to 0, register new clinic
+            if other_work_place_value is not None and other_work_place_value==0:
+                doctor = request.user.doctor
+                clinic = OtherClinic.objects.create(
+                    doctor=doctor,
+                    clinic_name=data.get('clinic_name', ''),
+                    address=data.get('address', ''),
+                    website=data.get('website', '')
+                )
+
+                # Send email notification
+                try:
+                    doctor_name = getattr(doctor.user, "get_full_name", lambda: doctor.user.email)()
+                    message_content = textwrap.dedent(f"""
+                        A new clinic has been registered by Dr. {doctor_name}.
+
+                        Clinic Name: {clinic.clinic_name}
+                        Address: {clinic.address}
+                        Website: {clinic.website}
+                    """)
+
+                    email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails='new-clinic@my-health.today',  # fixed missing variable
+                        subject="New Clinic Registered",
+                        plain_text_content=message_content
+                    )
+
+                    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                    sg.send(email)
+                    logger.info("Notification email sent to new-clinic@my-health.today")
+
+                except Exception as email_err:
+                    logger.error("Failed to send email: %s", str(email_err))
+
+                serializer = OtherClinicSerializer(clinic)
+                return Response({'message': "Clinic added successfully", 'data': serializer.data}, status=200)
+
+            # In all cases (even if other_work_place is not provided), update profile
             serializer = UserProfileUpdateSerializer(
                 instance=request.user, data=request.data, partial=True
             )
@@ -1046,6 +1094,7 @@ class GetUserProfileAPIView(APIView):
                 raise AuthenticationFailed("User is not authenticated.")
 
             user = request.user
+            doctor=request.user.doctor
             role = user.role
 
             if not role:
@@ -1062,14 +1111,19 @@ class GetUserProfileAPIView(APIView):
 
             if role == "Doctor":
                 logger.info("Returning doctor profile for user: %s", request.user.email)
+                other_clinic=OtherClinic.objects.filter(doctor=doctor).first()
+                other_clinic_data=OtherClinicSerializer(other_clinic).data if other_clinic else {}
 
                 clinic = Clinic.objects.filter(user=user).first()
                 clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
 
-                data["clinic_data"] = clinic_data
-
                 return Response(
-                    {"message": "Doctor profile.", "data": data},
+                    {
+                        "message": "Doctor profile.",
+                        "data": data,
+                        "clinic_data": clinic_data,
+                        "other_clinic_data": other_clinic_data
+                    },
                     status=status.HTTP_200_OK,
                 )
             elif role == "Patient":
