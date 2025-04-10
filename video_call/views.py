@@ -170,7 +170,7 @@ class CreateAgoraChatUserAPIView(APIView):
             user=sender_user,
             defaults={
                 "userID": sender_user.id,
-                "receiver_token": senderToken
+                "token": senderToken
             }
         )
 
