@@ -1,5 +1,13 @@
 from django.urls import path
-from .views import SendNotificationView, CreateAgoraChatUserAPIView, AgoraUserReceiverIDAPIView,StartRecordingAPIView, StopRecordingAPIView
+from .views import (
+    SendNotificationView, 
+    CreateAgoraChatUserAPIView, 
+    AgoraUserReceiverIDAPIView,
+    StartRecordingAPIView, 
+    StopRecordingAPIView,
+    AgoraTokenView,
+    
+)
 
 urlpatterns = [
     path('send-notification/', SendNotificationView.as_view(), name='send-notification'),
@@ -11,5 +19,7 @@ urlpatterns = [
     path('start-recording/', StartRecordingAPIView.as_view(), name='start-recording'),
     # stop recording
     path('stop-recording/', StopRecordingAPIView.as_view(), name='stop-recording'),
+    # agora token get
+    path('get-agora-token/', AgoraTokenView.as_view(), name='agora-token'),
         
 ]

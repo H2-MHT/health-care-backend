@@ -15,6 +15,7 @@ from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
 from agora_token_builder import RtcTokenBuilder
+from .models import Agoratoken
 
 # Agora credentials
 APP_ID = settings.APP_ID
@@ -154,7 +155,33 @@ class CreateAgoraChatUserAPIView(APIView):
         receiver.agora_channel_name = channel_name
         sender.save()
         receiver.save()
+        
+        try: 
+            sender_user = User.objects.get(pk=senderID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Sender user does not exist"}, status=404)
+        
+        try:
+            receiver_user = User.objects.get(pk=receiverID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Receiver user does not exist"}, status=404)
+        
+        Agoratoken.objects.update_or_create(
+            user=sender_user,
+            defaults={
+                "userID": sender_user.id,
+                "receiver_token": senderToken
+            }
+        )
 
+        Agoratoken.objects.update_or_create(
+            user=receiver_user,
+            defaults={
+                "userID": receiver_user.id,
+                "token": receiverToken
+            }
+        )
+        
         return JsonResponse({
             "app_id": APP_ID,
             "channel": channel_name,
@@ -163,6 +190,41 @@ class CreateAgoraChatUserAPIView(APIView):
             "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"receiverToken": receiverToken,"firebase_token": remoteUserFirebaseToken}
         })
 
+class AgoraTokenView(APIView):
+    def get(self, request):
+        try:
+            user_id = request.query_params.get("user_id", "")
+            if not user_id:
+                return JsonResponse({"error": "User ID is required"}, status=400)
+            
+            try:
+                user = User.objects.get(pk=user_id)
+            except User.DoesNotExist:
+                return JsonResponse({"error": "User does not exist"}, status=404)
+            
+            try:
+                agoratoken = Agoratoken.objects.get(user=user)
+            except Agoratoken.DoesNotExist:
+                return JsonResponse({"error": "Token has not been generated yet"}, status=404)
+            
+            data = {
+                    "app_id": APP_ID,
+                    "user_id": user_id,
+                    "name": user.get_full_name(),
+                    "token": agoratoken.token,
+                    "channel_name": user.agora_channel_name            
+                }
+            
+            return JsonResponse(
+                {
+                    "message": "Retrieved successfully",
+                    "data": data
+                }
+            )
+            
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+            
 class AgoraUserReceiverIDAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
