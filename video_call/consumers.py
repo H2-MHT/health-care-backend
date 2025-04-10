@@ -16,8 +16,11 @@ class DeepgramConsumer(AsyncWebsocketConsumer):
         logger.info("WebSocket connection accepted for client: %s", self.channel_name)
 
         try:
-            self.deepgram_ws = await websockets.connect(DEEPGRAM_URL)
-            logger.info("Connected to Deepgram WebSocket endpoint: %s", DEEPGRAM_URL)
+            self.deepgram_ws = await websockets.connect(
+                DEEPGRAM_URL,
+                extra_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"}
+            )
+            logger.info("Connected to Deepgram WebSocket endpoint.")
         except Exception as e:
             logger.exception("Failed to connect to Deepgram WebSocket: %s", e)
             await self.close()
