@@ -15,10 +15,17 @@ class DeepgramConsumer(AsyncWebsocketConsumer):
         await self.accept()
         logger.info("WebSocket connection accepted for client: %s", self.channel_name)
 
+        headers = [
+            ("Authorization", f"Token {DEEPGRAM_API_KEY}")
+        ]
+
         try:
             self.deepgram_ws = await websockets.connect(
                 "wss://api.deepgram.com/v1/listen",
-                headers=[("Authorization", f"Token {DEEPGRAM_API_KEY}")]
+                extra_headers={
+                    "Authorization": f"Token {DEEPGRAM_API_KEY}"
+                },
+                ping_interval=None
             )
             logger.info("Connected to Deepgram WebSocket endpoint.")
         except Exception as e:
