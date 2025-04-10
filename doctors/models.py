@@ -141,6 +141,7 @@ class BookedAppointment(models.Model):
         ("Confirmed", "Confirmed"),
         ("Rescheduled", "Rescheduled"),
         ("Cancelled", "Cancelled"),
+        ("Completed", "Completed"),
     ]
 
     PAYMENT_STATUS_CHOICES = [
