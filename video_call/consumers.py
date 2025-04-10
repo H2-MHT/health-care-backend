@@ -4,10 +4,11 @@ import websockets
 import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 
-DEEPGRAM_API_KEY = "ec2ada5f787c5931030a5be25576d8fc61cfe164"
+DEEPGRAM_API_KEY = "c173e2db764ed77a32e440a4f8bffb168a3c6125"
 DEEPGRAM_URL = f"wss://api.deepgram.com/v1/listen?access_token={DEEPGRAM_API_KEY}"
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('deepgram')
+
 
 class DeepgramConsumer(AsyncWebsocketConsumer):
     async def connect(self):
