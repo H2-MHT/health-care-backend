@@ -36,6 +36,7 @@ from .views import (
     DeleteDocumentAPIView,
     DeleteAppointmentAPIView,
     RefundAppointmentPaymentAPIView, 
+    CompletedAppointmentListView
     )
 
 
