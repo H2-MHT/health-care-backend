@@ -1037,11 +1037,10 @@ class CompletedAppointmentListView(APIView):
                     "status": appointment.status,
                     "slot": appointment.slot,
                     "patient": {
-                        "first_name": appointment.patient.user.first_name,
-                        "last_name": appointment.patient.user.last_name,
-                        "email": appointment.patient.user.email,
-                        "profile_picture": appointment.patient.user.profile_picture.url
-                        if appointment.patient.user.profile_picture else None,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "email": user.email,
+                        "profile_picture": user.profile_picture.url if user.profile_picture else None,
                     }
                 }
                 for appointment in appointments
@@ -1050,7 +1049,7 @@ class CompletedAppointmentListView(APIView):
             return Response(data, status=200)
                 
         except Exception as e:
-            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status)
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
             
 
 
