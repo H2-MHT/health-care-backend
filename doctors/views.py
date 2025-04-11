@@ -1028,29 +1028,28 @@ class CompletedAppointmentListView(APIView):
             appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
             
             data = {
-                "message": "Apoointment list retrieved successfully",
-                "data": 
-                [
-                    {
-                        "appointment_id": appointment.id,
-                        "patient_first_name": user.first_name,
-                        "patient_last_name": user.last_name,
+            "message": "Appointment list retrieved successfully",
+            "data": [
+                {
+                    "appointment_id": appointment.id,
+                    "appointment_type": appointment.appointment_type,
+                    "date": appointment.date,
+                    "status": appointment.status,
+                    "slot": appointment.slot,
+                    "patient": {
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "email": user.email,
                         "profile_picture": user.profile_picture.url if user.profile_picture else None,
-                        "city": user.city,
-                        "country": user.country,
-                        "bio": user.bio,
-                        "appointment_type": appointment.appointment_type,
-                        "date": appointment.date,
-                        "status": appointment.status,
-                        "slot": appointment.slot            
-               }
+                    }
+                }
                 for appointment in appointments
-             ]}
+            ]}
             
             return Response(data, status=200)
                 
         except Exception as e:
-            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status)
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
             
 
 
