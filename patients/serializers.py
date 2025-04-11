@@ -17,7 +17,17 @@ class PatientUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "first_name", "last_name", "phone_number", "profile_picture", "role", "city", "country", "residence"]
+class PatientSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
 
+    class Meta:
+        model = User
+        fields = ["id", "email", "name", "profile_picture"]
+        read_only_fields = ["id"]
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+    
 # Validator for file type
 def validate_document_file(value):
     ext = os.path.splitext(value.name)[1].lower()

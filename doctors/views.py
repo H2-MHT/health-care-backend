@@ -13,8 +13,8 @@ from users.serializers import UserSerializer
 from patients.models import Patient
 from django.utils.dateparse import parse_time
 from django.db.models import Q
-from clinics.serializers import ClinicSerializer
-from patients.serializers import PatientUserSerializer
+from clinics.serializers import ClinicListSerializer
+from patients.serializers import PatientSerializer
 from utils.whatsapp import (
     send_whatsapp_message_patient,
     send_whatsapp_message_doctor,
@@ -2448,18 +2448,36 @@ class ClinicsAssociatedToDoctorsAPIView(APIView):
 
             # Ensure user is a Doctor
             if user.role != "Doctor":
-                return Response({"detail": "Only doctors can access their clinic info."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({
+                    "data": None,
+                    "message": "Only doctors can access their clinic info.",
+                    "status": "error"
+                }, status=status.HTTP_403_FORBIDDEN)
 
-            # Get the associated clinic via work_place
+            # Retrieve the associated clinic via work_place
             clinic = getattr(user, "work_place", None)
             if not clinic:
-                return Response({"detail": "No clinic associated with this doctor."}, status=status.HTTP_404_NOT_FOUND)
+                return Response({
+                    "data": None,
+                    "message": "No clinic associated with this doctor.",
+                    "status": "error"
+                }, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = ClinicSerializer(clinic)
-            return Response({"clinic": serializer.data}, status=status.HTTP_200_OK)
+            serializer = ClinicListSerializer(clinic)
+
+            return Response({
+                "data": {
+                    "message": "Clinic information retrieved successfully.",
+                    "clinic": serializer.data
+                },
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "message": str(e),
+                "status": "error"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         
 class PatientsAssociatedToDoctorAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -2469,22 +2487,31 @@ class PatientsAssociatedToDoctorAPIView(APIView):
         try:
             doctor = request.user
 
+            # Ensure only doctors can access
             if doctor.role != "Doctor":
-                return Response({"detail": "Only doctors can access their associated patient info."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({
+                    "data": None,
+                    "message": "Only doctors can access their associated patient info.",
+                    "status": "error"
+                }, status=status.HTTP_403_FORBIDDEN)
 
-            # Get patients who booked appointments with this doctor
+            # Fetch patient IDs who booked appointments with this doctor
             patient_ids = BookedAppointment.objects.filter(
                 doctor=doctor.id
             ).values_list("patient", flat=True).distinct()
 
             patients = User.objects.filter(id__in=patient_ids)
-
-            serialized_patients = PatientUserSerializer(patients, many=True)
+            serialized_patients = PatientSerializer(patients, many=True)
 
             return Response({
-                "patient_count": len(serialized_patients.data),
-                "patients": serialized_patients.data
+                "data": {
+                    "message": "Associated patients retrieved successfully.",
+                    "patients": serialized_patients.data
+                },
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "message": str(e),
+                "status": "error"
+            }, status=status.HTTP_400_BAD_REQUEST)

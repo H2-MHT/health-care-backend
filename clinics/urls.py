@@ -20,4 +20,5 @@ urlpatterns = [
     path("doctor-report/", ClinicReportRemoveDoctorAPIView.as_view()),
     path("doctor-remove/<int:doctor_id>/", ClinicReportRemoveDoctorAPIView.as_view()),
     path("calendar-appointments/", ClinicCalendarAppointmentsAPIView.as_view()),
+    path("doctor-associated-to-clinic/", DoctorAssociatedToClinicListAPIView.as_view()),
 ]
