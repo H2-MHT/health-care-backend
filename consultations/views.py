@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import PrescriptionSerializer
 from django.urls import reverse
 from django.core.files.base import ContentFile
+from doctors.models import BookedAppointment
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -109,12 +110,16 @@ class PrescriptionView(APIView):
 
             data = request.data
             appointment_id = data.get("appointment_id")
-            appointment = Appointment.objects.filter(id=appointment_id).first()
+            appointment = BookedAppointment.objects.filter(id=appointment_id).first()
 
             if not appointment:
                 return Response({"error": "Appointment not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-            doctor = appointment.doctor
+            # Ensure the doctor matches the logged-in user
+            if appointment.doctor != request.user.id:
+                return Response({"error": "You are not authorized for this appointment"}, status=status.HTTP_403_FORBIDDEN)
+
+            doctor = request.user  # current doctor user
             prescription = Prescription.objects.create(
                 appointment=appointment,
                 doctor=doctor,
