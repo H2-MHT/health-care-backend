@@ -34,7 +34,18 @@ from clinics.models import OtherClinic
 #         validated_data["doctor"] = request.user.doctor  # Assign the related Doctor instance
 #         return super().create(validated_data)
     
-    
+
+class DoctorSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'profile_picture']
+        read_only_fields = ['id']
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+        
 class ReferralSerializer(serializers.ModelSerializer):
     registration_link = serializers.SerializerMethodField()
 

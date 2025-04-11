@@ -35,7 +35,7 @@ from .tasks import(
 )
 from datetime import timedelta, datetime
 from users.serializers import UserSerializer
-
+from doctors.serializers import DoctorSerializer
 # Create your views here.
 logger = logging.getLogger(__name__)
 
@@ -802,7 +802,7 @@ class AppointmentReminderAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class DoctorAssociatedtToPatientListAPIView(APIView):
+class DoctorAssociatedToPatientListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
@@ -810,20 +810,28 @@ class DoctorAssociatedtToPatientListAPIView(APIView):
             patient = request.user
 
             if patient.role != "Patient":
-                return Response({"detail": "Only patients can view there doctors."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({
+                    "data": None,
+                    "message": "Only patients can view their associated doctors.",
+                    "status": "error"
+                }, status=status.HTTP_403_FORBIDDEN)
 
             doctor_ids = BookedAppointment.objects.filter(
                 patient=patient.id
             ).values_list("doctor", flat=True).distinct()
 
             doctors = User.objects.filter(id__in=doctor_ids, role="Doctor")
-
-            serializer = UserSerializer(doctors, many=True)
+            serializer = DoctorSerializer(doctors, many=True)
 
             return Response({
-                "doctor_count": len(serializer.data),
-                "associated_doctors": serializer.data
+                "data": {
+                    "message": "Associated doctors retrieved successfully.",
+                    "associated_doctors": serializer.data
+                },
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "message": str(e),
+                "status": "error"
+            }, status=status.HTTP_400_BAD_REQUEST)

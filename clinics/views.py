@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.utils.timezone import now
 from utils.pagination import pagination_view,create_paginated_response
 from rest_framework.exceptions import ValidationError
+from doctors.serializers import DoctorSerializer
 
 
 # Create your views here.
@@ -766,3 +767,32 @@ class ClinicCalendarAppointmentsAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+class DoctorAssociatedToClinicListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # Get the logged-in clinic's associated Clinic object
+            clinic = Clinic.objects.get(user=request.user)
+
+            # Get all doctors whose work_place matches this clinic
+            doctors = User.objects.filter(role="Doctor", work_place=clinic)
+
+            serializer = DoctorSerializer(doctors, many=True)
+            return Response({
+                "message": "Doctors associated with the clinic retrieved successfully.",
+                "data": serializer.data,
+            }, status=status.HTTP_200_OK)
+
+        except Clinic.DoesNotExist:
+            return Response({
+                "message": "No clinic record associated with this user.",
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "message": "An unexpected error occurred.",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
