@@ -36,7 +36,9 @@ from .views import (
     DeleteDocumentAPIView,
     DeleteAppointmentAPIView,
     RefundAppointmentPaymentAPIView, 
-    CompletedAppointmentListView
+    CompletedAppointmentListView,
+    ClinicsAssociatedToDoctorsAPIView,
+    PatientsAssociatedToDoctorAPIView,
     )
 
 
@@ -99,5 +101,7 @@ urlpatterns = [
     path('licence-certificate/', LicenceCertificateAPIView.as_view(), name='licence-certificate'),
     path("delete-document/", DeleteDocumentAPIView.as_view(), name='delete-document'),
     path("media-digest-document/", MediaDigestAPIView.as_view(), name="media-digest-document"),
+    path("clinics-associated-to-doctors/", ClinicsAssociatedToDoctorsAPIView.as_view(), name="clinics-associated-to-doctors"),
+    path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="patient-associated-to-doctors"),
 
 ]
