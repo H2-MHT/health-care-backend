@@ -34,7 +34,7 @@ from .tasks import(
     send_whatsapp_reminder,
 )
 from datetime import timedelta, datetime
-
+from users.serializers import UserSerializer
 
 # Create your views here.
 logger = logging.getLogger(__name__)
@@ -801,3 +801,29 @@ class AppointmentReminderAPIView(APIView):
                 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DoctorAssociatedtToPatientListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            patient = request.user
+
+            if patient.role != "Patient":
+                return Response({"detail": "Only patients can view there doctors."}, status=status.HTTP_403_FORBIDDEN)
+
+            doctor_ids = BookedAppointment.objects.filter(
+                patient=patient.id
+            ).values_list("doctor", flat=True).distinct()
+
+            doctors = User.objects.filter(id__in=doctor_ids, role="Doctor")
+
+            serializer = UserSerializer(doctors, many=True)
+
+            return Response({
+                "doctor_count": len(serializer.data),
+                "associated_doctors": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -15,6 +15,7 @@ from .views import (
     AppointmentReminderAPIView,
     AppointmentDetailAPIView,
     PatientDashboardAPIView,
+    DoctorAssociatedtToPatientListAPIView,
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -35,5 +36,6 @@ urlpatterns = [
     path('appointments/<int:appointment_id>/', AppointmentDetailAPIView.as_view(), name="appointment-detail"),
     path('reminders/', AppointmentReminderAPIView.as_view(), name='set-reminder'),
     path('patient-dashboard/', PatientDashboardAPIView.as_view(), name='set-reminder'),
+    path("doctor-associated-to-patient/", DoctorAssociatedtToPatientListAPIView.as_view(), name="doctor-associated-to-patient"),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
