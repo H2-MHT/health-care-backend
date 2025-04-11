@@ -1028,25 +1028,24 @@ class CompletedAppointmentListView(APIView):
             appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
             
             data = {
-                "message": "Apoointment list retrieved successfully",
-                "data": 
-                [
-                    {
-                        "appointment_id": appointment.id,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "email": user.email,
-                        "profile_picture": user.profile_picture.url if user.profile_picture else None,
-                        "city": user.city,
-                        "country": user.country,
-                        "bio": user.bio,
-                        "appointment_type": appointment.appointment_type,
-                        "date": appointment.date,
-                        "status": appointment.status,
-                        "slot": appointment.slot            
-               }
+            "message": "Appointment list retrieved successfully",
+            "data": [
+                {
+                    "appointment_id": appointment.id,
+                    "appointment_type": appointment.appointment_type,
+                    "date": appointment.date,
+                    "status": appointment.status,
+                    "slot": appointment.slot,
+                    "patient": {
+                        "first_name": appointment.patient.user.first_name,
+                        "last_name": appointment.patient.user.last_name,
+                        "email": appointment.patient.user.email,
+                        "profile_picture": appointment.patient.user.profile_picture.url
+                        if appointment.patient.user.profile_picture else None,
+                    }
+                }
                 for appointment in appointments
-             ]}
+            ]}
             
             return Response(data, status=200)
                 
