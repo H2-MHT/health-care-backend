@@ -1033,8 +1033,9 @@ class CompletedAppointmentListView(APIView):
                 [
                     {
                         "appointment_id": appointment.id,
-                        "patient_first_name": user.first_name,
-                        "patient_last_name": user.last_name,
+                        "first_name": user.first_name,
+                        "last_name": user.last_name,
+                        "email": user.email,
                         "profile_picture": user.profile_picture.url if user.profile_picture else None,
                         "city": user.city,
                         "country": user.country,
