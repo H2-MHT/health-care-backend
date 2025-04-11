@@ -21,6 +21,7 @@ from .serializers import PrescriptionSerializer
 from django.urls import reverse
 from django.core.files.base import ContentFile
 from doctors.models import BookedAppointment
+from users.models import User
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -119,10 +120,9 @@ class PrescriptionView(APIView):
             if appointment.doctor != request.user.id:
                 return Response({"error": "You are not authorized for this appointment"}, status=status.HTTP_403_FORBIDDEN)
 
-            doctor = request.user  # current doctor user
             prescription = Prescription.objects.create(
                 appointment=appointment,
-                doctor=doctor,
+                doctor=request.user.id,
                 diagnosis=data.get("diagnosis"),
                 medicines=data.get("medicines"),
                 additional_instruction=data.get("additional_instruction")
@@ -149,17 +149,17 @@ class PrescriptionView(APIView):
                     "prescription_id": prescription.id,
                     "created_date": prescription.created_at.strftime('%d %b, %Y'),
                     "doctor": {
-                        "id": prescription.appointment.doctor.id,
-                        "name": f"{prescription.appointment.doctor.user.first_name} {prescription.appointment.doctor.user.last_name}",
-                        "email": prescription.appointment.doctor.user.email,
-                        "phone": prescription.appointment.doctor.user.phone_number,
+                        "id": prescription.appointment.doctor,
+                        "name": f"{User.objects.get(id=prescription.appointment.doctor).first_name} {User.objects.get(id=prescription.appointment.doctor).last_name}",
+                        "email": User.objects.get(id=prescription.appointment.doctor).email,
+                        "phone": User.objects.get(id=prescription.appointment.doctor).phone_number,
                     },
                     'patient': {
-                        'id': prescription.appointment.patient.id,
-                        'name': f"{prescription.appointment.patient.user.first_name} {prescription.appointment.patient.user.last_name}",
-                        "email": prescription.appointment.patient.user.email,
-                        "phone": prescription.appointment.patient.user.phone_number,
-                        'address': prescription.appointment.patient.user.city
+                        'id': prescription.appointment.patient,
+                        'name': f"{User.objects.get(id=prescription.appointment.patient).first_name} {User.objects.get(id=prescription.appointment.patient).last_name}",
+                        "email": User.objects.get(id=prescription.appointment.patient).email,
+                        "phone": User.objects.get(id=prescription.appointment.patient).phone_number,
+                        'address': User.objects.get(id=prescription.appointment.patient).city
                     },
                     'notes': prescription.appointment.notes,
                     "diagnosis": prescription.diagnosis,
@@ -169,8 +169,12 @@ class PrescriptionView(APIView):
                 for prescription in prescriptions
             ]
 
-            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},
-                            status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Prescriptions retrieved successfully", "prescriptions": data},
+                status=status.HTTP_200_OK
+            ) if data else Response(
+                {"prescriptions": []}, status=status.HTTP_200_OK
+            )
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
