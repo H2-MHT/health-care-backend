@@ -178,9 +178,6 @@ class PrescriptionView(APIView):
             appointment_id = request.query_params.get('appointment_id', None)
             prescription = Prescription.objects.filter(appointment__id=appointment_id).first()
 
-            if not prescription:
-                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
-
             data = request.data
             serializer = PrescriptionSerializer(prescription, data=data, partial=True)
 
