@@ -138,9 +138,6 @@ class PrescriptionView(APIView):
             appointment_id = request.query_params.get('appointment_id', None)
             prescriptions = Prescription.objects.filter(appointment__id=appointment_id)
 
-            if not prescriptions.exists():
-                return Response({'message': 'No prescriptions found'}, status=status.HTTP_404_NOT_FOUND)
-
             data = [
                 {
                     'appointment_id': prescription.appointment.id,
