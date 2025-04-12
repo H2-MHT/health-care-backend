@@ -22,6 +22,7 @@ from django.urls import reverse
 from django.core.files.base import ContentFile
 from doctors.models import BookedAppointment
 from users.models import User
+from django.shortcuts import get_object_or_404
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -111,18 +112,22 @@ class PrescriptionView(APIView):
 
             data = request.data
             appointment_id = data.get("appointment_id")
-            appointment = BookedAppointment.objects.filter(id=appointment_id).first()
 
-            if not appointment:
-                return Response({"error": "Appointment not found"}, status=status.HTTP_400_BAD_REQUEST)
+            # Validate appointment
+            appointment = get_object_or_404(BookedAppointment, id=appointment_id)
 
-            # Ensure the doctor matches the logged-in user
+            # Ensure the logged-in doctor matches the appointment doctor (IntegerField comparison)
             if appointment.doctor != request.user.id:
-                return Response({"error": "You are not authorized for this appointment"}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"error": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
 
+            # Prevent duplicate prescription
+            if Prescription.objects.filter(appointment_id=appointment_id).exists():
+                return Response({"error": "Prescription already exists for this appointment."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create the prescription
             prescription = Prescription.objects.create(
                 appointment=appointment,
-                doctor=request.user.id,
+                doctor=request.user,  # request.user is a User instance
                 diagnosis=data.get("diagnosis"),
                 medicines=data.get("medicines"),
                 additional_instruction=data.get("additional_instruction")
@@ -140,34 +145,48 @@ class PrescriptionView(APIView):
     
     def get(self, request):
         try:
-            appointment_id = request.query_params.get('appointment_id', None)
-            prescriptions = Prescription.objects.filter(appointment__id=appointment_id)
+            appointment_id = request.query_params.get('appointment_id')
 
-            data = [
-                {
-                    'appointment_id': prescription.appointment.id,
-                    "prescription_id": prescription.id,
-                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
-                    "doctor": {
-                        "id": prescription.appointment.doctor,
-                        "name": f"{User.objects.get(id=prescription.appointment.doctor).first_name} {User.objects.get(id=prescription.appointment.doctor).last_name}",
-                        "email": User.objects.get(id=prescription.appointment.doctor).email,
-                        "phone": User.objects.get(id=prescription.appointment.doctor).phone_number,
+            if not appointment_id:
+                return Response({"error": "appointment_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            prescriptions = Prescription.objects.select_related('appointment').filter(appointment__id=appointment_id)
+
+            user_ids = set()
+            for pres in prescriptions:
+                user_ids.add(pres.appointment.doctor)
+                user_ids.add(pres.appointment.patient)
+
+            users = User.objects.in_bulk(user_ids)
+
+            data = []
+            for prescription in prescriptions:
+                appointment = prescription.appointment
+                doctor = users.get(appointment.doctor)
+                patient = users.get(appointment.patient)
+
+                data.append({
+                    'appointment_id': appointment.id,
+                    'prescription_id': prescription.id,
+                    'created_date': prescription.created_at.strftime('%d %b, %Y'),
+                    'doctor': {
+                        'id': appointment.doctor,
+                        'name': f"{doctor.first_name} {doctor.last_name}" if doctor else "",
+                        'email': doctor.email if doctor else "",
+                        'phone': doctor.phone_number if doctor else "",
                     },
                     'patient': {
-                        'id': prescription.appointment.patient,
-                        'name': f"{User.objects.get(id=prescription.appointment.patient).first_name} {User.objects.get(id=prescription.appointment.patient).last_name}",
-                        "email": User.objects.get(id=prescription.appointment.patient).email,
-                        "phone": User.objects.get(id=prescription.appointment.patient).phone_number,
-                        'address': User.objects.get(id=prescription.appointment.patient).city
+                        'id': appointment.patient,
+                        'name': f"{patient.first_name} {patient.last_name}" if patient else "",
+                        'email': patient.email if patient else "",
+                        'phone': patient.phone_number if patient else "",
+                        'address': patient.city if patient else "",
                     },
-                    'notes': prescription.appointment.notes,
-                    "diagnosis": prescription.diagnosis,
-                    "medicines": prescription.medicines,
-                    "additional_instruction": prescription.additional_instruction,
-                }
-                for prescription in prescriptions
-            ]
+                    # 'notes': getattr(appointment, 'notes', ""),  # assuming `notes` field might not exist
+                    'diagnosis': prescription.diagnosis,
+                    'medicines': prescription.medicines,
+                    'additional_instruction': prescription.additional_instruction,
+                })
 
             return Response(
                 {"message": "Prescriptions retrieved successfully", "prescriptions": data},
@@ -288,27 +307,40 @@ def send_prescription_email(request, prescription):
     """
     API endpoint to send a prescription email with a PDF attachment using SendGrid.
     """
-    context = {
-        'prescription_id': prescription.id,
-        'created_date': prescription.created_at,
-        'doctor_name': prescription.appointment.doctor.user.first_name + " " + prescription.appointment.doctor.user.last_name,
-        'doctor_email': prescription.appointment.doctor.user.email,
-        'doctor_phone': prescription.appointment.doctor.user.phone_number,
-        'hospital_name': prescription.appointment.clinic.user.first_name,
-        'hospital_address': prescription.appointment.clinic.address,
-        'patient_name': prescription.appointment.patient.user.first_name,
-        'patient_email': prescription.appointment.patient.user.email,
-        'patient_address': prescription.appointment.patient.user.city,
-        'patient_phone': prescription.appointment.patient.user.phone_number,
-        'diagnosis': prescription.diagnosis,
-        'notes': prescription.appointment.notes,
-        'medicines': prescription.medicines,
-        'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
-    }
+    try:
+        # Fetch doctor and patient User instances using their IDs
+        doctor_user = User.objects.get(id=prescription.appointment.doctor)
+        patient_user = User.objects.get(id=prescription.appointment.patient)
+        
+        # # Fetch the clinic's user (if needed)
+        # hospital_user = prescription.appointment.clinic.user
 
-    template_path = 'prescription.html'
-    recipient_email = context['patient_email']
+        context = {
+            'prescription_id': prescription.id,
+            'created_date': prescription.created_at,
+            'doctor_name': f"{doctor_user.first_name} {doctor_user.last_name}",
+            'doctor_email': doctor_user.email,
+            'doctor_phone': doctor_user.phone_number,
+            # 'hospital_name': hospital_user.first_name,  # Assuming `clinic.user` is the hospital's user
+            # 'hospital_address': prescription.appointment.clinic.address,
+            'patient_name': f"{patient_user.first_name} {patient_user.last_name}",
+            'patient_email': patient_user.email,
+            'patient_address': patient_user.city,
+            'patient_phone': patient_user.phone_number,
+            'diagnosis': prescription.diagnosis,
+            # 'notes': prescription.appointment.notes,
+            'medicines': prescription.medicines,
+            'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
+        }
 
-    send_pdf_via_sendgrid(template_path, context, recipient_email, request)
+        template_path = 'prescription.html'
+        recipient_email = context['patient_email']
 
-    return {"status": "Email sent successfully via SendGrid!"}
+        send_pdf_via_sendgrid(template_path, context, recipient_email, request)
+
+        return {"status": "Email sent successfully via SendGrid!"}
+
+    except User.DoesNotExist as e:
+        return {"error": f"User not found: {str(e)}"}
+    except Exception as e:
+        return {"error": f"An error occurred: {str(e)}"}
