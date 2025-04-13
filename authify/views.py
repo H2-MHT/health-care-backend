@@ -98,7 +98,7 @@ class SignUpView(APIView):
 
         # email message
         message = Mail(
-            from_email=Email(settings.SENDGRID_FROM_EMAIL),
+            from_email='otp@my-health.today',
         )
 
         # dynamic template ID
@@ -380,8 +380,7 @@ class SignInView(APIView):
 
 class ForgotPasswordView(APIView):
     """
-    API view for handling forgot password requests.
-    Generates an OTP and sends it to the user's registered email for verification.
+    API view for handling forgot password requests using SendGrid dynamic templates.
     """
 
     def generate_otp(self):
@@ -392,16 +391,25 @@ class ForgotPasswordView(APIView):
         logger.info(f"Generated OTP: {otp}")
         return otp
 
-    def send_otp_email(self, email, otp):
+    def send_otp_email(self, email, otp, name=None):
         """
         Send the OTP to the user's email using SendGrid.
         """
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject="Password Reset OTP",
-            plain_text_content=f"Your OTP for password reset is {otp}. It is valid for 10 minutes.",
-        )
+        logger.info(f"Sending OTP to {email} using dynamic template...")
+
+        # Prepare message
+        message = Mail()
+        message.from_email = 'no-reply@my-health.today'
+        message.template_id = 'd-57e53ebd7031463c95856cacfc09d52b'
+
+        # Personalization with dynamic data
+        personalization = Personalization()
+        personalization.add_to(To(email))
+        personalization.dynamic_template_data = {
+            "name": name or "User",  # fallback if name is None
+            "otp": otp,
+        }
+        message.add_personalization(personalization)
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
@@ -434,7 +442,8 @@ class ForgotPasswordView(APIView):
 
         # Generate and send OTP
         otp = self.generate_otp()
-        email_response = self.send_otp_email(email, otp)
+        email_response = self.send_otp_email(email, otp, name=user.first_name)
+
         if isinstance(email_response, str):
             logger.error(f"Failed to send OTP to {email}. Error: {email_response}")
             return Response(
@@ -467,25 +476,32 @@ class ChangePasswordView(APIView):
     """
     API view to handle password change with OTP verification.
     """
-
     permission_classes = [IsAuthenticated]
 
-    def send_otp_email(self, email, otp):
+    def send_otp_email(self, email, otp, name=None):
         """
-        Send OTP via SendGrid.
+        Send OTP via SendGrid using a dynamic email template.
         """
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject="Your OTP Code",
-            plain_text_content=f"Your OTP code is {otp}",
-        )
+        message = Mail()
+        message.from_email = 'no-reply@my-health.today'
+        message.template_id = 'd-6cda674d2e124575b8c8a45e88b3596b'
+        
+        personalization = Personalization()
+        personalization.add_to(To(email))
+        personalization.dynamic_template_data = {
+            "name": name or "User",
+            "otp": otp,
+            "purpose": "Change Password"  # Optional additional context for the email
+        }
+        message.add_personalization(personalization)
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
+            logger.info(f"Dynamic OTP email sent to {email}. Status: {response.status_code}")
             return response
         except Exception as e:
+            logger.error(f"Failed to send OTP email: {str(e)}")
             return str(e)
 
     def post(self, request, *args, **kwargs):
@@ -497,21 +513,21 @@ class ChangePasswordView(APIView):
             old_password = request.data.get("old_password")
             new_password = request.data.get("new_password")
 
-            # Validate password
+            # Validate required fields
             if not old_password or not new_password:
                 return Response(
                     {"message": "Old password and new password are required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Validate old password
+            # Validate current password
             if not user.check_password(old_password):
                 return Response(
                     {"message": "Old password is incorrect."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Validate password strength
+            # Enforce password complexity policies
             if len(new_password) < 8:
                 return Response({"message": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
             if not re.search(r'[A-Za-z]', new_password):
@@ -521,26 +537,28 @@ class ChangePasswordView(APIView):
             if not re.search(r'[@$!%*?&]', new_password):
                 return Response({"message": "Password must contain at least one special character."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Generate and store OTP
-            otp_code = str(random.randint(100000, 999999))  # Generate 6-digit OTP
-            user.otp = otp_code  # Store OTP in User model
-            user.otp_created_at = timezone.now()  # Save timestamp
-            user.temp_new_password = new_password  # Temporarily store new password
+            # Generate OTP and persist temporarily
+            otp_code = str(random.randint(100000, 999999))
+            user.otp = otp_code
+            user.otp_created_at = timezone.now()
+            user.temp_new_password = new_password
             user.save()
 
-            # Send OTP via email
-            send_result = self.send_otp_email(user.email, otp_code)
-            if isinstance(send_result, str):  # If email sending fails
+            # Dispatch dynamic template OTP
+            send_result = self.send_otp_email(user.email, otp_code, name=user.first_name)
+            if isinstance(send_result, str):
                 return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            logger.exception("Error processing change password request: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+            
+            
     def put(self, request, *args, **kwargs):
         """
         User enters OTP, If valid, update the password immediately.
@@ -708,22 +726,25 @@ class ResendOTPView(APIView):
 
     def send_otp_email(self, email, otp):
         """
-        Send the OTP to the user's email using SendGrid.
+        Send OTP using a dynamic SendGrid template.
         """
         message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
+            from_email='no-reply@my-health.today',
             to_emails=email,
-            subject="Password Reset OTP - Resend",
-            plain_text_content=f"Your new OTP for password reset is {otp}. It is valid for 10 minutes.",
         )
+        message.template_id = 'd-7c64dfda916a4a2b801af519ccee57c7'
+        message.dynamic_template_data = {
+            "otp": otp,
+            "support_email": "support@example.com",  # optional placeholder
+        }
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
             return response
         except Exception as e:
-            logger.error(f"Failed to send OTP email to {email}: {str(e)}")
-            return None  # Return None instead of error details for security reasons
+            logger.error(f"SendGrid Error: {str(e)}")
+            return str(e)
 
     def post(self, request, *args, **kwargs):
         """
