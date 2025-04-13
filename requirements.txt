@@ -81,7 +81,7 @@ tzdata==2025.1
 urllib3==2.2.3
 weasyprint==63.1
 webencodings==0.5.1
-websockets==14.1
+websockets==10.1
 whitenoise==6.8.2
 wsproto==1.2.0
 yarl==1.18.3
