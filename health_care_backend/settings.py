@@ -407,6 +407,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://h2.doctor',
 ]
 
+
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+  
 # Twillio 
 ACCOUNT_SID = os.getenv("ACCOUNT_SID")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN")
