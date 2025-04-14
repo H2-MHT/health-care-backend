@@ -245,39 +245,53 @@ class GenerateAgoraToken(APIView):
         })
 
 class AgoraTokenView(APIView):
-    def get(self, request):
+    def post(self, request):
         try:
-            user_id = request.query_params.get("user_id", "")
-            if not user_id:
-                return JsonResponse({"error": "User ID is required"}, status=400)
+            sender_id = request.data.get("senderID", "")
+            receiver_id = request.data.get("receiverID", "")
+
+            if not sender_id:
+                return JsonResponse({"error": "Sender ID is required"}, status=400)
+            
+            if not receiver_id:
+                return JsonResponse({"error": "Receiver ID is required"}, status=400)
             
             try:
-                user = User.objects.get(pk=user_id)
+                sender = User.objects.get(pk=sender_id)
             except User.DoesNotExist:
-                return JsonResponse({"error": "User does not exist"}, status=404)
+                return JsonResponse({"error": "Sender user does not exist"}, status=404)
             
             try:
-                agoratoken = Agoratoken.objects.get(user=user)
+                receiver = User.objects.get(pk=receiver_id)
+            except User.DoesNotExist:
+                return JsonResponse({"error": "Receiver user does not exist"}, status=404)
+            
+            try:
+                senderToken = Agoratoken.objects.get(user=sender)
             except Agoratoken.DoesNotExist:
-                return JsonResponse({"error": "Token has not been generated yet"}, status=404)
+                return JsonResponse({"error": "Token has not been generated yet for sender"}, status=404)
             
-            data = {
-                    "app_id": APP_ID,
-                    "user_id": user_id,
-                    "name": user.get_full_name(),
-                    "token": agoratoken.token,
-                    "channel_name": user.agora_channel_name            
-                }
+            try:
+                receiverToken = Agoratoken.objects.get(user=receiver)
+            except Agoratoken.DoesNotExist:
+                return JsonResponse({"error": "Token has not been generated yet for receiver"}, status=404)
             
-            return JsonResponse(
-                {
-                    "message": "Retrieved successfully",
-                    "data": data
-                }
-            )
+            channel_name = sender.agora_channel_name
+            currentUserFirebaseToken = sender.device_token
+            remoteUserFirebaseToken = receiver.device_token
+            
+            return JsonResponse({
+            "message": "Retrieved successfully",
+            "app_id": APP_ID,
+            "channel": channel_name,
+            "currentUser": {"currentUserName": sender.get_full_name(),"uid": sender.id,"senderToken": senderToken.token,"firebase_token": currentUserFirebaseToken},
+            "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"receiverToken.": receiverToken.token,"firebase_token": remoteUserFirebaseToken}
+        })
             
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
+ 
+ 
             
 class AgoraUserReceiverIDAPIView(APIView):
     permission_classes = [IsAuthenticated]
