@@ -17,6 +17,8 @@ from users.models import User
 from payments.models import Transaction, AccountDetail
 from rest_framework import status
 from doctors.models import LicenceCertificate
+from reviews.models import Review, Report
+from reviews.serializers import ReportSerializer
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -428,3 +430,78 @@ class VerifyDocumentAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class ReviewReportAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(self, request, *args, **kwargs):
+        try:
+
+            if request.user.role != 'SuperAdmin':
+                return Response(
+                    {"error": "Only SuperAdmin can verify documents."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            user_id = request.query_params.get("user_id")
+
+            if user_id:
+                user = User.objects.get(pk=user_id)
+                report = Report.objects.filter(reported_by=user)
+            else:
+                report = Report.objects.all()
+
+            report_serializer = ReportSerializer(report, many=True)
+
+            return Response(
+                {
+                    "message": "Report Fetched Successfully",
+                    "report": report_serializer.data
+                }, 
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response(
+                {"error": f"An unexpected error occurred: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def patch(self, request, *args, **kwargs):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"message": "Only SuperAdmin can verify reports."}, status=status.HTTP_403_FORBIDDEN)
+            
+            report_id = request.data.get("report_id")
+            print("Request Data:", request.data)
+            if not report_id:
+                return Response({"error": "Report ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                report = Report.objects.get(id=report_id)
+            except Report.DoesNotExist:
+                return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            status_value = request.data.get("status")
+
+            if status_value not in ["Valid", "Invalid"]:
+                return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            report.status = status_value
+            report.save()
+
+            if status_value == "Valid":
+                reviews = Review.objects.filter(report=report)  
+                reviews.update(is_deleted=True)
+            elif status_value == "Invalid":
+                reviews = Review.objects.filter(report=report)
+                reviews.update(is_deleted=False)
+
+            response_data = {
+                "message": "Report status updated successfully",
+                "report_id": report.id,
+                "status": report.status
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)

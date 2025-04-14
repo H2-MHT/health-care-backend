@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import Review, Reply
+from .models import Review, Reply, Report
 from patients.models import Patient
+from doctors.models import BookedAppointment
 
 from appointments.models import Appointment
 
@@ -20,21 +21,12 @@ class ReviewSerializer(serializers.ModelSerializer):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
         return None
     def validate(self, data):
-        request = self.context.get('request')
-        user = request.user
-
-        # Ensure the user is a patient
-        if not hasattr(user, 'patient_profile'):
-            raise serializers.ValidationError("Only patients can create reviews.")
-
-        patient = user.patient_profile
+        request = self.context['request']
+        patient_user_id = request.user.id
         doctor = data.get('doctor')
 
-        # Ensure the doctor is assigned to the patient via an active appointment
-        if not Appointment.objects.filter(patient=patient, doctor=doctor, status__in=["Pending", "Confirmed", "Completed"]).exists():
-            raise serializers.ValidationError(
-                {"doctor": "This doctor is not assigned to the logged-in patient through an appointment."}
-            )
+        if not doctor:
+            raise serializers.ValidationError({"doctor": "Doctor is required."})
         return data
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
@@ -91,3 +83,14 @@ class ReplySerializer(serializers.ModelSerializer):
         if hasattr(obj.user, 'patient') and obj.user.patient.user:
             return obj.user.patient.user.first_name
         return None
+
+class ReportSerializer(serializers.ModelSerializer):
+    review_id = serializers.ReadOnlyField(source="review.id")
+    reported_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Report
+        fields = ["id", "review_id", "reported_by", "reason", "status", "created_at"]
+
+    def get_reported_by(self, obj):
+        return obj.reported_by.get_full_name() 

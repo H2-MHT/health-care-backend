@@ -1,15 +1,16 @@
 from rest_framework import generics
 from rest_framework.response import Response
-from .models import Review, Reply
-from .serializers import ReviewSerializer, ReplySerializer, ReviewUpdateSerializer
+from .models import Review, Reply, Report
+from .serializers import ReviewSerializer, ReplySerializer, ReviewUpdateSerializer, ReportSerializer
 from rest_framework.views import APIView
 from rest_framework import status, permissions
-from doctors.models import Doctor
+from doctors.models import Doctor, BookedAppointment
 from appointments.models import Appointment
 from rest_framework.generics import get_object_or_404
 from patients.models import Patient
 from utils.pagination import pagination_view, create_paginated_response
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 # Create your views here.
 
 class ReviewPIView(APIView):
@@ -37,10 +38,11 @@ class ReviewPIView(APIView):
             doctor = Doctor.objects.get(id=doctor_id)
 
             # Check if the patient has any appointment with this doctor
-            has_any_appointment = Appointment.objects.filter(
-                patient=patient, doctor=doctor
-            ).exists()
-
+            has_any_appointment = BookedAppointment.objects.filter(
+            patient=request.user.id,  # patient is saved as user.id
+            doctor=doctor.user.id,    # doctor is also saved as user.id
+            status="Confirmed"
+        ).exists()
             if not has_any_appointment:
                 return Response(
                     {"detail": "You can only review doctors you have had an appointment with."},
@@ -86,7 +88,7 @@ class ReviewPIView(APIView):
                               Review.objects.filter(patient=patient, doctor__user__last_name__istartswith=search_key)
 
             else:
-                reviews = Review.objects.filter(patient=patient).order_by('-created_at')
+                reviews = Review.objects.filter(patient=patient, is_deleted=False).order_by('-created_at')
             paginated_data, headers = pagination_view(reviews, request)
             serializer = ReviewSerializer(paginated_data, many=True)
             return create_paginated_response("Review retrieved successfully!", serializer.data, headers)
@@ -344,3 +346,37 @@ class ReplyAPIView(APIView):
 
         reply.delete()
         return Response({"message": "Reply deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+
+class ReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            data = request.data.copy()
+            review_id = data.get("review_id")
+            
+            try:
+                review = Review.objects.get(id=review_id)
+            except Review.DoesNotExist:
+                return Response({"detail": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            report = Report.objects.create(
+                review=review,
+                reported_by=request.user,
+                reason=data.get("reason"),
+            )
+
+            serializer = ReportSerializer(report)
+            return Response({"message": "Report submitted successfully", "report": serializer.data}, status=status.HTTP_201_CREATED)
+        
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def get(self, request):
+        try:
+            report = Report.objects.filter(reported_by=request.user)
+            serializer = ReportSerializer(report, many=True)
+            return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

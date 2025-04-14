@@ -2,7 +2,7 @@ from django.contrib import admin
 
 # Register your models here.
 
-from .models import Review, Reply
+from .models import Review, Reply, Report
 
 # class ReviewAdmin(admin.ModelAdmin):
 #     list_display = ('id', 'patient')
@@ -17,3 +17,4 @@ class ReviewAdmin(admin.ModelAdmin):
     inlines = [ReplyInline]
 
 admin.site.register(Review, ReviewAdmin)
+admin.site.register(Report)
