@@ -12,6 +12,7 @@ class Review(models.Model):
     title = models.CharField(max_length=255, null=True, blank=True)
     content = models.TextField(null=True, blank=True)
     recommend = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def save(self, *args, **kwargs):
@@ -45,3 +46,17 @@ class Reply(models.Model):
 
     def __str__(self):
         return f"Reply by {self.user} to review {self.review.id}"
+
+class Report(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE)
+    reported_by = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="reports")
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=20, 
+        choices=[("Pending", "Pending"), ("Valid", "Valid"), ("Invalid", "Invalid")], 
+        default="Pending"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report by {self.reported_by} on review {self.review.id}"
