@@ -104,7 +104,6 @@ urlpatterns = [
     path("media-digest-document/", MediaDigestAPIView.as_view(), name="media-digest-document"),
     path("clinics-associated-to-doctors/", ClinicsAssociatedToDoctorsAPIView.as_view(), name="all-clinic-on-doctor"),
     path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="all-patient-on-doctor"),
-    path('update-wallet/', DoctorWalletAPIView.as_view(), name='update-wallet'),
     path('get-wallet/', DoctorWalletAPIView.as_view(), name='get-wallet'),
 
 ]
