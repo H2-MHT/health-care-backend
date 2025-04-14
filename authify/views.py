@@ -1045,53 +1045,10 @@ class UpdateUserProfileAPIView(APIView):
 
     def patch(self, request):
         try:
-            logger.info("Received request to update user profile for user: %s", request.user.email)
-
-            if request.user.role != 'Doctor':
-                return Response({'message': 'User must be a doctor'}, status=400)
-
-            data = request.data
-            other_work_place_value = data.get("other_work_place")
-
-            # If explicitly provided and set to 0, register new clinic
-            if other_work_place_value is not None and other_work_place_value==0:
-                doctor = request.user.doctor
-                clinic = OtherClinic.objects.create(
-                    doctor=doctor,
-                    clinic_name=data.get('clinic_name', ''),
-                    address=data.get('address', ''),
-                    website=data.get('website', '')
-                )
-
-                # Send email notification
-                try:
-                    doctor_name = getattr(doctor.user, "get_full_name", lambda: doctor.user.email)()
-                    message_content = textwrap.dedent(f"""
-                        A new clinic has been registered by Dr. {doctor_name}.
-
-                        Clinic Name: {clinic.clinic_name}
-                        Address: {clinic.address}
-                        Website: {clinic.website}
-                    """)
-
-                    email = Mail(
-                        from_email=settings.SENDGRID_FROM_EMAIL,
-                        to_emails='new-clinic@my-health.today',  # fixed missing variable
-                        subject="New Clinic Registered",
-                        plain_text_content=message_content
-                    )
-
-                    sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
-                    sg.send(email)
-                    logger.info("Notification email sent to new-clinic@my-health.today")
-
-                except Exception as email_err:
-                    logger.error("Failed to send email: %s", str(email_err))
-
-                serializer = OtherClinicSerializer(clinic)
-                return Response({'message': "Clinic added successfully", 'data': serializer.data}, status=200)
-
-            # In all cases (even if other_work_place is not provided), update profile
+            
+            logger.info(
+                "Received request to update user profile for user: %s", request.user.email
+            )
             serializer = UserProfileUpdateSerializer(
                 instance=request.user, data=request.data, partial=True
             )
@@ -1116,7 +1073,6 @@ class UpdateUserProfileAPIView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
 
 class DeleteProfilePictureAPIView(APIView):
     permission_classes = [IsAuthenticated]

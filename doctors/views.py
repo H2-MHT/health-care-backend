@@ -1468,7 +1468,7 @@ class GenerateReferralCodeView(APIView):
                 )
 
             # Return referral data
-            serializer = ReferralSerializer(referral)
+            serializer = ReferralSerializer(referral, context={'request': request})
             return Response(
                 {
                     "message": "Referral data retrieved successfully.",

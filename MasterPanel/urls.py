@@ -18,7 +18,7 @@ from .views import(
 
 urlpatterns = [
     # Define your URL patterns here, for example:
-    path("total-count/", TotalPatientAndDoctorsView.as_view(), name="signup"),
+    path("total-count/", TotalPatientAndDoctorsView.as_view(), name="total-count"),
     # path("total-patient/", Patient_Record.as_view(), name="taker_get"),
     # path("patient-post/", Patient_Record.as_view(), name="taker_get"),
     # path("patient-put/<int:pk>/",Patient_Record.as_view(), name="taker_get"),

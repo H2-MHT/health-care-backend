@@ -56,7 +56,8 @@ class ReferralSerializer(serializers.ModelSerializer):
         fields = ['personal_code', 'referral_points', 'invited_users_count', 'registration_link']
 
     def get_registration_link(self, obj):
-        return obj.get_registration_link()
+        request = self.context.get('request')
+        return obj.get_registration_link(request) if request else None
     
     
 class InvitationSerializer(serializers.ModelSerializer):

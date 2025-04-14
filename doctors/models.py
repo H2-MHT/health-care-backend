@@ -1,6 +1,7 @@
 import os
 from django.db import models
 from django.forms import ValidationError
+from django.urls import reverse
 from  users.models import User
 import random
 import string
@@ -66,9 +67,11 @@ class Referral(models.Model):
     def __str__(self):
         return f"{self.user.first_name} - {self.personal_code}"
 
-    def get_registration_link(self):
-        """Generate a registration link that includes the personal referral code."""
-        return f"http://localhost:8000/register?referral_code={self.personal_code}"
+    def get_registration_link(self, request):
+        """Generate a dynamic registration link with the personal referral code."""
+        base_url = request.build_absolute_uri('/')
+        registration_path = reverse('signup')
+        return f"{base_url.rstrip('/')}{registration_path}?referral_code={self.personal_code}"
 
 
 
