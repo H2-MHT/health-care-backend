@@ -13,6 +13,8 @@ from .models import (
     LicenceCertificate,
     # Slot,
     MediaDigest,
+    DoctorWallet,
+    
 )
 from payments.models import Payment
 from authify.serializers import UserProfileSerializer, UserProfileUpdateSerializer
@@ -280,4 +282,7 @@ class OtherClinicSerializer(serializers.ModelSerializer):
         model=OtherClinic
         fields=['doctor_id','id','clinic_name','address','website','user']
 
-
+class DoctorWalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorWallet
+        fields = ['id', 'doctor_id', 'balance']
