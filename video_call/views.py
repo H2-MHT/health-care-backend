@@ -104,6 +104,60 @@ AZURE_ACCOUNT_KEY = os.getenv("AZURE_ACCOUNT_KEY")
 AZURE_CONTAINER = os.getenv("AZURE_CONTAINER")
 
 class CreateAgoraChatUserAPIView(APIView):
+    def post(self, request):
+        
+        senderID = request.data.get("senderID")
+        receiverID = request.data.get("receiverID")  
+
+        if not senderID or not receiverID:
+            return JsonResponse({"error": "Both user IDs are required"}, status=400)
+
+        try:
+            sender = User.objects.get(pk=senderID)
+            
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Sender user does not exist"}, status=404)
+        
+        try:
+           receiver = User.objects.get(pk=receiverID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Receiver user does not exist"}, status=404)
+
+        currentUserFirebaseToken = sender.device_token
+        remoteUserFirebaseToken = receiver.device_token
+        
+        sender_email = sender.email
+        receiver_email = receiver.email
+        
+        def sanitize_email(email):
+          return email.replace("@", "_").replace(".", "_")
+
+        email1_sanitized = sanitize_email(sender_email)
+        email2_sanitized = sanitize_email(receiver_email)
+        print(email1_sanitized, email2_sanitized)
+
+        channel_name = f"chat_{min(email1_sanitized, email2_sanitized)}_{max(email1_sanitized, email2_sanitized)}"
+
+        expire_timestamp = int(time.time()) + EXPIRE_TIME_IN_SECONDS
+         
+        token = RtcTokenBuilder.buildTokenWithUid(
+            APP_ID, APP_CERTIFICATE, channel_name, 0, 1, expire_timestamp
+        )
+
+        sender.agora_channel_name = channel_name
+        receiver.agora_channel_name = channel_name
+        sender.save()
+        receiver.save()
+
+        return JsonResponse({
+            "app_id": APP_ID,
+            "channel": channel_name,
+            "token": token,
+            "currentUser": {"currentUserName": sender.get_full_name(),"uid": sender.id, "firebase_token": currentUserFirebaseToken},
+            "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"firebase_token": remoteUserFirebaseToken}
+        })
+
+class GenerateAgoraToken(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
         
