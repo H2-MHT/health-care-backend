@@ -6,6 +6,7 @@ class Agoratoken(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     userID = models.IntegerField()
     token = models.TextField()
+    record_token = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
