@@ -13,6 +13,7 @@ from .views import(
     DeleteUser,
     DoctorWithdrawAPIView,
     VerifyDocumentAPIView,
+    ReviewReportAPIView,
 )
 
 urlpatterns = [
@@ -56,4 +57,6 @@ urlpatterns = [
     path("get-accounts/", DoctorWithdrawAPIView.as_view(), name='get-accounts'),
     path("approv-reject-payment/", DoctorWithdrawAPIView.as_view(), name="approv-reject-payment"),
     path("verify-document/", VerifyDocumentAPIView.as_view(), name="verify-document"),
+    path("get-report/", ReviewReportAPIView.as_view(), name="get-report"),
+    path("review-report/", ReviewReportAPIView.as_view(), name="review-report"),
 ]

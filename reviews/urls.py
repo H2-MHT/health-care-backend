@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (DoctorReviewsAPIView,
                     ReviewPIView,
                     ReplyAPIView,
+                    ReportAPIView,
 )
 
 urlpatterns = [
@@ -18,5 +19,7 @@ urlpatterns = [
     path('replies/', ReplyAPIView.as_view(), name='view-all-reply-to-review'),
     # get a list of all the reviews related to the specific doctor
     path('doctor/', DoctorReviewsAPIView.as_view(), name='doctor-reviews'),
+    path("report-sumbit/", ReportAPIView.as_view(), name="report-sumbit"),
+
 
 ]
