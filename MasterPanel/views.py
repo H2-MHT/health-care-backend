@@ -462,7 +462,6 @@ class ReviewReportAPIView(APIView):
     def patch(self, request, *args, **kwargs):
         try:
             report_id = request.data.get("report_id")
-            print("Request Data:", request.data)
             if not report_id:
                 return Response({"error": "Report ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
