@@ -97,6 +97,7 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20, choices=ROLE_CHOICES, default="Patient", null=False
     )
+    is_doctor_switched = models.BooleanField(default=False)
     languages = models.ManyToManyField(Language, blank=True)
     work_place = models.ForeignKey("clinics.Clinic", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinic_work")
     expertise = models.TextField(blank=True, default="")
