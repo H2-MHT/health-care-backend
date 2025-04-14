@@ -19,6 +19,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, subject, to_email
 from social_core.backends.apple import AppleIdAuth
@@ -377,6 +379,54 @@ class SignInView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class LogoutView(APIView):
+    """
+    API view for user logout. Invalidates the refresh token and reverts role if switched.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            user = request.user
+
+            # Revert role if temporarily switched
+            if user.is_doctor_switched:
+                user.role = 'Doctor'
+                user.is_doctor_switched = False
+                user.save(update_fields=['role', 'is_doctor_switched'])
+
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                logger.warning("Logout failed: Refresh token not provided.")
+                return Response(
+                    {"message": "Refresh token is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # Blacklist the refresh token
+
+            logger.info(f"User {user.email} logged out successfully and role reverted if switched.")
+            return Response(
+                {"message": "Logout successful."},
+                status=status.HTTP_205_RESET_CONTENT,
+            )
+
+        except TokenError as e:
+            logger.error(f"Invalid token during logout: {str(e)}")
+            return Response(
+                {"message": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Unexpected error during logout: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class ForgotPasswordView(APIView):
     """

@@ -117,3 +117,9 @@ class DeviceAccessSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceAccess
         fields = '__all__'
+
+
+class UserRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email', 'role', 'is_doctor_switched']
