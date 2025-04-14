@@ -1121,7 +1121,6 @@ class GetUserProfileAPIView(APIView):
                 raise AuthenticationFailed("User is not authenticated.")
 
             user = request.user
-            doctor=request.user.doctor
             role = user.role
 
             if not role:
@@ -1133,23 +1132,23 @@ class GetUserProfileAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            serializer = UserProfileSerializer(user, context={"request": request})
+            serializer = UserProfileSerializer(user)
             data = serializer.data
 
             if role == "Doctor":
                 logger.info("Returning doctor profile for user: %s", request.user.email)
-                other_clinic=OtherClinic.objects.filter(doctor=doctor).first()
-                other_clinic_data=OtherClinicSerializer(other_clinic).data if other_clinic else {}
 
+                # Fetch clinic data if it exists
                 clinic = Clinic.objects.filter(user=user).first()
                 clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
+
+                # Nested clinic data inside user profile response
+                data["clinic_data"] = clinic_data
 
                 return Response(
                     {
                         "message": "Doctor profile.",
-                        "data": data,
-                        "clinic_data": clinic_data,
-                        "other_clinic_data": other_clinic_data
+                        "data": data,  # Includes nested clinic info
                     },
                     status=status.HTTP_200_OK,
                 )
