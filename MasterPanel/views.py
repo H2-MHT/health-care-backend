@@ -250,7 +250,7 @@ class BlockUser(APIView):
             return Response({"message": status_message, "is_active": user.is_active}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -280,7 +280,7 @@ class DeleteUser(APIView):
             return Response({"message": status_message, "is_deleted": user.is_deleted}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 class DoctorWithdrawAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
@@ -299,7 +299,7 @@ class DoctorWithdrawAPIView(APIView):
             else:
                 return Response({"error": "You are not authorized to access this data"}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 
     def put (self, request, *args, **kwargs):
@@ -343,7 +343,7 @@ class DoctorWithdrawAPIView(APIView):
                 "rejection_reason": transaction.rejection_reason
             },status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         
 class VerifyDocumentAPIView(APIView):
@@ -376,7 +376,7 @@ class VerifyDocumentAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_400_BAD_REQUEST
             )
         
 
@@ -429,7 +429,7 @@ class VerifyDocumentAPIView(APIView):
             return Response({"message": "Licence Certificate updated successfully", "data": response_data}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 class ReviewReportAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
@@ -456,7 +456,7 @@ class ReviewReportAPIView(APIView):
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_400_BAD_REQUEST
             )
     
     def patch(self, request, *args, **kwargs):
