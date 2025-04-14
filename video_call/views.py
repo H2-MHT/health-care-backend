@@ -224,7 +224,8 @@ class GenerateAgoraToken(APIView):
             user=sender_user,
             defaults={
                 "userID": sender_user.id,
-                "token": senderToken
+                "token": senderToken,
+                "record_token": recorder_token
             }
         )
 
@@ -232,7 +233,8 @@ class GenerateAgoraToken(APIView):
             user=receiver_user,
             defaults={
                 "userID": receiver_user.id,
-                "token": receiverToken
+                "token": receiverToken,
+                "record_token": recorder_token
             }
         )
         
@@ -284,6 +286,7 @@ class AgoraTokenView(APIView):
             "message": "Retrieved successfully",
             "app_id": APP_ID,
             "channel": channel_name,
+            "recorder_token": senderToken.record_token,
             "currentUser": {"currentUserName": sender.get_full_name(),"uid": sender.id,"senderToken": senderToken.token,"firebase_token": currentUserFirebaseToken},
             "remoteUser": {"remoteUserName": receiver.get_full_name(), "uid": receiver.id,"receiverToken.": receiverToken.token,"firebase_token": remoteUserFirebaseToken}
         })
