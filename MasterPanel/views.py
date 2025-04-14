@@ -435,13 +435,6 @@ class ReviewReportAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
     def get(self, request, *args, **kwargs):
         try:
-
-            if request.user.role != 'SuperAdmin':
-                return Response(
-                    {"error": "Only SuperAdmin can verify documents."}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
             user_id = request.query_params.get("user_id")
 
             if user_id:
@@ -468,9 +461,6 @@ class ReviewReportAPIView(APIView):
     
     def patch(self, request, *args, **kwargs):
         try:
-            if request.user.role != 'SuperAdmin':
-                return Response({"message": "Only SuperAdmin can verify reports."}, status=status.HTTP_403_FORBIDDEN)
-            
             report_id = request.data.get("report_id")
             print("Request Data:", request.data)
             if not report_id:
