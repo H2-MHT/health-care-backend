@@ -2521,32 +2521,28 @@ class DoctorWalletAPIView(APIView):
 
     def get(self, request):
         try:
-            doctor_wallet = DoctorWallet.objects.get(doctor=request.user)
-            serializer = DoctorWalletSerializer(doctor_wallet)
-            return Response({"message": "Doctor wallet fetched successfully!", "data": serializer.data}, status=status.HTTP_200_OK)
+            doctor = request.user
+            completed_appointments = BookedAppointment.objects.filter(
+                doctor=doctor.id,
+                payment_status='Completed'
+            )
+
+            total_earned = sum(app.amount for app in completed_appointments)
+
+            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
+            wallet.balance = Decimal(total_earned)
+            wallet.save()
+
+            serializer = DoctorWalletSerializer(wallet)
+            return Response({
+                "message": "Doctor wallet fetched and updated successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
         except DoctorWallet.DoesNotExist:
             return Response({"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": "Something went wrong while fetching data.", "detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    def patch(self, request, *args, **kwargs):
-        try:
-            wallet = update_doctor_wallet(request)
-            serializer = DoctorWalletSerializer(wallet)
-            return Response({"message": "Doctor wallet updated successfully!", "data": serializer.data}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": "Something went wrong while updating data.", "detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-def update_doctor_wallet(request):
-    completed_appointments = BookedAppointment.objects.filter(
-        doctor=request.user.id,
-        payment_status='Completed'
-    )
-
-    total_earned = sum(app.amount for app in completed_appointments)
-
-    doctor = User.objects.get(pk=request.user.id)
-    wallet, created = DoctorWallet.objects.get_or_create(doctor=doctor)
-    wallet.balance = Decimal(total_earned)
-    wallet.save()
-    return wallet
+            return Response({
+                "error": "Something went wrong while fetching/updating data.",
+                "detail": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
