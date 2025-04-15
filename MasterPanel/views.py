@@ -2,8 +2,9 @@ from django.shortcuts import render, get_object_or_404
 
 # Create your views here.
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
 from doctors.models import Doctor
 from clinics.models import Clinic
@@ -21,7 +22,7 @@ from doctors.models import LicenceCertificate
 from reviews.models import Review, Report
 from reviews.serializers import ReportSerializer
 from doctors.models import Specialization
-
+from doctors.models import Specialization
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
@@ -590,3 +591,69 @@ class MergeSpecialization(APIView):
             return Response({'message': "specialization merged"}, status=201)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+class AddSpecializationAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request):
+        try:
+            serializer = SpecializationSerializer(data=request.data)
+
+            # Check for duplicate name before validation/save
+            name = request.data.get('name')
+            if Specialization.objects.filter(name__iexact=name).exists():
+                return Response(
+                    {"error": "Specialization with this name already exists."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"data": serializer.data, "message": "Specialization added successfully"},
+                    status=status.HTTP_201_CREATED
+                )
+
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self,request):
+        permission_classes = [IsSuperAdminOrAdmin]
+        try:
+            specialization_data = Specialization.objects.all()
+            serializer = SpecializationSerializer(specialization_data, many=True)
+            return Response(
+                {"message": "Specialization retrieved successfully","data": serializer.data},
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        try:
+            specialization_id=request.data.get('specialization_id')
+            specialization_data = Specialization.objects.get(id=specialization_id)
+
+            serializer = SpecializationSerializer(specialization_data, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {"message": "Specialization updated successfully","data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"message": "Specialization not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self,request):
+        try:
+            specialization_id=request.data.get('specialization_id')
+            specialization_data = Specialization.objects.get(id=specialization_id)
+            specialization_data.delete()
+            return Response({"message": "Specialization deleted successfully"}, status=status.HTTP_200_OK)
+        except Specialization.DoesNotExist:
+            return Response({"message": "Specialization not found"}, status=status.HTTP_404_NOT_FOUND)
