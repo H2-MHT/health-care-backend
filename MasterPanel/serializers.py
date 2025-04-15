@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from doctors.models import Specialization
 from patients.models import Patient
 from users.models import User
 
@@ -19,3 +21,10 @@ class DoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "first_name", "last_name", "phone_number", "is_active"]
+
+
+
+class SpecializationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=Specialization
+        fields=["id","name","is_approved","created_date"]
