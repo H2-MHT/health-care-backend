@@ -43,6 +43,7 @@ from .models import (
     LicenceCertificate, 
     MediaDigest,
     DoctorWallet,
+    Specialization,
 )
 from notifications.models import Notification
 from .serializers import (
@@ -2528,7 +2529,6 @@ class DoctorWalletAPIView(APIView):
             )
 
             total_earned = sum(app.amount for app in completed_appointments)
-
             wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
             wallet.balance = Decimal(total_earned)
             wallet.save()
@@ -2546,3 +2546,51 @@ class DoctorWalletAPIView(APIView):
                 "error": "Something went wrong while fetching/updating data.",
                 "detail": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+class AddSpecializationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            if request.user.role != 'Doctor':
+                return Response({"error": "Only doctors can add specializations."}, status=403)
+            
+            specialization = request.data.get('specialization')  
+            if not specialization:
+                return Response({"error": "Please provide a specialization."}, status=400)
+            
+            if Specialization.objects.filter(name__iexact=specialization).exists():
+                return Response({"message": "This specialization already exists"}, status=400)
+
+            Specialization.objects.create(
+                name=specialization.capitalize(),
+                is_approved = False  
+            )
+            send_specialization_approval_email(specialization)        
+            return Response({'message': 'Specialization added successfully'}, status=201)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+def send_specialization_approval_email(specialization):    
+    subject = f"New Specialization Request: {specialization}"
+
+    message = f"""
+    A doctor has submitted a new specialization request: {specialization}
+
+    Please log in to the admin panel to review and take action.
+
+    Thanks,  
+    My Health Team
+        """
+
+    try:
+        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+        email = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails='approvals@my-health.today',
+            subject=subject,
+            plain_text_content=message
+        )
+        sg.send(email)
+    except Exception as e:
+        print("Error sending approval email:", e)
