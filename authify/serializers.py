@@ -4,6 +4,7 @@ import json
 from doctors.models import Doctor
 from users.models import User
 import re
+from clinics.models import Clinic
 from patients.models import Patient
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -232,16 +233,26 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
             except json.JSONDecodeError:
                 languages = []
 
-        # Update experience_years explicitly
+        # Doctor-specific logic
         if instance.role == "Doctor":
             experience_years = validated_data.pop('experience_years', None)
-            if experience_years is not None:
-                doc = Doctor.objects.filter(user=instance).first()
-                if doc:
+            clinic = validated_data.pop('clinic', None)
+
+            doc = Doctor.objects.filter(user=instance).first()
+            if doc:
+                if experience_years is not None:
                     doc.experience_years = experience_years
-                    doc.save()
-                    
-                # Handle Patient-specific update
+
+                if clinic and clinic != "other":
+                    try:
+                        clinic_instance = Clinic.objects.get(id=clinic)
+                        doc.work_place = clinic_instance
+                    except Clinic.DoesNotExist:
+                        raise serializers.ValidationError("Invalid clinic ID.")
+
+                doc.save()
+
+        # Patient-specific logic
         if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
             show_email = validated_data.pop('show_email', None)
             show_phone = validated_data.pop('show_phone', None)

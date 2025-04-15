@@ -1045,33 +1045,86 @@ class UpdateUserProfileAPIView(APIView):
 
     def patch(self, request):
         try:
-            
-            logger.info(
-                "Received request to update user profile for user: %s", request.user.email
-            )
+            logger.info(f"User profile update initiated by: {request.user.email}")
+
             serializer = UserProfileUpdateSerializer(
-                instance=request.user, data=request.data, partial=True
+                instance=request.user,
+                data=request.data,
+                partial=True
             )
 
             if serializer.is_valid():
                 serializer.save()
-                logger.info("User profile updated successfully: %s", request.user.email)
-                return Response(
-                    {"message": "Profile updated successfully.", "data": serializer.data},
-                    status=status.HTTP_200_OK,
-                )
+                user = request.user
+                doctor = getattr(user, "doctor", None)
 
-            logger.warning(
-                "Profile update failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
+                # Load default serialized data
+                response_data = serializer.data
+
+                # Clinic handling logic
+                if request.data.get("clinic") == "other":
+                    response_data["work_place"] = "other"
+
+                    clinic_name = request.data.get("clinic_name")
+                    clinic_location = request.data.get("clinic_location")
+                    clinic_website = request.data.get("clinic_website")
+
+                    # Inject clinic info directly into response
+                    response_data["clinic_name"] = clinic_name
+                    response_data["clinic_location"] = clinic_location
+                    response_data["clinic_website"] = clinic_website
+
+                    # Save to DB if applicable
+                    if doctor and clinic_name and clinic_location:
+                        OtherClinic.objects.update_or_create(
+                            doctor=doctor,
+                            clinic_name=clinic_name,
+                            defaults={
+                                "address": clinic_location,
+                                "website": clinic_website
+                            }
+                        )
+
+                        # Optional: Notify via email
+                        try:
+                            html_content = f"""
+                            <strong>Doctor:</strong> {user.get_full_name()}<br>
+                            <strong>Email:</strong> {user.email}<br>
+                            <strong>Clinic Name:</strong> {clinic_name}<br>
+                            <strong>Location:</strong> {clinic_location}<br>
+                            <strong>Website:</strong> {clinic_website or 'N/A'}
+                            """
+                            message = Mail(
+                                from_email='no-reply@my-health.today',
+                                to_emails='new-clinic@my-health.today',
+                                subject='New Other Clinic Added',
+                                html_content=html_content
+                            )
+                            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                            sg.send(message)
+                        except Exception as email_err:
+                            logger.warning(f"SendGrid failed: {email_err}")
+
+                else:
+                    # Ensure work_place is returned as ID and no extra clinic fields are present
+                    response_data["other_clinic"] = None
+                    response_data.pop("clinic_name", None)
+                    response_data.pop("clinic_location", None)
+                    response_data.pop("clinic_website", None)
+
+                return Response({
+                    "message": "Profile updated successfully.",
+                    "data": response_data
+                }, status=status.HTTP_200_OK)
+
+            logger.warning(f"Validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
+
+        except Exception as ex:
+            logger.exception("Critical failure in UpdateUserProfileAPIView.")
             return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"message": f"Unexpected server error: {str(ex)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 class DeleteProfilePictureAPIView(APIView):

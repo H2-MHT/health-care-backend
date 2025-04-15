@@ -238,3 +238,21 @@ class CalendarAppointmentSerializer(AppointmentSerializer):
         return data
 
 
+class OtherClinicSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = OtherClinic
+        fields = ["id", "clinic_name", "address", "website"]
+
+    def create(self, validated_data):
+        doctor = self.context.get("doctor")
+        if not doctor:
+            raise serializers.ValidationError("Doctor context is required.")
+        return OtherClinic.objects.create(doctor=doctor, **validated_data)
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
