@@ -9,6 +9,7 @@ from doctors.models import Doctor
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
@@ -19,6 +20,7 @@ from rest_framework import status
 from doctors.models import LicenceCertificate
 from reviews.models import Review, Report
 from reviews.serializers import ReportSerializer
+from doctors.models import Specialization
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -494,3 +496,97 @@ class ReviewReportAPIView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+class ApproveSpecialization(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "Only super admins can approve specializations."}, status=403)
+            
+            specialization_name = request.data.get('specialization_name')
+            if not specialization_name:
+                return Response({"error": "Please provide a specialization name."}, status=400)
+            
+            try:
+                specialization = Specialization.objects.get(name__iexact=specialization_name)
+            except Specialization.DoesNotExist:
+                return Response({"error": "This specialization does not exist"}, status=400)
+            
+            if specialization.is_approved:
+                return Response({'message': 'Specialization already approved'}, status=400)
+            
+            specialization.is_approved = True
+            specialization.save()
+            return Response({'message': 'Specialization approved successfully'}, status=200)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
+    def get(self, request):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "Only super admins can perform this action."}, status=403)
+            
+            specialization = Specialization.objects.filter(is_approved=False)       
+            if specialization:
+                data = [
+                {
+                    "id": spec.id,
+                    "name": spec.name,
+                }
+                for spec in specialization
+            ]     
+            else:
+                data = {}
+            
+            return Response({'message': 'Retrieved successfully', 'data': data}, status=200)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+          
+class MergeSpecialization(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            specializations = Specialization.objects.filter(is_approved=True)  
+            data = {
+                    "message": "Specializations list retrieved successfully",
+                    "number_of_specializations": len(specializations),
+                    "specializations": [
+                        {"id": specialization.id, "name": specialization.name}
+                        for specialization in specializations
+                    ]
+                }
+            
+            return Response(data, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+    
+    def post(self, request):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "Only super admins can merge specializations."}, status=403)
+            
+            data = request.data
+            specialization = data.get('source_specialization')
+            target_specialization = data.get('target_specialzation')
+            
+            if not specialization or not target_specialization:
+                return Response({"error": "Source specialization and target specialization are required."}, status=400)
+            
+            merged_specialization = f"{specialization} {target_specialization}".capitalize()
+            
+            if Specialization.objects.filter(name__iexact=merged_specialization).exists():
+                return Response({"error": "Specialization already exists."}, status=400)
+            
+            Specialization.objects.create(
+                name=merged_specialization,
+                is_approved = True  
+            )
+            
+            specialization_to_delete = Specialization.objects.filter(name__iexact=target_specialization)
+            specialization_to_delete.delete()
+            return Response({'message': "specialization merged"}, status=201)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

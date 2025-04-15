@@ -14,6 +14,8 @@ from .views import(
     DoctorWithdrawAPIView,
     VerifyDocumentAPIView,
     ReviewReportAPIView,
+    ApproveSpecialization,
+    MergeSpecialization
 )
 
 urlpatterns = [
@@ -59,4 +61,8 @@ urlpatterns = [
     path("verify-document/", VerifyDocumentAPIView.as_view(), name="verify-document"),
     path("get-report/", ReviewReportAPIView.as_view(), name="get-report"),
     path("review-report/", ReviewReportAPIView.as_view(), name="review-report"),
+    # specialization
+    path('approve-specialization/', ApproveSpecialization.as_view(), name="approve-specialization"),
+    path('merge-specialization/', MergeSpecialization.as_view(), name="merge-specialization")
+    
 ]

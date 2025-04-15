@@ -16,6 +16,7 @@ from .models import(
     DoctorSchedule,
     LicenceCertificate,
     DoctorWallet,
+    Specialization
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -44,3 +45,4 @@ admin.site.register(BookedAppointment)
 admin.site.register(DoctorSchedule)
 admin.site.register(LicenceCertificate)
 admin.site.register(DoctorWallet)
+admin.site.register(Specialization)
