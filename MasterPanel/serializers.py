@@ -27,4 +27,9 @@ class DoctorSerializer(serializers.ModelSerializer):
 class SpecializationSerializer(serializers.ModelSerializer):
     class Meta:
         model=Specialization
-        fields=["id","name","is_approved","created_date"]
+        fields=["id","name","description","is_approved","created_date"]
+        
+    def validate_name(self, value):
+        if Specialization.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError("A specialization with this name already exists.")
+        return value
