@@ -1,6 +1,5 @@
 import logging
 import random
-import textwrap
 import time
 import requests
 import jwt
@@ -22,9 +21,6 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, subject, to_email
-from social_core.backends.apple import AppleIdAuth
-from social_django.utils import load_strategy
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import AuthenticationFailed
 from datetime import timedelta
@@ -44,13 +40,11 @@ from .serializers import (
     ResetPasswordSerializer,
 )
 from clinics.models import(
-    Clinic,
     OtherClinic,
 )
 from clinics.serializers import ClinicInfoSerializer
 import logging
-from sendgrid.helpers.mail import Mail, Email, To, Personalization
-from django.dispatch import receiver
+from sendgrid.helpers.mail import Mail, To, Personalization
 from django.utils.timezone import now
 
 
@@ -1177,57 +1171,50 @@ class GetUserProfileAPIView(APIView):
             role = user.role
 
             if not role:
-                logger.warning(
-                    "User role is not assigned for user: %s", request.user.email
-                )
-                return Response(
-                    {"message": "User role is not assigned."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"message": "User role is not assigned."}, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = UserProfileSerializer(user)
             data = serializer.data
 
             if role == "Doctor":
-                logger.info("Returning doctor profile for user: %s", request.user.email)
+                logger.info("Returning doctor profile.")
 
-                # Fetch clinic data if it exists
-                clinic = Clinic.objects.filter(user=user).first()
-                clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
+                clinic = user.work_place
+                if clinic is None:
+                    try:
+                        doctor = user.doctor
+                        other_clinic = OtherClinic.objects.get(doctor=doctor)
+                        data["other_clinic"] = OtherClinicSerializer(other_clinic).data
+                    except (Doctor.DoesNotExist, OtherClinic.DoesNotExist):
+                        data["other_clinic"] = {}
+                    data["clinic_data"] = {}
+                else:
+                    data["clinic_data"] = ClinicInfoSerializer(clinic).data
+                    data["other_clinic"] = {}
 
-                # Nested clinic data inside user profile response
-                data["clinic_data"] = clinic_data
+                return Response({
+                    "message": "Doctor profile.",
+                    "data": data,
+                }, status=status.HTTP_200_OK)
 
-                return Response(
-                    {
-                        "message": "Doctor profile.",
-                        "data": data,  # Includes nested clinic info
-                    },
-                    status=status.HTTP_200_OK,
-                )
             elif role == "Patient":
-                logger.info("Returning patient profile for user: %s", request.user.email)
-                return Response(
-                    {"message": "Patient profile.", "data": data},
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                logger.error("Invalid role assigned to user: %s", request.user.email)
-                return Response(
-                    {"message": "Invalid role assigned to user."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({
+                    "message": "Patient profile.",
+                    "data": data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "message": "Invalid role assigned to user."
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         except AuthenticationFailed as e:
-            logger.warning("Authentication failed: %s", str(e))
             return Response({"message": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            logger.exception("Error fetching user profile: %s", str(e))
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 class UserDeviceTokenAPIView(APIView):
     permission_classes = [IsAuthenticated]
