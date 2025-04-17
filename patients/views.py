@@ -54,6 +54,12 @@ class PatientDashboardAPIView(APIView):
                 patient = Patient.objects.get(user=request.user)
             except Patient.DoesNotExist:
                 return Response({"error": "Patient profile not found."}, status=404)
+            
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+
+            converted_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            converted_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
 
             # Get patient details
             patient_data = {
@@ -62,7 +68,7 @@ class PatientDashboardAPIView(APIView):
             }
 
             # Fetch patient-created notes
-            patient_notes = Notes.objects.filter(user=request.user)
+            patient_notes = Notes.objects.filter(user=request.user, created_at__gte=converted_start_date, created_at__lte=converted_end_date).order_by('-created_at')
             notes_data = [
                 {
                     "note_id": note.id,
@@ -74,56 +80,63 @@ class PatientDashboardAPIView(APIView):
             ]
 
             # Completed Appointments (Confirmed & Completed)
-            completed_appointments = Appointment.objects.filter(
-                patient=patient, status__in=["Confirmed", "Completed"]
-            ).select_related("doctor__user", "clinic")
+            completed_appointments = BookedAppointment.objects.filter(
+                patient=request.user.id, status__in=["Confirmed", "Completed"],
+                date__gte=converted_start_date, date__lte=converted_end_date
+            ).order_by("date")
 
-            completed_data = [
-                {
+            completed_data = []
+            for appt in completed_appointments:
+                doc = User.objects.filter(pk=appt.doctor).first()
+                pat = User.objects.filter(pk=appt.patient).first()
+                completed_data.append({
                     "appointment_id": appt.id,
-                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
-                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
-                    "date_time": appt.date_time.isoformat(),
+                    "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                    "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                    "date": appt.date,
                     "status": appt.status,
-                    "records": appt.records,
-                    "notes": appt.notes,
-                }
-                for appt in completed_appointments
-            ]
+                })
 
             # Upcoming Requests (Future Pending Appointments)
-            upcoming_appointments = Appointment.objects.filter(
-                patient=patient,
-                date_time__gte=timezone.now(),  # Future appointments
-                status="Pending"
-            ).select_related("doctor__user", "clinic")
-
-            upcoming_data = [
-                {
-                    "appointment_id": appt.id,
-                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
-                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
-                    "date_time": appt.date_time.isoformat(),
-                    "status": appt.status,
-                }
-                for appt in upcoming_appointments
-            ]
+            upcoming_requests = BookedAppointment.objects.filter(
+                patient=request.user.id,
+                date__gte=timezone.now().date()
+                
+            ).exclude(status="Completed").order_by("date")[:10]
+            upcoming_data = []
+            for appt in upcoming_requests:
+                doc = User.objects.filter(pk=appt.doctor).first()
+                pat = User.objects.filter(pk=appt.patient).first()
+                upcoming_data.append(
+                    {
+                        "appointment_id": appt.id,
+                        "doctor_id": doc.id if doc else None,
+                        "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                        "patient_id": pat.id if pat else None,
+                        "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                        "date": appt.date,
+                        "slot": appt.slot,
+                        "status": appt.status,
+                    }
+                )
 
             # Archived Appointments
-            archived_appointments = Appointment.objects.filter(
-                patient=patient, status__in=["Archived", "Cancelled"]
-            ).select_related("doctor__user", "clinic")
-
-            archived_data = [
-                {
+            archived_appointments = BookedAppointment.objects.filter(
+                patient=request.user.id, status="Cancelled",
+                date__gte=converted_start_date, date__lte=converted_end_date
+            ).order_by("date")
+            archived_data = []
+            for appt in archived_appointments:
+                pat = User.objects.filter(pk=appt.patient).first()
+                doc = User.objects.filter(pk=appt.doctor).first()
+                archived_data.append({
                     "appointment_id": appt.id,
-                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
-                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
-                    "date_time": appt.date_time.isoformat(),
+                    "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                    "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                    "date": appt.date.isoformat() if appt.date else None,
+                    "slot": appt.slot,
                     "status": appt.status,
-                }
-                for appt in archived_appointments
-            ]
+                })
 
             return Response(
                 {
