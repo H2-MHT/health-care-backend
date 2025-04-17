@@ -442,9 +442,9 @@ class ReviewReportAPIView(APIView):
 
             if user_id:
                 user = User.objects.get(pk=user_id)
-                report = Report.objects.filter(reported_by=user)
+                report = Report.objects.filter(reported_by=user).order_by("-created_at")
             else:
-                report = Report.objects.all()
+                report = Report.objects.all().order_by('-created_at')
 
             report_serializer = ReportSerializer(report, many=True)
 
