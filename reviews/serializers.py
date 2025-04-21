@@ -11,8 +11,11 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor', 'rating', 'title', 'content', 'recommend', 'created_at']
-
+        fields = ['id', 'reviewer_name', 'doctor', 'patient', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
+        extra_kwargs = {
+            'doctor': {'required': False},
+            'patient': {'required': False},
+        }
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
 
@@ -20,14 +23,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
         return None
-    def validate(self, data):
-        request = self.context['request']
-        patient_user_id = request.user.id
-        doctor = data.get('doctor')
 
-        if not doctor:
-            raise serializers.ValidationError({"doctor": "Doctor is required."})
-        return data
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
