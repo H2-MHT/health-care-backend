@@ -25,7 +25,7 @@ class ReviewPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         patient = request.user.patient_profile
-        doctor_id = request.data.get('doctor')  # doctor ID is passed in the request data
+        doctor_id = request.data.get('doctor_user_id')  # doctor ID is passed in the request data
 
         if not doctor_id:
             return Response(
@@ -35,7 +35,7 @@ class ReviewPIView(APIView):
 
         try:
             # Verify if the doctor exists
-            doctor = Doctor.objects.get(id=doctor_id)
+            doctor = Doctor.objects.get(user__id=doctor_id)
 
             # Check if the patient has any appointment with this doctor
             has_any_appointment = BookedAppointment.objects.filter(
@@ -53,12 +53,15 @@ class ReviewPIView(APIView):
                 {"detail": "The specified doctor does not exist."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-
+            
+        data = request.data.copy()
+        data.pop('doctor', None)
+        
         # Proceed with review creation
-        serializer = ReviewSerializer(data=request.data, context={'request': request})
+        serializer = ReviewSerializer(data=data, context={'request': request})
 
         if serializer.is_valid():
-            serializer.save(patient=patient)
+            serializer.save(patient=patient, doctor=doctor)
             return Response(
                 {"message": "Review added successfully!", "data": serializer.data},
                 status=status.HTTP_201_CREATED

@@ -1,17 +1,19 @@
 from rest_framework import serializers
 from .models import Review, Reply, Report
 from patients.models import Patient
-from doctors.models import BookedAppointment
+from doctors.models import BookedAppointment, Doctor
 
 from appointments.models import Appointment
 
 class ReviewSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
     reviewer_profile_picture = serializers.SerializerMethodField()
+    doctor_id = serializers.PrimaryKeyRelatedField(source='doctor', queryset=Doctor.objects.all(), required=False)
+    patient_id = serializers.PrimaryKeyRelatedField(source='patient', queryset=Patient.objects.all(), required=False)
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor', 'rating', 'title', 'content', 'recommend', 'created_at']
+        fields = ['id', 'reviewer_name', 'doctor_id', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
 
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
@@ -20,14 +22,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
         return None
-    def validate(self, data):
-        request = self.context['request']
-        patient_user_id = request.user.id
-        doctor = data.get('doctor')
 
-        if not doctor:
-            raise serializers.ValidationError({"doctor": "Doctor is required."})
-        return data
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
