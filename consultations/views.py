@@ -226,10 +226,11 @@ class PrescriptionListView(APIView):
             user = request.user
             try:
                 patient = user.patient_profile
-            except Exception as e:
+            except Exception:
                 return Response({"error": "User is not a patient"}, status=status.HTTP_400_BAD_REQUEST)
 
-            appointments = Appointment.objects.filter(patient=patient, status='Completed')
+            # patient.user.id since BookedAppointment.patient is an IntegerField
+            appointments = BookedAppointment.objects.filter(patient=patient.user.id, status='Completed')
 
             if not appointments.exists():
                 return Response({'message': 'No completed appointments found'}, status=status.HTTP_404_NOT_FOUND)
