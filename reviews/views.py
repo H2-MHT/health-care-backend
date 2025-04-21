@@ -169,7 +169,6 @@ class DoctorReviewsAPIView(generics.ListAPIView):
 
             doctor_id = request.user.doctor.id
             queryset = self.get_queryset(doctor_id)
-            print(request.query_params)
 
             # Pagination Parameters
             if 'limit' not in request.query_params:
