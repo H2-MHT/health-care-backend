@@ -1,21 +1,20 @@
 from rest_framework import serializers
 from .models import Review, Reply, Report
 from patients.models import Patient
-from doctors.models import BookedAppointment
+from doctors.models import BookedAppointment, Doctor
 
 from appointments.models import Appointment
 
 class ReviewSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
     reviewer_profile_picture = serializers.SerializerMethodField()
+    doctor_id = serializers.PrimaryKeyRelatedField(source='doctor', queryset=Doctor.objects.all(), required=False)
+    patient_id = serializers.PrimaryKeyRelatedField(source='patient', queryset=Patient.objects.all(), required=False)
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'doctor', 'patient', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
-        extra_kwargs = {
-            'doctor': {'required': False},
-            'patient': {'required': False},
-        }
+        fields = ['id', 'reviewer_name', 'doctor_id', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
+
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
 

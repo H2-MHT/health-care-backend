@@ -25,7 +25,7 @@ class ReviewPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         patient = request.user.patient_profile
-        doctor_id = request.data.get('doctor')  # doctor ID is passed in the request data
+        doctor_id = request.data.get('doctor_user_id')  # doctor ID is passed in the request data
 
         if not doctor_id:
             return Response(
