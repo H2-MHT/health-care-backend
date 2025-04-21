@@ -83,10 +83,14 @@ class ReplySerializer(serializers.ModelSerializer):
 class ReportSerializer(serializers.ModelSerializer):
     review_id = serializers.ReadOnlyField(source="review.id")
     reported_by = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
-        fields = ["id", "review_id", "reported_by", "reason", "status", "created_at"]
+        fields = ["id", "review_id", "content", "reported_by", "reason", "status", "created_at"]
 
     def get_reported_by(self, obj):
-        return obj.reported_by.get_full_name() 
+        return obj.reported_by.get_full_name()
+    
+    def get_content(self, obj):
+        return obj.review.content
