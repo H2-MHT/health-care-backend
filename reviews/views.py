@@ -153,7 +153,7 @@ class DoctorReviewsAPIView(generics.ListAPIView):
     def get_queryset(self, doctor_id):
         try:
             # Filter reviews related to the specific doctor
-            return Review.objects.filter(doctor_id=doctor_id)
+            return Review.objects.filter(doctor_id=doctor_id, is_deleted=False)
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
@@ -367,6 +367,7 @@ class ReportAPIView(APIView):
                 review=review,
                 reported_by=request.user,
                 reason=data.get("reason"),
+                status=data.get('status')
             )
 
             serializer = ReportSerializer(report)
