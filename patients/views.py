@@ -45,44 +45,49 @@ class PatientDashboardAPIView(APIView):
 
     def get(self, request):
         try:
-            # Ensure only patients can access this view
             if request.user.role != "Patient":
                 return Response({"error": "Access restricted to patients only."}, status=403)
 
-            # Fetch the patient profile
             try:
                 patient = Patient.objects.get(user=request.user)
             except Patient.DoesNotExist:
                 return Response({"error": "Patient profile not found."}, status=404)
-            
+
+            # Parse optional date filters with fallback to default range
             start_date = request.query_params.get('start_date')
             end_date = request.query_params.get('end_date')
 
-            converted_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-            converted_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            try:
+                converted_start_date = datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else datetime.today() - timedelta(days=30)
+                converted_end_date = datetime.strptime(end_date, '%Y-%m-%d').date() if end_date else datetime.today()
+            except ValueError:
+                return Response({"error": "Invalid date format. Expected YYYY-MM-DD."}, status=400)
 
-            # Get patient details
             patient_data = {
                 "patient_id": patient.id,
                 "patient_name": f"{request.user.first_name} {request.user.last_name}",
             }
 
-            # Fetch patient-created notes
-            patient_notes = Notes.objects.filter(user=request.user, created_at__gte=converted_start_date, created_at__lte=converted_end_date).order_by('-created_at')
+            patient_notes = Notes.objects.filter(
+                user=request.user,
+                created_at__date__gte=converted_start_date,
+                created_at__date__lte=converted_end_date
+            ).order_by('-created_at')
+
             notes_data = [
                 {
                     "note_id": note.id,
                     "title": note.title,
                     "note": note.note,
                     "created_at": note.created_at.isoformat(),
-                }
-                for note in patient_notes
+                } for note in patient_notes
             ]
 
-            # Completed Appointments (Confirmed & Completed)
             completed_appointments = BookedAppointment.objects.filter(
-                patient=request.user.id, status__in=["Confirmed", "Completed"],
-                date__gte=converted_start_date, date__lte=converted_end_date
+                patient=request.user.id,
+                status__in=["Confirmed", "Completed"],
+                date__gte=converted_start_date,
+                date__lte=converted_end_date
             ).order_by("date")
 
             completed_data = []
@@ -97,34 +102,33 @@ class PatientDashboardAPIView(APIView):
                     "status": appt.status,
                 })
 
-            # Upcoming Requests (Future Pending Appointments)
             upcoming_requests = BookedAppointment.objects.filter(
                 patient=request.user.id,
                 date__gte=timezone.now().date()
-                
             ).exclude(status="Completed").order_by("date")[:10]
+
             upcoming_data = []
             for appt in upcoming_requests:
                 doc = User.objects.filter(pk=appt.doctor).first()
                 pat = User.objects.filter(pk=appt.patient).first()
-                upcoming_data.append(
-                    {
-                        "appointment_id": appt.id,
-                        "doctor_id": doc.id if doc else None,
-                        "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
-                        "patient_id": pat.id if pat else None,
-                        "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
-                        "date": appt.date,
-                        "slot": appt.slot,
-                        "status": appt.status,
-                    }
-                )
+                upcoming_data.append({
+                    "appointment_id": appt.id,
+                    "doctor_id": doc.id if doc else None,
+                    "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                    "patient_id": pat.id if pat else None,
+                    "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                    "date": appt.date,
+                    "slot": appt.slot,
+                    "status": appt.status,
+                })
 
-            # Archived Appointments
             archived_appointments = BookedAppointment.objects.filter(
-                patient=request.user.id, status="Cancelled",
-                date__gte=converted_start_date, date__lte=converted_end_date
+                patient=request.user.id,
+                status="Cancelled",
+                date__gte=converted_start_date,
+                date__lte=converted_end_date
             ).order_by("date")
+
             archived_data = []
             for appt in archived_appointments:
                 pat = User.objects.filter(pk=appt.patient).first()
@@ -138,23 +142,19 @@ class PatientDashboardAPIView(APIView):
                     "status": appt.status,
                 })
 
-            return Response(
-                {
-                    "patient": patient_data,
-                    "notes": notes_data,  # Only patient-created notes
-                    "completed_appointments": completed_data,
-                    "upcoming_appointments": upcoming_data,
-                    "archived_appointments": archived_data,
-                },
-                status=200
-            )
+            return Response({
+                "patient": patient_data,
+                "notes": notes_data,
+                "completed_appointments": completed_data,
+                "upcoming_appointments": upcoming_data,
+                "archived_appointments": archived_data,
+            }, status=200)
 
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
 
 class PatientListView(APIView):
     permission_classes = [IsAuthenticated]
