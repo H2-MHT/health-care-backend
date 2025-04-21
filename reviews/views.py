@@ -366,8 +366,7 @@ class ReportAPIView(APIView):
             report = Report.objects.create(
                 review=review,
                 reported_by=request.user,
-                reason=data.get("reason"),
-                status=data.get('status')
+                reason=data.get("reason")
             )
 
             serializer = ReportSerializer(report)
