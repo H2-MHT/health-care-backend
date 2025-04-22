@@ -85,7 +85,7 @@ class Invitation(models.Model):
     invited_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
     first_appointment = models.BooleanField(default=False)
     invitation_code = models.CharField(max_length=20, null=True, blank=True, unique=True)
-    benefit = models.CharField(max_length=20, choices=BENEFIT_CHOICES, default="")
+    benefit_type = models.CharField(max_length=20, choices=BENEFIT_CHOICES, default="")
     is_redeemed = models.BooleanField(default=False)
 
     def __str__(self):
