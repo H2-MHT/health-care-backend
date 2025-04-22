@@ -76,11 +76,24 @@ class Referral(models.Model):
 
 
 class Invitation(models.Model):
+    BENEFIT_CHOICES = [
+        ("discount", "Discount on consultation"),
+        ("free", "Free consultation"),
+        ("premium", "Access to premium for 24 hours"),
+    ]
     invited_by = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name='invitations')
-    invited_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
+    invited_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
     first_appointment = models.BooleanField(default=False)
+    invitation_code = models.CharField(max_length=20, null=True, blank=True, unique=True)
+    benefit = models.CharField(max_length=20, choices=BENEFIT_CHOICES, default="")
+    is_redeemed = models.BooleanField(default=False)
+
     def __str__(self):
         return f"Invitation by {self.invited_by.user.first_name}"
+
+    def redeem(self):
+        self.is_redeemed = True
+        self.save()
 
 class AppointmentManagement(models.Model):
     
