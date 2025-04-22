@@ -1560,7 +1560,7 @@ class InviteUserView(APIView):
             )
             return Response(
                 {"error": "Something went wrong while applying referral code."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_400_BAD_REQUEST
             )
         
 @api_view(["POST"])
