@@ -77,6 +77,7 @@ from sendgrid.helpers.mail import Mail
 from django.utils import timezone
 from django.db.models import F
 from decimal import Decimal
+import uuid
 import re
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -1493,96 +1494,75 @@ class GenerateReferralCodeView(APIView):
 
 
 class InviteUserView(APIView):
-    """Apply referral code manually and mark it as used."""
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        referral_code = request.data.get(
-            "referral_code"
-        )  # Get referral code from request body
+        referral_code = request.data.get("referral_code")
 
-        if not request.user.is_authenticated:
-            logger.warning(
-                "Unauthorized attempt to use referral code by anonymous user."
-            )
+        if not referral_code:
             return Response(
-                {"error": "You must be logged in to use a referral code."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Referral code is required."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # Check if the referral code exists
             referral = Referral.objects.get(personal_code=referral_code)
-            logger.info(
-                "User %s attempting to use referral code: %s",
-                request.user.email,
-                referral_code,
-            )
 
             if referral.user == request.user:
-                logger.warning(
-                    "User %s tried to use their own referral code.", request.user.email
-                )
                 return Response(
                     {"error": "You cannot use your own referral code."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Check if this referral code has already been used by the current user
-            if Invitation.objects.filter(
-                    invited_by=referral, invited_user=request.user
-            ).exists():
-                logger.warning(
-                    "User %s already used referral code: %s",
-                    request.user.email,
-                    referral_code,
-                )
+            if Invitation.objects.filter(invited_user=request.user).exists():
                 return Response(
-                    {"error": "You have already used this referral code."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"error": "You have already used a referral code."},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             with transaction.atomic():
-                # Create an invitation for the new user (invited by user A)
+                generated_code = str(uuid.uuid4())[:8]
+
                 invitation = Invitation.objects.create(
                     invited_by=referral,
                     invited_user=request.user,
-                )
-
-                # Update the invites invited users count
+                    invitation_code=generated_code,
+                    first_appointment=False
+                                                    )
                 referral.invited_users_count = Invitation.objects.filter(
                     invited_by=referral
                 ).count()
+                referral.referral_points += 5
                 referral.save()
 
                 logger.info(
                     "Referral code %s successfully used by user %s",
                     referral_code,
-                    request.user.email,
+                    request.user.email
                 )
 
             return Response(
                 {"message": "Referral code applied successfully."},
-                status=status.HTTP_200_OK,
+                status=status.HTTP_200_OK
             )
 
         except Referral.DoesNotExist:
-            logger.error(
-                "Invalid referral code attempt: %s by user %s",
-                referral_code,
-                request.user.email,
-            )
             return Response(
-                {"error": "Invalid referral code."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid referral code."},
+                status=status.HTTP_400_BAD_REQUEST
             )
+
         except Exception as e:
             logger.exception(
-                "Error applying referral code for user %s: %s",
+                "Unexpected error applying referral code for user %s: %s",
                 request.user.email,
-                str(e),
+                str(e)
             )
-            return Response({"message": "You already applied other referral code"}, status=status.HTTP_400_BAD_REQUEST)
-
-
+            return Response(
+                {"error": "Something went wrong while applying referral code."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
 @api_view(["POST"])
 def redeem_invitation(request, invitation_code):
     """Redeem the invitation and increase the inviters stats."""
