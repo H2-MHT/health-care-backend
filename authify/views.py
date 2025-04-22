@@ -405,7 +405,7 @@ class LogoutView(APIView):
             logger.info(f"User {user.email} logged out successfully and role reverted if switched.")
             return Response(
                 {"message": "Logout successful."},
-                status=status.HTTP_205_RESET_CONTENT,
+                status=status.HTTP_200_OK,
             )
 
         except TokenError as e:
