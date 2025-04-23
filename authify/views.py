@@ -122,17 +122,21 @@ class SignUpView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            logger.info("User sign-up request received.")
+            logger.info("User registration attempt received.")
             serializer = RegistrationSerializer(data=request.data)
-            if serializer.is_valid():
-                user = serializer.save()
-                logger.info(f"User registered successfully: {user.email}")
-                name = user.first_name if user.first_name else "User"
-                # Generate OTP
-                otp = self.generate_otp()
 
-                # Send OTP to user's email
-                email_response = self.send_otp_email(user.email, otp, name)
+            # deletion of unverified user with the same email
+            email = request.data.get('email')
+            if email:
+                existing_user = User.objects.filter(email=email).first()
+                if existing_user and not existing_user.is_verified:
+                    existing_user.delete()
+                    logger.info(f"Unverified user with email {email} deleted before re-registration.")
+            
+            if serializer.is_valid():
+                user = serializer.save()  # creating the user
+                otp = self.generate_otp()
+                email_response = self.send_otp_email(user.email, otp, user.first_name or "User")
 
                 if isinstance(email_response, str):
                     logger.error(f"Failed to send OTP to {user.email}: {email_response}")
@@ -143,12 +147,13 @@ class SignUpView(APIView):
 
                 # Store OTP in the database for verification later
                 user.otp = otp
+                user.otp_created_at = timezone.now()
                 user.save()
                 logger.info(f"OTP stored for user {user.email}")
 
                 return Response(
                     {
-                        "message": "User registered successfully. OTP sent to your email.",
+                    "message": "User registered successfully. OTP sent to your email.",
                         "user": serializer.data,
                     },
                     status=status.HTTP_201_CREATED,
@@ -161,7 +166,7 @@ class SignUpView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+            
 class OTPVerificationView(APIView):
     """
     API view to verify OTP for the given user using email and OTP.
@@ -184,7 +189,28 @@ class OTPVerificationView(APIView):
                     return Response(
                         {"message": "User not found."}, status=status.HTTP_404_NOT_FOUND
                     )
+                    
+                # **Check if OTP is expired**
+                if user.otp_created_at is None:
+                    logger.warning(f"OTP creation time is missing for user {email}.")
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                otp_age = timezone.now() - user.otp_created_at
+                if otp_age > timedelta(minutes=settings.OTP_EXPIRY_MINUTES):
+                    logger.warning(f"OTP for user {email} has expired.")
+                    # Clear expired OTP from user record
+                    user.otp = ""
+                    user.otp_created_at = None
+                    user.save()
 
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
                 # Check if OTP matches
                 if user.otp != otp:
                     logger.warning(f"Invalid OTP for user {email}.")
