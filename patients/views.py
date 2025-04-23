@@ -712,7 +712,7 @@ class GetFamilyMembersView(APIView):
         patient = get_object_or_404(Patient, user=request.user)
 
         # Fetch only the family members of the current user
-        family_members = FamilyMember.objects.filter(patient=patient, is_verified=True).order_by('-created_at')
+        family_members = FamilyMember.objects.filter(patient=patient, is_verified=True).order_by('-id')
 
         # Serialize the data
         family_members_data = [
