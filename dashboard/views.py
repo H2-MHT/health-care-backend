@@ -32,9 +32,12 @@ class DashboardAPIView(APIView):
             
             start_date = request.query_params.get('start_date')
             end_date = request.query_params.get('end_date')
-
-            converted_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-            converted_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Invalid date format. Expected DD-MM-YYYY."}, status=400)
             # Reviews
             total_reviews = Review.objects.filter(doctor=doctor).count()
             reviews = Review.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user")[:10]

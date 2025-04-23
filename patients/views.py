@@ -58,10 +58,10 @@ class PatientDashboardAPIView(APIView):
             end_date = request.query_params.get('end_date')
 
             try:
-                converted_start_date = datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else datetime.today() - timedelta(days=30)
-                converted_end_date = datetime.strptime(end_date, '%Y-%m-%d').date() if end_date else datetime.today()
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date() if start_date else datetime.today() - timedelta(days=30)
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date() if end_date else datetime.today()
             except ValueError:
-                return Response({"error": "Invalid date format. Expected YYYY-MM-DD."}, status=400)
+                return Response({"error": "Invalid date format. Expected DD-MM-YYYY."}, status=400)
 
             patient_data = {
                 "patient_id": patient.id,
