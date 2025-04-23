@@ -37,6 +37,19 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "rating",
             "reviews"
         ]
+        extra_kwargs = {
+            "email": {"required": True}
+        }
+
+    def validate_email(self, value):
+        """
+        Override default unique email validation:
+        Allow if user exists but is unverified.
+        """
+        user = User.objects.filter(email=value).first()
+        if user and user.is_verified:
+            raise serializers.ValidationError("User with this email is already verified.")
+        return value
 
     def validate(self, data):
         if data["password"] != data["confirm_password"]:
@@ -44,12 +57,58 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        validated_data.pop(
-            "confirm_password"
-        )  # Remove confirm_password field before saving
+        validated_data.pop("confirm_password", None)
+        languages_data = validated_data.pop("languages", [])
 
+        if isinstance(languages_data, str):
+            try:
+                languages_data = json.loads(languages_data)
+            except json.JSONDecodeError:
+                languages_data = []
+
+        email = validated_data.get("email")
+        existing_user = User.objects.filter(email=email).first()
+
+        if existing_user:
+            if existing_user.is_verified:
+                raise serializers.ValidationError({"email": "User with this email is already verified."})
+            else:
+                # Update the existing unverified user instead of deleting
+                existing_user.first_name = validated_data.get("first_name", existing_user.first_name)
+                existing_user.last_name = validated_data.get("last_name", existing_user.last_name)
+                existing_user.password = validated_data.get("password", existing_user.password)
+                existing_user.set_password(existing_user.password)  # hashed password
+                existing_user.is_verified = False  # unverified for re-registration
+                existing_user.otp = ""  # Reset OTP
+                existing_user.otp_created_at = None  # Clear OTP timestamp
+                existing_user.save(update_fields=['first_name', 'last_name', 'password', 'is_verified', 'otp', 'otp_created_at'])
+
+                # Proceed with any necessary updates, like languages
+                if languages_data:
+                    existing_user.languages.set(languages_data)
+
+                return existing_user
+
+
+        user = User(**validated_data)
+        user.set_password(validated_data["password"])
+        user.save()
+
+        if languages_data:
+            user.languages.set(languages_data)
+
+        return user
+
+
+    def update(self, instance, validated_data):
+        validated_data.pop("confirm_password", None)
         languages = validated_data.pop("languages", [])
-        # Handle services_provided
+
+        for attr, value in validated_data.items():
+            if attr == "password":
+                instance.set_password(value)
+            else:
+                setattr(instance, attr, value)
 
         if isinstance(languages, str):
             try:
@@ -57,13 +116,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
             except json.JSONDecodeError:
                 languages = []
 
-        user = User(**validated_data)
-        user.set_password(validated_data["password"])  # Hash the password
-        if languages:
-            user.languages.set(languages)
-        user.save()
-        return user
+        instance.save()
 
+        if languages:
+            instance.languages.set(languages)
+
+        return instance
 
 class OTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()

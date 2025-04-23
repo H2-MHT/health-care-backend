@@ -426,3 +426,5 @@ CELERY_TIMEZONE = 'UTC'
 # Agora video-call
 APP_ID = os.getenv("APP_ID")
 APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
+
+OTP_EXPIRY_MINUTES = 1
