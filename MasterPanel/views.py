@@ -23,6 +23,12 @@ from reviews.models import Review, Report
 from reviews.serializers import ReportSerializer
 from doctors.models import Specialization
 from .serializers import SpecializationSerializer
+from django.conf import settings
+import stripe
+import os 
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
@@ -703,4 +709,29 @@ class NewSpecializationAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
             
+class AdminWithdrawalRequestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "You are not authorized to perform this action"}, status=status.HTTP_403_FORBIDDEN)
             
+            transactions = Transaction.objects.filter(transaction_type="Withdrawal", status="pending").order_by('-timestamp')
+            withdrwal = []
+            
+            for transaction in transactions:
+                data = {
+                    "id": transaction.id,
+                    "name": transaction.account.full_name,
+                    "account_number": transaction.account.account_number,
+                    "amount": transaction.amount,
+                    "transaction_type": transaction.transaction_type,
+                    "payment link": transaction.stripe_payment_link ,
+                    "timestamp": transaction.timestamp
+                }
+                
+                withdrwal.append(data) 
+            return Response({'message': "Retrieved successfully", 'data': withdrwal}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
