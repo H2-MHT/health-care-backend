@@ -2594,9 +2594,6 @@ class DoctorInfoAPIView(APIView):
             except Doctor.DoesNotExist:
                 return Response({'message': 'User is not a doctor'}, status=status.HTTP_400_BAD_REQUEST)
             
-            if request.user.id != int(userID):
-                return Response({'messafe': "You can not view the data of other doctor"}, status=status.HTTP_403_FORBIDDEN)
-            
             license_data = LicenceCertificate.objects.filter(user=user).first()
             
             if not license_data:
