@@ -40,6 +40,7 @@ from .views import (
     ClinicsAssociatedToDoctorsAPIView,
     PatientsAssociatedToDoctorAPIView,
     DoctorWalletAPIView,
+    DoctorInfoAPIView
     )
 
 
@@ -49,6 +50,7 @@ urlpatterns = [
     path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
     path("delete-appointment/", DeleteAppointmentAPIView.as_view(), name="appointment"),
     path('appointment-list/', CompletedAppointmentListView.as_view(), name='appoitment-list'),
+    path('doctor-info/', DoctorInfoAPIView.as_view(), name="doctor-info"),
 
     
     # referral and invitation 

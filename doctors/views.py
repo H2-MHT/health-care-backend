@@ -45,6 +45,7 @@ from .models import (
     DoctorWallet,
     Specialization,
 )
+from reviews.models import Review
 from notifications.models import Notification
 from .serializers import (
     AppointmentManagementSerializer,
@@ -2574,3 +2575,97 @@ def send_specialization_approval_email(specialization):
         sg.send(email)
     except Exception as e:
         print("Error sending approval email:", e)
+
+class DoctorInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            userID = request.query_params.get('doctor_user_id') 
+            if not userID:
+                return Response({'message':'doctor id is requeired'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:  
+                user = User.objects.get(pk=userID)
+            except User.DoesNotExist:
+                return Response({'message': 'Doctor does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try: 
+                doctor = Doctor.objects.get(user=user)
+            except Doctor.DoesNotExist:
+                return Response({'message': 'User is not a doctor'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if request.user.id != int(userID):
+                return Response({'messafe': "You can not view the data of other doctor"}, status=status.HTTP_403_FORBIDDEN)
+            
+            license_data = LicenceCertificate.objects.filter(user=user).first()
+            
+            if not license_data:
+                doctor_license_data = "not found"
+            else:
+                doctor_license_data = {
+                    "description": license_data.description,
+                    "attatchment": license_data.attachment.url,
+                    "status": license_data.status,
+                    "rejection_reason": license_data.rejection_reason
+                }
+                
+            media_data = MediaDigest.objects.filter(user_doctor=user).first()
+            
+            if not media_data:
+                media_digest = "not found"
+            else:
+                media_digest = {
+                    "title": media_data.title,
+                    "description": media_data.description,
+                    "attatchment": media_data.attachment_file.url,        
+                }
+            reviews = Review.objects.filter(doctor=doctor)
+            
+            if not reviews:
+                doctor_review = "review not found"
+            else:
+                doctor_review = [
+                    {
+                       "patient":{
+                           "id": review.patient.user.id,
+                           "name": review.patient.user.get_full_name()
+                       },
+                        "doctor":{
+                           "id": review.doctor.user.id,
+                           "name": review.doctor.user.get_full_name()
+                       },
+                        "title": review.title,
+                        "content": review.content,
+                        "rating": review.rating,
+                        "recommend": review.recommend
+                    }
+                    for review in reviews
+                ]
+                
+            data = {
+                "id": user.id,
+                "name": user.get_full_name(),
+                "email": user.email,
+                "contact": user.phone_number,
+                "city": user.city,
+                "country": user.country,
+                "expertise": user.expertise,
+                "professional_stat": user.professional_stat,
+                "profile": user.profile_picture.url,
+                "qualification": doctor.qualifications,
+                "speciality": doctor.specialty,
+                "experience_years": doctor.experience_years,
+                "license": doctor_license_data,
+                "media_digest": media_digest,
+                "reviews": doctor_review          
+            }
+            
+            return Response({
+                "message": "Retrieved successfully",
+                "data": data
+            })
+         
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+                
