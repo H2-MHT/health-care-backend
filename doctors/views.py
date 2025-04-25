@@ -2106,7 +2106,7 @@ def send_otp(user):
     user.save()
 
     sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
-    from_email = Email("akash.prajapati@techqware.com")  # Update with your sender email
+    from_email = Email("otp@my-health.today")  # sender email
     to_email = To(user.email)
     subject = "Your OTP for Password Change"
     content = Content("text/plain", f"Your OTP for password change is: {otp}")
