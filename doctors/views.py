@@ -2077,7 +2077,7 @@ class CommunicationPreferencesAPIView(APIView):
 
     def put(self, request, *args, **kwargs):
         try:
-            """Update the current user's communication preferences"""
+            """Update the current user communication preferences"""
             preferences, created = CommunicationPreferences.objects.get_or_create(
                 user=request.user
             )
