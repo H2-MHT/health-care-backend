@@ -362,7 +362,7 @@ class NotesAPIView(APIView):
                                 status=status.HTTP_404_NOT_FOUND)
 
             note.delete()
-            return Response({"message": "Note deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"message": "Note deleted successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
