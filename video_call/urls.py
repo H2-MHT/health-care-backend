@@ -7,6 +7,9 @@ from .views import (
     StartRecordingAPIView, 
     StopRecordingAPIView,
     AgoraTokenView,
+    RecordingListAPIView,
+    CreateMeetingLink,
+    GenerateMeetingToken
     
 )
 
@@ -24,5 +27,11 @@ urlpatterns = [
     path('stop-recording/', StopRecordingAPIView.as_view(), name='stop-recording'),
     # agora token get
     path('get-agora-token/', AgoraTokenView.as_view(), name='agora-token'),
+    # recording list
+    path('recording-list/', RecordingListAPIView.as_view(), name="recording-list"),
+    # Meeting link
+    path('meeting-link/', CreateMeetingLink.as_view(), name='meeting-link'),
+    # generate meeting token
+    path('generate-meeting-token/', GenerateMeetingToken.as_view(), name="generate-meeting-token")
         
 ]

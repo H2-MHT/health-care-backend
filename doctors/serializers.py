@@ -16,6 +16,7 @@ from .models import (
     DoctorWallet,
     
 )
+from video_call.models import MeetingRoom
 from payments.models import Payment
 from authify.serializers import UserProfileSerializer, UserProfileUpdateSerializer
 from datetime import datetime, timedelta
@@ -111,9 +112,10 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
 
 
 class BookedAppointmentSerializer(serializers.ModelSerializer):
+    meeting_link = serializers.SerializerMethodField()
     class Meta:
         model = BookedAppointment
-        fields = ['id', 'appointment_type', 'status', 'date', 'slot', 'created_at']
+        fields = ['id', 'appointment_type', 'status', 'meeting_link', 'date', 'slot', 'created_at']
         
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -140,6 +142,13 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
             data["rescheduled_by"] = "Doctor" if rescheduled_by_user.role == "Doctor" else "Patient"
 
         return data
+    
+    def get_meeting_link(self, obj):
+        try:
+            meeting = MeetingRoom.objects.get(appointment=obj)
+            return meeting.link
+        except MeetingRoom.DoesNotExist:
+            return None
         
 
 
