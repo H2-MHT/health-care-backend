@@ -45,5 +45,3 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-"serviceAccountKey1.json" 
-serviceAccountKey1.json
