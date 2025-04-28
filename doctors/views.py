@@ -1030,26 +1030,37 @@ class CompletedAppointmentListView(APIView):
                 return Response({"message": "only doctor can perform this action"}, status=status.HTTP_403_FORBIDDEN)
             
             appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
-            
+
             data = {
-            "message": "Appointment list retrieved successfully",
-            "data": [
-                {
+                "message": "Appointment list retrieved successfully",
+                "data": []
+            }
+
+            for appointment in appointments:
+                try:
+                    patient_user = User.objects.get(id=appointment.patient)
+                    patient_data = {
+                        "first_name": patient_user.first_name,
+                        "last_name": patient_user.last_name,
+                        "email": patient_user.email,
+                        "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
+                    }
+                except User.DoesNotExist:
+                    patient_data = {
+                        "first_name": None,
+                        "last_name": None,
+                        "email": None,
+                        "profile_picture": None,
+                    }
+
+                data["data"].append({
                     "appointment_id": appointment.id,
                     "appointment_type": appointment.appointment_type,
                     "date": appointment.date,
                     "status": appointment.status,
                     "slot": appointment.slot,
-                    "patient": {
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "email": user.email,
-                        "profile_picture": user.profile_picture.url if user.profile_picture else None,
-                    }
-                }
-                for appointment in appointments
-            ]}
-            
+                    "patient": patient_data
+                })
             return Response(data, status=200)
                 
         except Exception as e:
