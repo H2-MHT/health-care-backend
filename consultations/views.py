@@ -138,14 +138,14 @@ class PrescriptionView(APIView):
 
             # Ensure the logged-in doctor matches the appointment doctor (IntegerField comparison)
             if appointment.doctor != request.user.id:
-                return Response({"error": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"message": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
             
             if appointment.status != "Completed":
-                return Response({'message': 'You can not create the prescription as appointment is not completed yet'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'message': 'You can not create the prescription as appointment is not completed yet'}, status=status.HTTP_200_OK)
 
             # Prevent duplicate prescription
             if Prescription.objects.filter(appointment_id=appointment_id).exists():
-                return Response({"error": "Prescription already exists."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Prescription already exists."}, status=status.HTTP_200_OK)
 
             doctor_user = request.user
             patient_user = User.objects.get(id=appointment.patient)
@@ -302,9 +302,10 @@ class PrescriptionListView(APIView):
                         'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
                         "email": patient_user.email if patient_user else "Unknown",
                     },
-                    'pdf_url': request.build_absolute_uri(
-                        reverse('prescription_template') + f"?appointment_id={appointment.id}"
-                    )
+                    'pdf_url': prescription.pdf_file.url
+                    # 'pdf_url': request.build_absolute_uri(
+                    #     reverse('prescription_template') + f"?appointment_id={appointment.id}"
+                    # )
                 })
 
             return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},status=status.HTTP_200_OK)
