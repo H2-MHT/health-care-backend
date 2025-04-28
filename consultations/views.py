@@ -139,6 +139,9 @@ class PrescriptionView(APIView):
             # Ensure the logged-in doctor matches the appointment doctor (IntegerField comparison)
             if appointment.doctor != request.user.id:
                 return Response({"error": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
+            
+            if appointment.status != "Completed":
+                return Response({'message': 'You can not create the prescription as appointment is not completed yet'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Prevent duplicate prescription
             if Prescription.objects.filter(appointment_id=appointment_id).exists():
