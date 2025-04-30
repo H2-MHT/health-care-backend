@@ -360,7 +360,7 @@ class ConsultationReportAPIView(APIView):
 
     def post(self, request):        
         appointment = request.data.get('appointment_id')
-        prescription = request.data.get('prescription_id')
+        prescription = request.data.get('prescription')
         short_description = request.data.get('short_description')
         translated_text = request.data.get('translated_text')
         recommendation = request.data.get('recommendation')
@@ -373,10 +373,6 @@ class ConsultationReportAPIView(APIView):
         except BookedAppointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            prescription = Prescription.objects.get(pk=prescription)
-        except Prescription.DoesNotExist:
-            return Response({"error": "Prescription not found."}, status=status.HTTP_404_NOT_FOUND)
         
         doctor = Doctor.objects.filter(user_id=appointment.doctor).first()
         patient = Patient.objects.filter(user_id=appointment.patient).first()
@@ -407,9 +403,6 @@ class ConsultationReportAPIView(APIView):
                   "id": Consultation.id,
                    user: user_id,
                   "appointment_id": Consultation.appointment.id,
-                  "prescription_id": Consultation.prescription.id,
-                  "short_description": Consultation.short_description,
-                  "recommendation": Consultation.recommendation,
                   "translated_text": Consultation.translated_text,
                   "created_at": Consultation.created_at
               }
@@ -428,6 +421,9 @@ class ConsultationReportAPIView(APIView):
             except BookedAppointment.DoesNotExist:
                 return Response({"error": "Invalid appointment id"}, status=status.HTTP_404_NOT_FOUND)
             
+            prescription = Prescription.objects.get(appointment=appointment)
+            prescription_data = PrescriptionSerializer(prescription).data if prescription else "Akshat"
+            
             patient = ""
             doctor = ""
             if request.user.role == "Patient":
@@ -441,7 +437,7 @@ class ConsultationReportAPIView(APIView):
                 {
                     "id": consultation.id,
                     "appointment_id": consultation.appointment.id,
-                    "prescription_id": consultation.prescription.id,
+                    "prescription": prescription_data,
                     "short_description": consultation.short_description,
                     "translated_text": consultation.translated_text,
                     "recommendation": consultation.recommendation,
