@@ -566,7 +566,7 @@ class CreateMeetingLink(APIView):
             channel_name = f"meeting_{unique_id}"   
               
             base_url = request.build_absolute_uri('/')[:-1]
-            meeting_link = f"{base_url}/meeting?channel={channel_name}"
+            meeting_link = f"meeting?channel={channel_name}"
             
             MeetingRoom.objects.create(
                 doctor=doctor,
