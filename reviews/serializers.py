@@ -8,12 +8,12 @@ from appointments.models import Appointment
 class ReviewSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
     reviewer_profile_picture = serializers.SerializerMethodField()
-    doctor_id = serializers.PrimaryKeyRelatedField(source='doctor', queryset=Doctor.objects.all(), required=False)
+    doctor = serializers.SerializerMethodField()
     patient_id = serializers.PrimaryKeyRelatedField(source='patient', queryset=Patient.objects.all(), required=False)
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'doctor_id', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
+        fields = ['id', 'reviewer_name', 'doctor', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
 
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
@@ -22,6 +22,15 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
         return None
+    
+    def get_doctor(self, obj):
+        doctor = {}
+        if obj.doctor:
+            doctor['dcotor_id'] =  obj.doctor.user.id
+            doctor['name'] = obj.doctor.user.get_full_name()
+            doctor['profile_picture'] =  obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
+        return doctor
+        
 
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
