@@ -625,6 +625,20 @@ class GenerateMeetingToken(APIView):
             except BookedAppointment.DoesNotExist:
                 return JsonResponse({'message': 'appointment not found'}, status=400)
             
+            current_user = request.user
+            if current_user.id != appointment.doctor and current_user.id != appointment.patient:
+                return JsonResponse({'message': 'You are not part of this appointment'}, status=403)
+            
+            if current_user.id == appointment.doctor:
+                remote_user_id = appointment.patient
+            else:
+                remote_user_id = appointment.doctor
+
+            try:
+                remote_user = User.objects.get(pk=remote_user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'message': 'Remote user not found'}, status=400)
+            
             try:
                 meeting = MeetingRoom.objects.get(appointment=appointment) 
             except MeetingRoom.DoesNotExist:
@@ -641,12 +655,16 @@ class GenerateMeetingToken(APIView):
             
             return JsonResponse(
                 {   
-                    "message": "Token generated successfully",
-                    "user_id": user.id,
-                    "name": user.get_full_name(),
-                    "meetingToken": meetingToken 
+                    "mesage": "Token generated successfully",
+                    "current_user_id": current_user.id,
+                    "currentUserName": current_user.get_full_name(),
+                    "remote_user_id": remote_user.id,
+                    "remoteUserName": remote_user.get_full_name(),
+                    "channel_name": channel_name,
+                    "token": meetingToken,
+                    "app_id": APP_ID
                 }
-            )
+                )
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)         
             
