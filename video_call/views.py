@@ -608,6 +608,7 @@ class GenerateMeetingToken(APIView):
             data = request.data
             uid = data.get('uid')
             appointment_id = data.get('appointment_id')
+            EXPIRE_TIME_IN_SECONDS = 60 * 60 * 2
             
             if not uid:
                 return JsonResponse({'message': 'uid is required'}, status=400)
@@ -648,10 +649,10 @@ class GenerateMeetingToken(APIView):
                 return JsonResponse({'message': 'Link was expired'}, status=400)
             
             channel_name = meeting.channel_name
-            expire_timestamp = 60 * 10
+            expire_timestamp = int(time.time()) + EXPIRE_TIME_IN_SECONDS
             
             meetingToken = RtcTokenBuilder.buildTokenWithUid(
-                APP_ID, APP_CERTIFICATE, channel_name, int(uid), 1, expire_timestamp)
+                APP_ID, APP_CERTIFICATE, channel_name, int(current_user.id), 1, expire_timestamp)
             
             return JsonResponse(
                 {   
