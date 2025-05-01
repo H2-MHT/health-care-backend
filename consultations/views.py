@@ -35,6 +35,8 @@ from django.shortcuts import get_object_or_404
 import qrcode
 from io import BytesIO
 from django.template.loader import render_to_string
+from utils.prescription_translation import translate_prescription_content
+from users.models import AppLanguage
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -98,9 +100,11 @@ def send_prescription_email(request, prescription):
         patient_user = User.objects.get(id=prescription.appointment.patient)
         prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
         qr_code_base64 = generate_qr_code_base64(prescription_url)
+        formatted_date = prescription.created_at.strftime("%d %B %Y")
+
         context = {
             'prescription_id': prescription.id,
-            'created_date': prescription.created_at,
+            'created_date': formatted_date,
             'doctor_name': doctor_user.get_full_name(),
             'doctor_email': doctor_user.email,
             'doctor_phone': doctor_user.phone_number,
@@ -110,8 +114,29 @@ def send_prescription_email(request, prescription):
             'patient_phone': patient_user.phone_number,
             'diagnosis': prescription.diagnosis,
             'medicines': prescription.medicines,
+            'additional_instruction': prescription.additional_instruction,
             'qr_code_base64': qr_code_base64,
+            "prescription": "Prescription",
+            "diagnosis_title": "Diagnosis",
+            "quantity": "Quantity",
+            "time": "Time",
+            "medication": "Medication",
+            "times_day": "Times/day",
+            "duration": "Duration",
+            "notes_title": "Notes",
+            "signature": "Signature",
+            "assurance": "Assurance info",
+            "creating_date": "Date",
+            "due_date": "Due Date",
         }
+
+        try:
+            user_language_pref = AppLanguage.objects.get(user=patient_user)
+        except AppLanguage.DoesNotExist:
+            user_language_pref = AppLanguage(code='en')
+
+        if user_language_pref.code != 'en':
+            context = translate_prescription_content(context, user_language_pref.code)
 
         template_path = 'prescription.html'
         send_pdf_via_sendgrid(template_path, context, patient_user.email, request)

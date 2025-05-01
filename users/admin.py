@@ -5,7 +5,7 @@ from .models import User, Education, Skill, Media, TwoFactorMethod, DeviceAccess
 
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'username', 'email','role', 'is_staff', 'is_superuser', 'is_active', 'is_doctor_switched')
+    list_display = ('uid', 'id', 'username', 'email','role', 'is_staff', 'is_superuser', 'is_active', 'is_doctor_switched')
 
     def save_model(self, request, obj, form, change):
         if not change:
