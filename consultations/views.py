@@ -425,7 +425,7 @@ class ConsultationReportAPIView(APIView):
             except BookedAppointment.DoesNotExist:
                 return Response({"error": "Invalid appointment id"}, status=status.HTTP_404_NOT_FOUND)
             
-            prescription = Prescription.objects.get(appointment=appointment)
+            prescription = Prescription.objects.filter(appointment=appointment).first()
             prescription_data = PrescriptionSerializer(prescription).data if prescription else None
             
             patient = ""
