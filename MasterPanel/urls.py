@@ -18,6 +18,7 @@ from .views import(
     MergeSpecialization,
     NewSpecializationAPIView,
     AdminWithdrawalRequestAPIView,
+    ExportDataAPIView,
 )
 
 urlpatterns = [
@@ -70,5 +71,5 @@ urlpatterns = [
     path('merge-specialization/', MergeSpecialization.as_view(), name="merge-specialization"),
     # withdrawal request 
     path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
-    
+    path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
 ]
