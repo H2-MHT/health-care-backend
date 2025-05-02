@@ -51,6 +51,9 @@ urlpatterns = [
     path('notifications/', include('notifications.urls')),
     
     # include the urls from the video_call apps
-    path('video-call/', include('video_call.urls'))
+    path('video-call/', include('video_call.urls')),
+    
+    # include the urls from the NHS app
+    path('nhs/', include('NHS.urls')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
