@@ -6,7 +6,7 @@ from celery import Celery
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "health_care_backend.settings")
 
 # Ensure Django is fully loaded
-# django.setup()
+django.setup()
 
 # Initialize Celery
 app = Celery("health_care_backend")
