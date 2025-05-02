@@ -929,7 +929,7 @@ class BookAppointmentAPIView(APIView):
                 return Response({'message': 'Appointment ID and status are required'}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment_status = appointment_status.capitalize()
-            if appointment_status not in ['Confirmed', 'Cancelled']:
+            if appointment_status not in ['Confirmed', 'Cancelled', 'Completed']:
                 return Response({'message': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
             try:

@@ -35,6 +35,9 @@ from django.shortcuts import get_object_or_404
 import qrcode
 from io import BytesIO
 from django.template.loader import render_to_string
+from utils.prescription_translation import translate_prescription_content
+from users.models import AppLanguage
+from django.shortcuts import redirect
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -92,15 +95,20 @@ def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request)
             os.remove(temp_pdf_name)
 
 
+def prescription_pdf_redirect(request, uid):
+    user = get_object_or_404(User, uid=uid)
+    prescription = get_object_or_404(Prescription, appointment__patient=user.id)
+    return redirect(prescription.pdf_file.url)
+
 def send_prescription_email(request, prescription):
     try:
         doctor_user = User.objects.get(id=prescription.appointment.doctor)
         patient_user = User.objects.get(id=prescription.appointment.patient)
-        prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
-        qr_code_base64 = generate_qr_code_base64(prescription_url)
+        formatted_date = prescription.created_at.strftime("%d %B %Y")
+
         context = {
             'prescription_id': prescription.id,
-            'created_date': prescription.created_at,
+            'created_date': formatted_date,
             'doctor_name': doctor_user.get_full_name(),
             'doctor_email': doctor_user.email,
             'doctor_phone': doctor_user.phone_number,
@@ -110,10 +118,47 @@ def send_prescription_email(request, prescription):
             'patient_phone': patient_user.phone_number,
             'diagnosis': prescription.diagnosis,
             'medicines': prescription.medicines,
-            'qr_code_base64': qr_code_base64,
+            'additional_instruction': prescription.additional_instruction,
+            "prescription": "Prescription",
+            "diagnosis_title": "Diagnosis",
+            "quantity": "Quantity",
+            "time": "Time",
+            "medication": "Medication",
+            "times_day": "Times/day",
+            "duration": "Duration",
+            "notes_title": "Notes",
+            "signature": "Signature",
+            "assurance": "Assurance info",
+            "creating_date": "Date",
+            "due_date": "Due Date",
         }
 
+        try:
+            user_language_pref = AppLanguage.objects.get(user=patient_user)
+        except AppLanguage.DoesNotExist:
+            user_language_pref = AppLanguage(code='en')
+
+        if user_language_pref.code != 'en':
+            context = translate_prescription_content(context, user_language_pref.code)
+        
         template_path = 'prescription.html'
+        pdf_file, _ = generate_pdf(template_path, context, request)
+        prescription.pdf_file.save(f"prescription_{prescription.id}.pdf", ContentFile(pdf_file))
+        prescription.save()
+
+        prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
+        qr_code_base64 = generate_qr_code_base64(prescription_url)
+        context['qr_code_base64'] = qr_code_base64
+        
+        user = User.objects.get(id=prescription.appointment.patient)
+        short_url = request.build_absolute_uri(reverse("prescription_pdf", args=[user.uid]))
+        qr_code_base64 = generate_qr_code_base64(short_url)
+        context['qr_code_base64'] = qr_code_base64
+
+        final_pdf_file, _ = generate_pdf(template_path, context, request)
+        prescription.pdf_file.save(f"prescription_{prescription.id}_with_qr.pdf", ContentFile(final_pdf_file))
+        prescription.save()
+     
         send_pdf_via_sendgrid(template_path, context, patient_user.email, request)
 
         return {"status": "Email sent successfully via SendGrid!"}
@@ -171,7 +216,7 @@ class PrescriptionView(APIView):
                 'patient_address': patient_user.city,
                 'patient_phone': patient_user.phone_number,
                 'diagnosis': prescription.diagnosis,
-                'medicines': prescription.medicines
+                'medicines': prescription.medicines,
             }
 
             # Generate PDF and attach to saved model (no QR in DB)

@@ -142,10 +142,10 @@
   <div class="container">
     <div class="header">
       <div class="left-section">
-        <h3>Prescription</h3>
+        <h3>{{ prescription }}</h3>
         <p>#{{ prescription_id }}</p>
-        <p>Creating Date: <strong>{{ created_date }}</strong></p>
-        <p>Due Date: <strong>{{ due_date }}</strong></p>
+        <p>{{ creating_date }}: <strong>{{ created_date }}</strong></p>
+        <p>{{ due_date }}: <strong>{{ due_date }}</strong></p>
       </div>
       <div class="right-section">
         <h2>{{ doctor_name }}</h2>
@@ -168,9 +168,9 @@
           <p>{{ patient_phone }}</p>
         </div>
         <div>
-          <p><strong>Diagnosis</strong></p>
+          <p><strong>{{ diagnosis_title }}</strong></p>
           <p>{{ diagnosis }}</p>
-          <p><strong>Notes</strong></p>
+          <p><strong>{{ notes_title }}</strong></p>
           <p>{{ notes }}</p>
         </div>
       </div>
@@ -178,11 +178,11 @@
       <table class="table">
         <thead>
           <tr>
-            <th>Medication</th>
-            <th>Quantity</th>
-            <th>Time</th>
-            <th>Times/day</th>
-            <th>Duration</th>
+            <th>{{ medication }}</th>
+            <th>{{ quantity }}</th>
+            <th>{{ time }}</th>
+            <th>{{ times_day }}</th>
+            <th>{{ duration }}</th>
           </tr>
         </thead>
         <tbody>
@@ -200,17 +200,20 @@
     </div>
 
     <div class="table-bottom">
-      <p><strong>Assurance info:</strong></p>
+      <p><strong>{{ assurance }}</strong></p>
       <div class="totalCollect"></div>
     </div>
 
     <div class="signature">
-      <p><strong>Signature / Stamp</strong></p>
+      <p><strong>{{ signature }}</strong></p>
+    </div>
+    <div>
+      <b>{{ additional_instruction }}</b>
     </div>
 
     <div class="qrBox">
       {% if qr_code_base64 %}
-        <img src="{{ qr_code_base64 }}" width="30" height="30" alt="QR Code">
+      <img src="{{ qr_code_base64 }}" width="30" height="30" alt="QR Code">
       {% endif %}
     </div>
 
