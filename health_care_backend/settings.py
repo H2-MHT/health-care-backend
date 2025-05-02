@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'notifications',
     'video_call',
     'django_celery_beat',
+    'NHS',
 ]
 
 REST_FRAMEWORK = {
@@ -428,3 +429,6 @@ APP_ID = os.getenv("APP_ID")
 APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
 
 OTP_EXPIRY_MINUTES = 15
+
+NHS_API_KEY = os.getenv("NHS_API_KEY")
+NHS_BASE_URL = os.getenv("NHS_BASE_URL")
