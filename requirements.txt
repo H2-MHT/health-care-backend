@@ -98,3 +98,4 @@ agora_token_builder==1.0.0
 uvicorn
 reportlab
 pycountry
+deep-translator
