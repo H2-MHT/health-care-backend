@@ -24,7 +24,7 @@ def translate_prescription_content(context: dict, lang_code: str) -> dict:
         'prescription', 
         'patient_address', 
         'creating_date', 
-        'due_date'
+        'due_date',
     ]
 
     for field in fields_to_translate:
