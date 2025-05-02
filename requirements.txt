@@ -96,4 +96,5 @@ channels==4.0.0
 firebase-admin==6.7.0
 agora_token_builder==1.0.0
 uvicorn
+reportlab
 pycountry
