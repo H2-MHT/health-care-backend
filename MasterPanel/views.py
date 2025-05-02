@@ -774,7 +774,6 @@ class ExportDataAPIView(APIView):
             "first_name",
             "last_name",
             "phone_number",
-            "role",
             "city",
             "country",
             "residence",
