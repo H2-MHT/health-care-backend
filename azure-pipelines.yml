@@ -1,8 +1,9 @@
 trigger:
   branches:
     include:
-      - development
+      - prod
       - stage 
+      - dev
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -95,7 +96,7 @@ stages:
                     fi
               displayName: 'remove older folders'
 - stage: production
-  condition: eq(variables['Build.SourceBranchName'], 'development')
+  condition: eq(variables['Build.SourceBranchName'], 'prod')
   displayName: Deploy to production
   trigger: manual
   jobs:
