@@ -6,11 +6,16 @@ from rest_framework import status
 import stripe
 from django.conf import settings
 from .models import Payment, User
+from doctors.models import DoctorWallet
 from appointments.models import Appointment
 from rest_framework.permissions import IsAuthenticated
 from doctors.models import Doctor
 from .serializers import AccountDetailSerializer, TransactionSerializer
 from .models import AccountDetail, Transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import os
+import uuid
 
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -234,7 +239,7 @@ class AddAccountDetailAPIView(APIView):
 class WithdrawalAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         try:
             user_id = request.data.get('user_id')
             account_number = request.data.get('account_number')
@@ -263,37 +268,86 @@ class WithdrawalAPIView(APIView):
                 account_number=account_number.strip(), 
                 full_name__istartswith=full_name.strip()
             ).first()
-
+            
             if not account:
                 print(f"Account not found! Available accounts: {AccountDetail.objects.filter(user__id=user_id).values_list('account_number', 'full_name')}")
                 return Response(
                     {"error": "Account not found for the given doctor details."},
                     status=status.HTTP_404_NOT_FOUND
                 )
-
-            transaction = Transaction.objects.create(
+            if not account.stripe_account_id:
+                return Response({"error": "Stripe account not found for the given doctor details."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = request.user
+            try:
+                wallet = DoctorWallet.objects.get(doctor=user)
+            except DoctorWallet.DoesNotExist:
+                return Response({"error": "Doctor wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            walletAmount  = wallet.balance
+            
+            if amount > walletAmount:
+                return Response({"error": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if amount <= 0:
+                return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        
+            try: 
+                price = stripe.Price.create(
+                    unit_amount=int(amount * 100),
+                    currency=user.currency.lower(), 
+                    product_data={
+                        "name": f"Doctor Payment: {account.full_name}",
+                    }
+                )
+                payment_intent_id = str(uuid.uuid4())
+                payment_link = stripe.PaymentLink.create(
+                    line_items=[{
+                        "price": price.id,
+                        "quantity": 1, 
+                    }],
+                    after_completion={
+                        "type": "redirect",
+                        "redirect": {
+                            "url": "https://h2.doctor/superadmin/managepayment"
+                        },
+                    },
+                    transfer_data={
+                        "destination": account.stripe_account_id 
+                    },
+                    metadata={"payment_link_id": payment_intent_id}
+                )
+    
+                wallet.balance -= amount
+                wallet.save()
+                
+                transaction = Transaction.objects.create(
                 account=account,
                 transaction_type="Withdrawal",
                 amount=amount,
-                status="pending"
-            )
-
-            transaction_serializer = TransactionSerializer(transaction)
-            return Response(
+                status="pending",
+                stripe_payment_link = payment_link.url,
+                stripe_payment_link_id = payment_intent_id    
+                )
+                
+                transaction_serializer = TransactionSerializer(transaction)
+                return Response(
                 {
                     "message": "Withdrawal request submitted successfully.",
                     "data": transaction_serializer.data
                 },
-                status=status.HTTP_201_CREATED
-            )
-
+                status=status.HTTP_201_CREATED)
+    
+            except stripe.error.StripeError as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         try:
             user_id = request.user.id
             
@@ -322,3 +376,116 @@ class WithdrawalAPIView(APIView):
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class StripeConnectAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        account_detail, _ = AccountDetail.objects.get_or_create(user=user)
+
+        if account_detail.stripe_account_id:
+            return Response({
+                "message": "Stripe account already exists",
+                "stripe_account_id": account_detail.stripe_account_id
+            }, status=status.HTTP_200_OK)
+
+
+        try:
+            capabilities = {
+            "transfers": {"requested": True}
+            }
+
+            if user.country.upper() == "US":
+                capabilities["card_payments"] = {"requested": True}
+                
+            account = stripe.Account.create(
+                type="express",
+                country=user.country,
+                email=user.email,
+                capabilities=capabilities
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        account_detail.stripe_account_id = account.id
+        account_detail.save()
+
+        try:
+            account_link = stripe.AccountLink.create(
+                account=account.id,
+                refresh_url="https://h2.doctor/dashboard",  
+                return_url=f"https://h2.doctor/dashboard",
+                type="account_onboarding"
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": "Stripe account created successfully",
+            "onboarding_url": account_link.url
+        }, status=status.HTTP_201_CREATED)
+        
+    def get(self, request):
+        user = request.user
+
+        try:
+            account_detail = AccountDetail.objects.get(user=user)
+
+            if not account_detail.stripe_account_id:
+                return Response({"error": "Stripe account not found."}, status=400)
+
+            login_link = stripe.Account.create_login_link(account_detail.stripe_account_id)
+
+            return Response({
+                "login_url": login_link.url
+            })
+
+        except AccountDetail.DoesNotExist:
+            return Response({"error": "Account details not found."}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+        
+@method_decorator(csrf_exempt, name='dispatch')
+class StripeWebhookView(APIView):
+    def post(self, request, *args, **kwargs):
+    
+        payload = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        except ValueError:
+            return Response({"error": "Invalid payload"}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.SignatureVerificationError:
+            return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
+     
+        if event["type"] == "payment_intent.succeeded":
+            payment_intent = event["data"]["object"]
+            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
+            
+            try:
+                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
+                transaction.status = "success"  
+                transaction.save()
+            except Transaction.DoesNotExist:
+                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        elif event["type"] == "payment_intent.payment_failed":
+            payment_intent = event["data"]["object"]
+            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
+
+            try:
+                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
+                transaction.status = "failed" 
+                transaction.save()
+            except Transaction.DoesNotExist:
+                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response(status=status.HTTP_200_OK)
+          

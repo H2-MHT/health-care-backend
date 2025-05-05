@@ -6,6 +6,7 @@ from .views import(EducationAPIView,
                 ViewSkills,
                 NotesAPIView,
                 DeviceAccessListCreateAPIView,
+                SwitchRoleAPIView,
 )
 
 urlpatterns = [
@@ -21,5 +22,8 @@ urlpatterns = [
         path("notes/", NotesAPIView.as_view(), name="notes-list-create"),
         path("notes/<int:pk>/", NotesAPIView.as_view(), name="notes-detail"),
         path('device-access/', DeviceAccessListCreateAPIView.as_view(), name='device-access-list-create'),
+        
+        # switch role
+        path('switch-role/', SwitchRoleAPIView.as_view(), name='switch-role'),
 
 ]

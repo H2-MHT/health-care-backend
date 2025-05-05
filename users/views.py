@@ -2,14 +2,29 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
 import logging
-from .serializers import EducationSerializer, SkillSerializer, NotesSerializer, DeviceAccessSerializer
-from .models import Education, User, TwoFactorMethod, Skill, Notes, DeviceAccess
+from .serializers import (
+    EducationSerializer,
+    SkillSerializer,
+    NotesSerializer,
+    DeviceAccessSerializer,
+    UserRoleSerializer
+)
+from .models import(
+    Education,
+    User,
+    TwoFactorMethod,
+    Skill,
+    Notes,
+    DeviceAccess,
+)
 import json
 from django.http import QueryDict
 from django.core.exceptions import ValidationError
-from rest_framework.exceptions import NotFound
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from patients.models import Patient
+
 logger = logging.getLogger(__name__)
 
 class ViewSkills(APIView):
@@ -347,7 +362,7 @@ class NotesAPIView(APIView):
                                 status=status.HTTP_404_NOT_FOUND)
 
             note.delete()
-            return Response({"message": "Note deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            return Response({"message": "Note deleted successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
@@ -434,3 +449,52 @@ class DeviceAccessListCreateAPIView(APIView):
         return Response({"error": "No valid field provided for update"}, status=status.HTTP_400_BAD_REQUEST)
     
     
+class SwitchRoleAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def blacklist_old_tokens(self, user):
+        tokens = OutstandingToken.objects.filter(user=user)
+        for token in tokens:
+            if not BlacklistedToken.objects.filter(token=token).exists():
+                BlacklistedToken.objects.create(token=token)
+
+    def generate_new_tokens(self, user):
+        refresh = RefreshToken.for_user(user)
+        return {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+
+    def post(self, request):
+        user = request.user
+
+        if user.role == 'Doctor' and not user.is_doctor_switched:
+            user.role = 'Patient'
+            user.is_doctor_switched = True
+            user.save()
+
+            # create patient record if it doesn't exist
+            Patient.objects.get_or_create(user=user)
+
+        elif user.role == 'Patient' and user.is_doctor_switched:
+            user.role = 'Doctor'
+            user.is_doctor_switched = False
+            user.save()
+
+        else:
+            return Response(
+                {"detail": "Role switching is not permitted for your user type."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        self.blacklist_old_tokens(user)
+        tokens = self.generate_new_tokens(user)
+        serializer = UserRoleSerializer(user)
+
+        return Response({
+            "detail": "Role switched successfully.",
+            "user": serializer.data,
+            "tokens": tokens
+        }, status=status.HTTP_200_OK)
+        
+

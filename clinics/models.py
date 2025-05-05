@@ -83,3 +83,8 @@ class ClinicReviewReply(models.Model):
     def __str__(self):
         return f"Reply by {self.user} to review {self.review.id}"
 
+class OtherClinic(models.Model):
+    doctor = models.ForeignKey("doctors.Doctor", on_delete=models.CASCADE)
+    clinic_name=models.CharField(max_length=255,null=False)
+    address=models.CharField(max_length=255,null=False)
+    website=models.CharField(max_length=255,null=True, blank=True)

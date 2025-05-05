@@ -1,12 +1,14 @@
 import os
 from django.db import models
 from django.forms import ValidationError
+from django.urls import reverse
 from  users.models import User
 import random
 import string
 from payments.models import Payment
 from patients.models import Patient
 from appointments.models import Appointment
+from decimal import Decimal
 # Create your models here.
 
 
@@ -65,18 +67,33 @@ class Referral(models.Model):
     def __str__(self):
         return f"{self.user.first_name} - {self.personal_code}"
 
-    def get_registration_link(self):
-        """Generate a registration link that includes the personal referral code."""
-        return f"http://localhost:8000/register?referral_code={self.personal_code}"
+    def get_registration_link(self, request):
+        """Generate a dynamic registration link with the personal referral code."""
+        base_url = request.build_absolute_uri('/')
+        registration_path = reverse('signup')
+        return f"{base_url.rstrip('/')}{registration_path}?referral_code={self.personal_code}"
 
 
 
 class Invitation(models.Model):
+    BENEFIT_CHOICES = [
+        ("discount", "Discount on consultation"),
+        ("free", "Free consultation"),
+        ("premium", "Access to premium for 24 hours"),
+    ]
     invited_by = models.ForeignKey(Referral, on_delete=models.CASCADE, related_name='invitations')
-    invited_user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
+    invited_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invited_as')
     first_appointment = models.BooleanField(default=False)
+    invitation_code = models.CharField(max_length=20, null=True, blank=True, unique=True)
+    benefit_type = models.CharField(max_length=20, choices=BENEFIT_CHOICES, default="")
+    is_redeemed = models.BooleanField(default=False)
+
     def __str__(self):
         return f"Invitation by {self.invited_by.user.first_name}"
+
+    def redeem(self):
+        self.is_redeemed = True
+        self.save()
 
 class AppointmentManagement(models.Model):
     
@@ -140,6 +157,7 @@ class BookedAppointment(models.Model):
         ("Confirmed", "Confirmed"),
         ("Rescheduled", "Rescheduled"),
         ("Cancelled", "Cancelled"),
+        ("Completed", "Completed"),
     ]
 
     PAYMENT_STATUS_CHOICES = [
@@ -158,10 +176,11 @@ class BookedAppointment(models.Model):
     slot = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2,null=True, default=Decimal('0.00'))
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
     rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
@@ -337,3 +356,16 @@ class MediaDigest(models.Model):
     def __str__(self):
         return self.title if self.title else "Untitled Media"
 
+
+class DoctorWallet(models.Model):
+    doctor = models.ForeignKey(User, on_delete=models.CASCADE)
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.0'))
+    
+class Specialization(models.Model):
+    name = models.CharField(max_length=100)
+    description=models.TextField(max_length=250, null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    created_date=models.DateField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name

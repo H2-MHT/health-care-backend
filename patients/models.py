@@ -14,8 +14,8 @@ def validate_past_date(value):
 class Patient(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="patient_profile")
     chronic_conditions = models.TextField(null=True, blank=True)
-    show_email = models.BooleanField(default=False)
-    show_phone = models.BooleanField(default=False)
+    show_email = models.BooleanField(default=True)
+    show_phone = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Patient"

@@ -57,6 +57,20 @@ class ClinicSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_fields = ('name',)
 
+class ClinicListSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = Clinic
+        fields = ['id', 'name', 'profile_picture', 'email']
+
+    def get_name(self, obj):
+        if obj.user:
+            return f"{obj.user.first_name} {obj.user.last_name}".strip()
+        return ""
+    
 class LanguageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Language
@@ -224,3 +238,21 @@ class CalendarAppointmentSerializer(AppointmentSerializer):
         return data
 
 
+class OtherClinicSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = OtherClinic
+        fields = ["id", "clinic_name", "address", "website"]
+
+    def create(self, validated_data):
+        doctor = self.context.get("doctor")
+        if not doctor:
+            raise serializers.ValidationError("Doctor context is required.")
+        return OtherClinic.objects.create(doctor=doctor, **validated_data)
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance

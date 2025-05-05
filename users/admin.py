@@ -1,11 +1,19 @@
 from django.contrib import admin
-from .models import User, Education, Skill, Media, TwoFactorMethod, DeviceAccess
+from .models import (
+    User,
+    Education,
+    Skill,
+    Media,
+    TwoFactorMethod,
+    DeviceAccess,
+    AppLanguage
+)
 
 # Register your models here.
 
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'username', 'email','role', 'is_staff', 'is_superuser', 'is_active')
+    list_display = ('uid', 'id', 'username', 'email','role', 'is_staff', 'is_superuser', 'is_active', 'is_doctor_switched')
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -30,3 +38,4 @@ admin.site.register(User, UserAdmin)
 admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)
 
 admin.site.register(DeviceAccess)
+admin.site.register(AppLanguage)

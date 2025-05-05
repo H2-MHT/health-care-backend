@@ -35,6 +35,13 @@ from .views import (
     PublicDoctorDetailAPIView,
     DeleteDocumentAPIView,
     DeleteAppointmentAPIView,
+    RefundAppointmentPaymentAPIView, 
+    CompletedAppointmentListView,
+    ClinicsAssociatedToDoctorsAPIView,
+    PatientsAssociatedToDoctorAPIView,
+    DoctorWalletAPIView,
+    DoctorInfoAPIView,
+    AddSpecializationAPIView
     )
 
 
@@ -43,6 +50,9 @@ urlpatterns = [
     path('public-doctor-list/', PublicDoctorListAPIView.as_view(), name='public-doctor-list'),
     path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
     path("delete-appointment/", DeleteAppointmentAPIView.as_view(), name="appointment"),
+    path('appointment-list/', CompletedAppointmentListView.as_view(), name='appoitment-list'),
+    path('doctor-info/', DoctorInfoAPIView.as_view(), name="doctor-info"),
+    path('add-specialization/', AddSpecializationAPIView.as_view(), name="add-specialization"),
 
     
     # referral and invitation 
@@ -77,6 +87,7 @@ urlpatterns = [
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),
     path("appointment/create-checkout-session/", CreateStripeCheckoutSession.as_view(), name="payment-confirmation"),
     path("appointment-summary/<int:appointment_id>/", AppointmentSummaryAPIView.as_view(), name="payment-details"),
+    path('refund-payment/',RefundAppointmentPaymentAPIView.as_view(), name="refund-payment"),
 
     path("payment-success/", PaymentSuccessView.as_view(), name="payment-success"),
 
@@ -95,5 +106,8 @@ urlpatterns = [
     path('licence-certificate/', LicenceCertificateAPIView.as_view(), name='licence-certificate'),
     path("delete-document/", DeleteDocumentAPIView.as_view(), name='delete-document'),
     path("media-digest-document/", MediaDigestAPIView.as_view(), name="media-digest-document"),
+    path("clinics-associated-to-doctors/", ClinicsAssociatedToDoctorsAPIView.as_view(), name="all-clinic-on-doctor"),
+    path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="all-patient-on-doctor"),
+    path('get-wallet/', DoctorWalletAPIView.as_view(), name='get-wallet'),
 
 ]

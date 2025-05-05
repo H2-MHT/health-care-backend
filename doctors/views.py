@@ -13,6 +13,8 @@ from users.serializers import UserSerializer
 from patients.models import Patient
 from django.utils.dateparse import parse_time
 from django.db.models import Q
+from clinics.serializers import ClinicListSerializer
+from patients.serializers import PatientSerializer
 from utils.whatsapp import (
     send_whatsapp_message_patient,
     send_whatsapp_message_doctor,
@@ -40,7 +42,10 @@ from .models import (
     PatientBookAppointment,
     LicenceCertificate, 
     MediaDigest,
+    DoctorWallet,
+    Specialization,
 )
+from reviews.models import Review
 from notifications.models import Notification
 from .serializers import (
     AppointmentManagementSerializer,
@@ -54,6 +59,7 @@ from .serializers import (
     DoctorScheduleSerializer,
     LicenceCertificateSerializer, 
     MediaDigestSerializer,
+    DoctorWalletSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -67,6 +73,12 @@ from django.contrib.auth.hashers import make_password
 from rest_framework.decorators import api_view
 from utils.pagination import pagination_view, create_paginated_response
 from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from django.utils import timezone
+from django.db.models import F
+from decimal import Decimal
+import uuid
 import re
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -697,6 +709,16 @@ class BookAppointmentAPIView(APIView):
             # Convert date to correct format
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
             appointment_day = date_obj.strftime("%a")
+            
+    
+            slot_start_str = slot.split("-")[0].strip()
+            slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()
+            
+    
+            appointment_datetime = datetime.combine(date_obj, slot_start_time)
+            appointment_datetime = timezone.make_aware(appointment_datetime)
+            now = timezone.now()
+            within_24_hours = appointment_datetime - now <= timedelta(hours=24)
 
             doctor = User.objects.filter(pk=doctor_user_id).first()
             if not doctor:
@@ -723,7 +745,7 @@ class BookAppointmentAPIView(APIView):
 
             # Ensure slot is not already booked
             is_booked = BookedAppointment.objects.filter(
-                doctor=doctor_user_id, slot=slot, date=date_obj
+                doctor=doctor_user_id, slot=slot, date=date_obj, status__in = ['Pending', 'Confirmed']
             ).exists()
 
             if is_booked:
@@ -792,8 +814,16 @@ class BookAppointmentAPIView(APIView):
             # Update appointment status to "Pending"
             appointment.status = "Pending"
             appointment.save()
+            
+            message_text = "Appointment booked successfully"
+            if within_24_hours:
+                message_text += (
+                    " (Note: You are booking the appointment within 24 hours. "
+                    "If you cancel, 10% amount will be deducted.)"
+                )
+            
             return Response({
-                "message": "Appointment booked successfully",
+                "message_text": message_text,
                 "data": {
                     "appointment_id": appointment.id,
                     "appointment_type": appointment.appointment_type,
@@ -899,7 +929,7 @@ class BookAppointmentAPIView(APIView):
                 return Response({'message': 'Appointment ID and status are required'}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment_status = appointment_status.capitalize()
-            if appointment_status not in ['Confirmed', 'Cancelled']:
+            if appointment_status not in ['Confirmed', 'Cancelled', 'Completed']:
                 return Response({'message': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
@@ -989,7 +1019,55 @@ class DoctorAppointmentAPIView(APIView):
                 
         except Exception as e:
             return Response({'error':str(e)},status=status.HTTP_400_BAD_REQUEST)
-    
+
+class CompletedAppointmentListView(APIView):
+    permission_classes = [IsAuthenticated]    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            if not hasattr(user, "doctor"):
+                return Response({"message": "only doctor can perform this action"}, status=status.HTTP_403_FORBIDDEN)
+            
+            appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
+
+            data = {
+                "message": "Appointment list retrieved successfully",
+                "data": []
+            }
+
+            for appointment in appointments:
+                try:
+                    patient_user = User.objects.get(id=appointment.patient)
+                    patient_data = {
+                        "first_name": patient_user.first_name,
+                        "last_name": patient_user.last_name,
+                        "email": patient_user.email,
+                        "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
+                    }
+                except User.DoesNotExist:
+                    patient_data = {
+                        "first_name": None,
+                        "last_name": None,
+                        "email": None,
+                        "profile_picture": None,
+                    }
+
+                data["data"].append({
+                    "appointment_id": appointment.id,
+                    "appointment_type": appointment.appointment_type,
+                    "date": appointment.date,
+                    "status": appointment.status,
+                    "slot": appointment.slot,
+                    "patient": patient_data
+                })
+            return Response(data, status=200)
+                
+        except Exception as e:
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            
+
+
 
 # class MyAppointmentsAPIView(APIView):
 #     """
@@ -1307,6 +1385,7 @@ class CreateStripeCheckoutSession(APIView):
 
                 # Save session ID
                 appointment.stripe_session_id = checkout_session.id
+                appointment.amount = amount/100
                 appointment.save()
 
                 return Response({"session_url": checkout_session.url}, status=status.HTTP_200_OK)
@@ -1403,7 +1482,7 @@ class GenerateReferralCodeView(APIView):
                 )
 
             # Return referral data
-            serializer = ReferralSerializer(referral)
+            serializer = ReferralSerializer(referral, context={'request': request})
             return Response(
                 {
                     "message": "Referral data retrieved successfully.",
@@ -1427,96 +1506,75 @@ class GenerateReferralCodeView(APIView):
 
 
 class InviteUserView(APIView):
-    """Apply referral code manually and mark it as used."""
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        referral_code = request.data.get(
-            "referral_code"
-        )  # Get referral code from request body
+        referral_code = request.data.get("referral_code")
 
-        if not request.user.is_authenticated:
-            logger.warning(
-                "Unauthorized attempt to use referral code by anonymous user."
-            )
+        if not referral_code:
             return Response(
-                {"error": "You must be logged in to use a referral code."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Referral code is required."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # Check if the referral code exists
             referral = Referral.objects.get(personal_code=referral_code)
-            logger.info(
-                "User %s attempting to use referral code: %s",
-                request.user.email,
-                referral_code,
-            )
 
             if referral.user == request.user:
-                logger.warning(
-                    "User %s tried to use their own referral code.", request.user.email
-                )
                 return Response(
                     {"error": "You cannot use your own referral code."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Check if this referral code has already been used by the current user
-            if Invitation.objects.filter(
-                    invited_by=referral, invited_user=request.user
-            ).exists():
-                logger.warning(
-                    "User %s already used referral code: %s",
-                    request.user.email,
-                    referral_code,
-                )
+            if Invitation.objects.filter(invited_user=request.user).exists():
                 return Response(
-                    {"error": "You have already used this referral code."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"error": "You have already used a referral code."},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             with transaction.atomic():
-                # Create an invitation for the new user (invited by user A)
+                generated_code = str(uuid.uuid4())[:8]
+
                 invitation = Invitation.objects.create(
                     invited_by=referral,
                     invited_user=request.user,
-                )
-
-                # Update the invites invited users count
+                    invitation_code=generated_code,
+                    first_appointment=False
+                                                    )
                 referral.invited_users_count = Invitation.objects.filter(
                     invited_by=referral
                 ).count()
+                referral.referral_points += 5
                 referral.save()
 
                 logger.info(
                     "Referral code %s successfully used by user %s",
                     referral_code,
-                    request.user.email,
+                    request.user.email
                 )
 
             return Response(
                 {"message": "Referral code applied successfully."},
-                status=status.HTTP_200_OK,
+                status=status.HTTP_200_OK
             )
 
         except Referral.DoesNotExist:
-            logger.error(
-                "Invalid referral code attempt: %s by user %s",
-                referral_code,
-                request.user.email,
-            )
             return Response(
-                {"error": "Invalid referral code."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid referral code."},
+                status=status.HTTP_400_BAD_REQUEST
             )
+
         except Exception as e:
             logger.exception(
-                "Error applying referral code for user %s: %s",
+                "Unexpected error applying referral code for user %s: %s",
                 request.user.email,
-                str(e),
+                str(e)
             )
-            return Response({"message": "You already applied other referral code"}, status=status.HTTP_400_BAD_REQUEST)
-
-
+            return Response(
+                {"error": "Something went wrong while applying referral code."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
 @api_view(["POST"])
 def redeem_invitation(request, invitation_code):
     """Redeem the invitation and increase the inviters stats."""
@@ -2030,7 +2088,7 @@ class CommunicationPreferencesAPIView(APIView):
 
     def put(self, request, *args, **kwargs):
         try:
-            """Update the current user's communication preferences"""
+            """Update the current user communication preferences"""
             preferences, created = CommunicationPreferences.objects.get_or_create(
                 user=request.user
             )
@@ -2059,7 +2117,7 @@ def send_otp(user):
     user.save()
 
     sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
-    from_email = Email("akash.prajapati@techqware.com")  # Update with your sender email
+    from_email = Email("otp@my-health.today")  # sender email
     to_email = To(user.email)
     subject = "Your OTP for Password Change"
     content = Content("text/plain", f"Your OTP for password change is: {otp}")
@@ -2250,5 +2308,372 @@ class MediaDigestAPIView(APIView):
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
+class RefundAppointmentPaymentAPIView(APIView):
+    def post(self, request):
+
+        appointment_id = request.data.get("appointment_id")
+        cancelled_by = request.data.get("cancelled_by")
+
+        appointment = get_object_or_404(BookedAppointment, id=appointment_id)
+        now = timezone.now() 
+
+        slot_start = appointment.slot.split("-")[0].strip()
+        appointment_time = datetime.strptime(slot_start, "%H:%M").time()
+        appointment_datetime = timezone.make_aware(datetime.combine(appointment.date, appointment_time)) 
+
+        time_until_appointment = appointment_datetime - now
+        
+        if time_until_appointment < timedelta(hours=12):
+            return Response({"error": "Cancellation not allowed within 12 hours of appointment."}, status=400)
+        
+        session = stripe.checkout.Session.retrieve(appointment.stripe_session_id)
+        payment_intent = session.payment_intent
+
+        if cancelled_by == "doctor":
+            try:
+                stripe.Refund.create(
+                    payment_intent=payment_intent,
+                )
+            except Exception as e:
+                return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
+            
+            appointment.status = "Cancelled"
+            appointment.payment_status = "Refunded"
+            appointment.save()
+            send_refund_email(appointment, cancelled_by, appointment.amount)
+            return Response({"message": "Doctor cancelled. Full refund issued."}, status=200)
+
+        elif cancelled_by == "patient":
+            if time_until_appointment <= timedelta(hours=24):
+                # Deduct 10%, refund 90%, add 10% to doctor wallet
+                refund_amount = int(appointment.amount * Decimal("0.9"))
+                doctor_earning = int(appointment.amount * Decimal("0.1"))               
+                
+                doctor = User.objects.filter(pk=appointment.doctor).first()
+                
+                wallet, created = DoctorWallet.objects.get_or_create(
+                doctor=doctor,
+                defaults={"balance": doctor_earning}
+                )
+                if not created:
+                    DoctorWallet.objects.filter(doctor=doctor).update(
+                        balance=F('balance') + doctor_earning
+                    )
+                
+                try:
+                    stripe.Refund.create(
+                        payment_intent=payment_intent, 
+                        amount=int(appointment.amount_paid * 0.9 * 100), 
+                    ) 
+                except Exception as e:
+                    return Response({"error": f"Stripe partial refund failed: {str(e)}"}, status=500) 
+
+                appointment.status = "Cancelled"
+                appointment.payment_status = "Refunded"
+                appointment.save()
+                send_refund_email(appointment, cancelled_by, refund_amount)
+                return Response({
+                    "message": "Cancelled within 24 hours. 10% deducted, 90% refunded.",
+                    "refunded_amount": refund_amount,
+                    "doctor_earning": doctor_earning
+                }, status=200)
+
+            else:
+                
+                try:
+                    stripe.Refund.create(
+                        payment_intent=payment_intent, 
+                    )
+                except Exception as e:
+                    return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
+                
+                appointment.status = "Cancelled"
+                appointment.payment_status = "Refunded"
+                appointment.save()
+                
+                send_refund_email(appointment, cancelled_by, appointment.amount)
+                
+                return Response({
+                    "message": "Cancelled more than 24 hours before appointment. Full refund issued."
+                }, status=200)
+
+        else:
+            return Response({"error": "Invalid value for 'cancelled_by'."}, status=400)
+  
+  
+  
+def send_refund_email(appointment, cancelled_by, refund_amount):
+    content = f"""
+    Hello,
+    
+    A refund has been processed.
+    
+    Details:
+    - Appointment ID: {appointment.id}
+    - Cancelled By: {cancelled_by.title()}
+    - Slot: {appointment.slot}
+    - Date: {appointment.date}
+    - refund: {refund_amount}
+
+    Regards,
+    My Health System
+    """
+    message = Mail(
+        from_email=settings.SENDGRID_FROM_EMAIL,
+        to_emails='refund@my-health.today',
+        subject='Refund Processed Notification',
+        plain_text_content=content
+    )
+
+    try:
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+    except Exception as e:
+        print(f"Failed to send refund email: {str(e)}")
 
 
+class ClinicsAssociatedToDoctorsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            user = request.user
+
+            # Ensure user is a Doctor
+            if user.role != "Doctor":
+                return Response({
+                    "data": None,
+                    "message": "Only doctors can access their clinic info.",
+                    "status": "error"
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Retrieve the associated clinic via work_place
+            clinic = getattr(user, "work_place", None)
+            if not clinic:
+                return Response({
+                    "data": None,
+                    "message": "No clinic associated with this doctor.",
+                    "status": "error"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = ClinicListSerializer(clinic)
+
+            return Response({
+                "data": {
+                    "message": "Clinic information retrieved successfully.",
+                    "clinic": serializer.data
+                },
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "message": str(e),
+                "status": "error"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        
+class PatientsAssociatedToDoctorAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
+    def get(self, request, *args, **kwargs):
+        try:
+            doctor = request.user
+
+            # Ensure only doctors can access
+            if doctor.role != "Doctor":
+                return Response({
+                    "data": None,
+                    "message": "Only doctors can access their associated patient info.",
+                    "status": "error"
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Fetch patient IDs who booked appointments with this doctor
+            patient_ids = BookedAppointment.objects.filter(
+                doctor=doctor.id
+            ).values_list("patient", flat=True).distinct()
+
+            patients = User.objects.filter(id__in=patient_ids)
+            serialized_patients = PatientSerializer(patients, many=True)
+
+            return Response({
+                "data": {
+                    "message": "Associated patients retrieved successfully.",
+                    "patients": serialized_patients.data
+                },
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "message": str(e),
+                "status": "error"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class DoctorWalletAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            doctor = request.user
+            completed_appointments = BookedAppointment.objects.filter(
+                doctor=doctor.id,
+                payment_status='Completed'
+            )
+
+            total_earned = sum(app.amount for app in completed_appointments)
+            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
+            wallet.balance = Decimal(total_earned)
+            wallet.save()
+
+            serializer = DoctorWalletSerializer(wallet)
+            return Response({
+                "message": "Doctor wallet fetched and updated successfully!",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except DoctorWallet.DoesNotExist:
+            return Response({"error": "Wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                "error": "Something went wrong while fetching/updating data.",
+                "detail": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class AddSpecializationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            if request.user.role != 'Doctor':
+                return Response({"error": "Only doctors can add specializations."}, status=403)
+            
+            specialization = request.data.get('specialization')  
+            if not specialization:
+                return Response({"error": "Please provide a specialization."}, status=400)
+            
+            if Specialization.objects.filter(name__iexact=specialization).exists():
+                return Response({"message": "This specialization already exists"}, status=400)
+
+            Specialization.objects.create(
+                name=specialization.capitalize(),
+                is_approved = False  
+            )
+            send_specialization_approval_email(specialization)        
+            return Response({'message': 'Specialization added successfully'}, status=201)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+def send_specialization_approval_email(specialization):    
+    subject = f"New Specialization Request: {specialization}"
+
+    message = f"""
+    A doctor has submitted a new specialization request: {specialization}
+
+    Please log in to the admin panel to review and take action.
+
+    Thanks,  
+    My Health Team
+        """
+
+    try:
+        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+        email = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails='approvals@my-health.today',
+            subject=subject,
+            plain_text_content=message
+        )
+        sg.send(email)
+    except Exception as e:
+        print("Error sending approval email:", e)
+
+class DoctorInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            userID = request.query_params.get('doctor_user_id') 
+            if not userID:
+                return Response({'message':'doctor id is requeired'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:  
+                user = User.objects.get(pk=userID)
+            except User.DoesNotExist:
+                return Response({'message': 'Doctor does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try: 
+                doctor = Doctor.objects.get(user=user)
+            except Doctor.DoesNotExist:
+                return Response({'message': 'User is not a doctor'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            license_data = LicenceCertificate.objects.filter(user=user).first()
+            
+            if not license_data:
+                doctor_license_data = "not found"
+            else:
+                doctor_license_data = {
+                    "description": license_data.description,
+                    "attatchment": license_data.attachment.url,
+                    "status": license_data.status,
+                    "rejection_reason": license_data.rejection_reason
+                }
+                
+            media_data = MediaDigest.objects.filter(user_doctor=user).first()
+            
+            if not media_data:
+                media_digest = "not found"
+            else:
+                media_digest = {
+                    "title": media_data.title,
+                    "description": media_data.description,
+                    "attatchment": media_data.attachment_file.url,        
+                }
+            reviews = Review.objects.filter(doctor=doctor)
+            
+            if not reviews:
+                doctor_review = "review not found"
+            else:
+                doctor_review = [
+                    {
+                       "patient":{
+                           "id": review.patient.user.id,
+                           "name": review.patient.user.get_full_name()
+                       },
+                        "doctor":{
+                           "id": review.doctor.user.id,
+                           "name": review.doctor.user.get_full_name()
+                       },
+                        "title": review.title,
+                        "content": review.content,
+                        "rating": review.rating,
+                        "recommend": review.recommend
+                    }
+                    for review in reviews
+                ]
+                
+            data = {
+                "id": user.id,
+                "name": user.get_full_name(),
+                "email": user.email,
+                "contact": user.phone_number,
+                "city": user.city,
+                "country": user.country,
+                "expertise": user.expertise,
+                "professional_stat": user.professional_stat,
+                "profile": user.profile_picture.url,
+                "qualification": doctor.qualifications,
+                "speciality": doctor.specialty,
+                "experience_years": doctor.experience_years,
+                "license": doctor_license_data,
+                "media_digest": media_digest,
+                "reviews": doctor_review          
+            }
+            
+            return Response({
+                "message": "Retrieved successfully",
+                "data": data
+            })
+         
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+                

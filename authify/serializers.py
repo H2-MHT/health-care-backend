@@ -4,6 +4,7 @@ import json
 from doctors.models import Doctor
 from users.models import User
 import re
+from clinics.models import Clinic
 from patients.models import Patient
 class RegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -36,6 +37,19 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "rating",
             "reviews"
         ]
+        extra_kwargs = {
+            "email": {"required": True}
+        }
+
+    def validate_email(self, value):
+        """
+        Override default unique email validation:
+        Allow if user exists but is unverified.
+        """
+        user = User.objects.filter(email=value).first()
+        if user and user.is_verified:
+            raise serializers.ValidationError("User with this email is already verified.")
+        return value
 
     def validate(self, data):
         if data["password"] != data["confirm_password"]:
@@ -43,12 +57,58 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        validated_data.pop(
-            "confirm_password"
-        )  # Remove confirm_password field before saving
+        validated_data.pop("confirm_password", None)
+        languages_data = validated_data.pop("languages", [])
 
+        if isinstance(languages_data, str):
+            try:
+                languages_data = json.loads(languages_data)
+            except json.JSONDecodeError:
+                languages_data = []
+
+        email = validated_data.get("email")
+        existing_user = User.objects.filter(email=email).first()
+
+        if existing_user:
+            if existing_user.is_verified:
+                raise serializers.ValidationError({"email": "User with this email is already verified."})
+            else:
+                # Update the existing unverified user instead of deleting
+                existing_user.first_name = validated_data.get("first_name", existing_user.first_name)
+                existing_user.last_name = validated_data.get("last_name", existing_user.last_name)
+                existing_user.password = validated_data.get("password", existing_user.password)
+                existing_user.set_password(existing_user.password)  # hashed password
+                existing_user.is_verified = False  # unverified for re-registration
+                existing_user.otp = ""  # Reset OTP
+                existing_user.otp_created_at = None  # Clear OTP timestamp
+                existing_user.save(update_fields=['first_name', 'last_name', 'password', 'is_verified', 'otp', 'otp_created_at'])
+
+                # Proceed with any necessary updates, like languages
+                if languages_data:
+                    existing_user.languages.set(languages_data)
+
+                return existing_user
+
+
+        user = User(**validated_data)
+        user.set_password(validated_data["password"])
+        user.save()
+
+        if languages_data:
+            user.languages.set(languages_data)
+
+        return user
+
+
+    def update(self, instance, validated_data):
+        validated_data.pop("confirm_password", None)
         languages = validated_data.pop("languages", [])
-        # Handle services_provided
+
+        for attr, value in validated_data.items():
+            if attr == "password":
+                instance.set_password(value)
+            else:
+                setattr(instance, attr, value)
 
         if isinstance(languages, str):
             try:
@@ -56,13 +116,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
             except json.JSONDecodeError:
                 languages = []
 
-        user = User(**validated_data)
-        user.set_password(validated_data["password"])  # Hash the password
-        if languages:
-            user.languages.set(languages)
-        user.save()
-        return user
+        instance.save()
 
+        if languages:
+            instance.languages.set(languages)
+
+        return instance
 
 class OTPVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -212,19 +271,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             except Patient.DoesNotExist:
                 return None  # No patient profile found
         return obj.phone_number  # Show phone number
-
-
-class ShowPatientEmailPhoneSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Patient
-        fields = ["show_email", "show_phone"]
-
-    def update(self, instance, validated_data):
-        """Update the patient's preferences."""
-        instance.show_email = validated_data.get("show_email", instance.show_email)
-        instance.show_phone = validated_data.get("show_phone", instance.show_phone)
-        instance.save()
-        return instance
     
     
 class UserProfileUpdateSerializer(UserProfileSerializer):
@@ -232,6 +278,10 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         required=False, validators=[validate_profile_picture]
     )
     languages = serializers.CharField(required=False)
+    show_email = serializers.BooleanField(required=False)
+    show_phone = serializers.BooleanField(required=False)
+    class Meta(UserProfileSerializer.Meta):
+            fields = UserProfileSerializer.Meta.fields + ['show_email', 'show_phone']
 
     def update(self, instance, validated_data):
         languages = validated_data.pop('languages', [])
@@ -241,14 +291,35 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
             except json.JSONDecodeError:
                 languages = []
 
-        # Update experience_years explicitly
+        # Doctor-specific logic
         if instance.role == "Doctor":
             experience_years = validated_data.pop('experience_years', None)
-            if experience_years is not None:
-                doc = Doctor.objects.filter(user=instance).first()
-                if doc:
+            clinic = validated_data.pop('clinic', None)
+
+            doc = Doctor.objects.filter(user=instance).first()
+            if doc:
+                if experience_years is not None:
                     doc.experience_years = experience_years
-                    doc.save()
+
+                if clinic and clinic != "other":
+                    try:
+                        clinic_instance = Clinic.objects.get(id=clinic)
+                        doc.work_place = clinic_instance
+                    except Clinic.DoesNotExist:
+                        raise serializers.ValidationError("Invalid clinic ID.")
+
+                doc.save()
+
+        # Patient-specific logic
+        if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
+            show_email = validated_data.pop('show_email', None)
+            show_phone = validated_data.pop('show_phone', None)
+
+            if show_email is not None:
+                instance.patient_profile.show_email = show_email
+            if show_phone is not None:
+                instance.patient_profile.show_phone = show_phone
+            instance.patient_profile.save()
 
         # Update other fields dynamically
         for attr, value in validated_data.items():
@@ -265,4 +336,10 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         """Customize GET response for languages"""
         data = super().to_representation(instance)
         data['languages'] = list(instance.languages.values_list("id", flat=True))
+
+        # Include patient fields if available
+        if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
+            data['show_email'] = instance.patient_profile.show_email
+            data['show_phone'] = instance.patient_profile.show_phone
+
         return data

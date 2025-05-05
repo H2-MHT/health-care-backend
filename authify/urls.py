@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     SignUpView,
     SignInView,
+    LogoutView,
     GoogleLoginView,
     AppleLoginView,
     OTPVerificationView,
@@ -14,12 +15,12 @@ from .views import (
     GetUserProfileAPIView,
     AccountDeactivateDeleteView,
     UserDeviceTokenAPIView,
-    ShowPatientEmailPhoneAPIView,
 )
 
 urlpatterns = [
     path("signup/", SignUpView.as_view(), name="signup"),
     path("signin/", SignInView.as_view(), name="signin"),
+    path("logout/", LogoutView.as_view(), name="Logout"),
     # password reset
     path("forget-password/", ForgotPasswordView.as_view(), name="forget-password"),
     path("verify-otp/", OTPVerificationView.as_view(), name="verify-otp"),
@@ -38,5 +39,4 @@ urlpatterns = [
     path('firebase-device-token/', UserDeviceTokenAPIView.as_view(), name='firebase-device-token'),
 
     path("view-profile/", GetUserProfileAPIView.as_view(), name="view-profile"),
-    path("show-email-phone/", ShowPatientEmailPhoneAPIView.as_view(), name="show-email-phone"),
 ]

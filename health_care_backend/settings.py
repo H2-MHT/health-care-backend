@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'social_django',
     'authify',
     'users',
@@ -59,6 +60,7 @@ INSTALLED_APPS = [
     'notifications',
     'video_call',
     'django_celery_beat',
+    'NHS',
 ]
 
 REST_FRAMEWORK = {
@@ -80,10 +82,12 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv('GOOGLE_CLIENT_ID')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 
 # Apple ID credentials
-SOCIAL_AUTH_APPLE_CLIENT_ID = os.getenv('APPLE_CLIENT_ID')
-SOCIAL_AUTH_APPLE_TEAM_ID = os.getenv('APPLE_TEAM_ID')
-SOCIAL_AUTH_APPLE_KEY_ID = os.getenv('APPLE_KEY_ID')
-SOCIAL_AUTH_APPLE_SECRET = os.getenv('APPLE_PRIVATE_KEY')
+APPLE_CLIENT_ID = os.getenv("APPLE_CLIENT_ID")
+APPLE_TEAM_ID = os.getenv("APPLE_TEAM_ID")
+APPLE_KEY_ID = os.getenv("APPLE_KEY_ID")
+APPLE_REDIRECT_URI = os.getenv("APPLE_REDIRECT_URI")
+APPLE_PRIVATE_KEY = os.getenv("APPLE_PRIVATE_KEY").replace('\\n', '\n')
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -217,7 +221,7 @@ STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
@@ -312,6 +316,12 @@ LOGGING = {
             'filename': os.path.join(BASE_LOG_DIR, 'users.log'),
             'formatter': 'verbose',
         },
+        'video_call': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_LOG_DIR, 'video_call.log'),
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'appointments': {
@@ -365,6 +375,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'videpo_call': {
+            'handlers': ['video_call'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
     },
 }
 
@@ -394,6 +409,10 @@ CSRF_TRUSTED_ORIGINS = [
     'https://h2.doctor',
 ]
 
+
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+  
 # Twillio 
 ACCOUNT_SID = os.getenv("ACCOUNT_SID")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN")
@@ -408,3 +427,8 @@ CELERY_TIMEZONE = 'UTC'
 # Agora video-call
 APP_ID = os.getenv("APP_ID")
 APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
+
+OTP_EXPIRY_MINUTES = 15
+
+NHS_API_KEY = os.getenv("NHS_API_KEY")
+NHS_BASE_URL = os.getenv("NHS_BASE_URL")

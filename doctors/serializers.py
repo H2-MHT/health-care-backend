@@ -13,13 +13,17 @@ from .models import (
     LicenceCertificate,
     # Slot,
     MediaDigest,
+    DoctorWallet,
+    
 )
+from video_call.models import MeetingRoom
 from payments.models import Payment
+from authify.serializers import UserProfileSerializer, UserProfileUpdateSerializer
 from datetime import datetime, timedelta
 from django.contrib.auth.hashers import check_password
 from users.models import User
 from django.utils.timezone import now
-
+from clinics.models import OtherClinic
 # class DoctorNotesSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = DoctorNotes
@@ -33,7 +37,18 @@ from django.utils.timezone import now
 #         validated_data["doctor"] = request.user.doctor  # Assign the related Doctor instance
 #         return super().create(validated_data)
     
-    
+
+class DoctorSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'profile_picture']
+        read_only_fields = ['id']
+
+    def get_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
+        
 class ReferralSerializer(serializers.ModelSerializer):
     registration_link = serializers.SerializerMethodField()
 
@@ -42,7 +57,8 @@ class ReferralSerializer(serializers.ModelSerializer):
         fields = ['personal_code', 'referral_points', 'invited_users_count', 'registration_link']
 
     def get_registration_link(self, obj):
-        return obj.get_registration_link()
+        request = self.context.get('request')
+        return obj.get_registration_link(request) if request else None
     
     
 class InvitationSerializer(serializers.ModelSerializer):
@@ -96,9 +112,10 @@ class ConsultationSettingsSerializer(serializers.ModelSerializer):
 
 
 class BookedAppointmentSerializer(serializers.ModelSerializer):
+    meeting_link = serializers.SerializerMethodField()
     class Meta:
         model = BookedAppointment
-        fields = ['id', 'appointment_type', 'status', 'date', 'slot', 'created_at']
+        fields = ['id', 'appointment_type', 'status', 'meeting_link', 'date', 'slot', 'created_at']
         
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -125,6 +142,13 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
             data["rescheduled_by"] = "Doctor" if rescheduled_by_user.role == "Doctor" else "Patient"
 
         return data
+    
+    def get_meeting_link(self, obj):
+        try:
+            meeting = MeetingRoom.objects.get(appointment=obj)
+            return meeting.link
+        except MeetingRoom.DoesNotExist:
+            return None
         
 
 
@@ -262,3 +286,13 @@ class MediaDigestSerializer(serializers.ModelSerializer):
     def get_doctor(self, obj):
         return obj.user_doctor.id if obj.user_doctor else None
 
+class OtherClinicSerializer(serializers.ModelSerializer):
+    user =UserProfileUpdateSerializer(read_only=True)
+    class Meta:
+        model=OtherClinic
+        fields=['doctor_id','id','clinic_name','address','website','user']
+
+class DoctorWalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorWallet
+        fields = ['id', 'doctor_id', 'balance']

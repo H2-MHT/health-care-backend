@@ -1,9 +1,13 @@
+import pycountry
+import uuid as uuid_lib
+from django.db import transaction
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.db import models
 from clinics.models import Language
 import random
 from django.utils.timezone import now
+from datetime import datetime
 
 
 class CustomUserManager(BaseUserManager):
@@ -66,9 +70,10 @@ class User(AbstractUser):
 
     # Authentication fields
     username = None
+    uid = models.CharField(max_length=30, editable=False, blank=True, null=True, unique=True)
+    uuid = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)
     email = models.EmailField(unique=True, null=False)
     password = models.CharField(max_length=128, null=False)
-    currency=models.CharField(max_length=10, default="")
     otp_created_at = models.DateTimeField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
@@ -91,12 +96,14 @@ class User(AbstractUser):
     # Address Information
     country = models.CharField(max_length=255, blank=True, default="")
     city = models.CharField(max_length=255, blank=True, default="")
+    currency=models.CharField(max_length=10, default="", help_text="Currency code")
     residence = models.CharField(max_length=255, blank=True, default="")
 
     # Professional Information
     role = models.CharField(
         max_length=20, choices=ROLE_CHOICES, default="Patient", null=False
     )
+    is_doctor_switched = models.BooleanField(default=False)
     languages = models.ManyToManyField(Language, blank=True)
     work_place = models.ForeignKey("clinics.Clinic", on_delete=models.SET_NULL, null=True, blank=True, related_name="clinic_work")
     expertise = models.TextField(blank=True, default="")
@@ -147,7 +154,49 @@ class User(AbstractUser):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip()    
+    
+    @staticmethod
+    def get_country_code(country_name: str) -> str:
+        try:
+            country = pycountry.countries.search_fuzzy(country_name)[0]
+            return country.alpha_2
+        except (LookupError, AttributeError, IndexError):
+            return 'XX'  # Default fallback if country not found
 
+    @staticmethod
+    @transaction.atomic
+    def generate_uid(prefix: str, country_code: str) -> str:
+        today = datetime.today().strftime('%d%m%Y')
+
+        # Lock the sequence row to prevent race condition
+        sequence, _ = UIDSequence.objects.select_for_update().get_or_create(
+            prefix=prefix,
+            date=today,
+            defaults={'counter': 0}
+        )
+
+        sequence.counter += 1
+        sequence.save()
+
+        return f"{prefix}{today}{country_code}{sequence.counter:06d}"
+
+    def save(self, *args, **kwargs):
+        if not self.uid:
+            prefix = 'U' if self.role == 'Patient' else 'D' if self.role == 'Doctor' else 'X'
+            country_code = self.get_country_code(self.country or "")
+            self.uid = self.generate_uid(prefix, country_code)
+        super().save(*args, **kwargs)
+
+
+class UIDSequence(models.Model):
+    prefix = models.CharField(max_length=10)
+    date = models.CharField(max_length=8)
+    counter = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('prefix', 'date')
+        
+        
 def user_fileq(instance, filename):
     return "{0}-{1}".format(instance.type, filename)
 
@@ -213,3 +262,17 @@ class DeviceAccess(models.Model):
     platform = models.CharField(max_length=100)
     active_sessions = models.BooleanField(null=True, blank=True, default=None)
 
+class AppLanguage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='app_languages')
+    language_name = models.CharField(max_length=100, blank=True, null=True, help_text="Language name", default="English")
+    code = models.CharField(max_length=10, blank=True, null=True, help_text="Language code", default="en")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Application Language"
+        verbose_name_plural = "Application Languages"
+
+    def __str__(self):
+        return f"{self.user.email} - {self.language_name}"
+    

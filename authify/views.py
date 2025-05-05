@@ -1,9 +1,13 @@
 import logging
 import random
+import time
+import requests
+import jwt
 import re
 import sendgrid
 from datetime import timedelta
 from django.utils import timezone
+from rest_framework.authtoken.models import Token
 
 from django.conf import settings
 from django.utils.timezone import now
@@ -14,16 +18,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-from social_core.backends.apple import AppleIdAuth
-from social_django.utils import load_strategy
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import AuthenticationFailed
 from datetime import timedelta
 from django.contrib.auth import authenticate, login
 from authify.utils import validate_google_id_token
 from doctors.models import Doctor
+from doctors.serializers import OtherClinicSerializer
 from users.models import User
 from patients.models import Patient
 from .serializers import (
@@ -34,13 +38,13 @@ from .serializers import (
     UserProfileSerializer,
     UserProfileUpdateSerializer,
     ResetPasswordSerializer,
-    ShowPatientEmailPhoneSerializer,
 )
-from clinics.models import Clinic
+from clinics.models import(
+    OtherClinic,
+)
 from clinics.serializers import ClinicInfoSerializer
 import logging
-from sendgrid.helpers.mail import Mail, Email, To, Personalization
-from django.dispatch import receiver
+from sendgrid.helpers.mail import Mail, To, Personalization
 from django.utils.timezone import now
 
 
@@ -90,7 +94,7 @@ class SignUpView(APIView):
 
         # email message
         message = Mail(
-            from_email=Email(settings.SENDGRID_FROM_EMAIL),
+            from_email='otp@my-health.today',
         )
 
         # dynamic template ID
@@ -118,17 +122,21 @@ class SignUpView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            logger.info("User sign-up request received.")
+            logger.info("User registration attempt received.")
             serializer = RegistrationSerializer(data=request.data)
-            if serializer.is_valid():
-                user = serializer.save()
-                logger.info(f"User registered successfully: {user.email}")
-                name = user.first_name if user.first_name else "User"
-                # Generate OTP
-                otp = self.generate_otp()
 
-                # Send OTP to user's email
-                email_response = self.send_otp_email(user.email, otp, name)
+            # deletion of unverified user with the same email
+            email = request.data.get('email')
+            if email:
+                existing_user = User.objects.filter(email=email).first()
+                if existing_user and not existing_user.is_verified:
+                    existing_user.delete()
+                    logger.info(f"Unverified user with email {email} deleted before re-registration.")
+            
+            if serializer.is_valid():
+                user = serializer.save()  # creating the user
+                otp = self.generate_otp()
+                email_response = self.send_otp_email(user.email, otp, user.first_name or "User")
 
                 if isinstance(email_response, str):
                     logger.error(f"Failed to send OTP to {user.email}: {email_response}")
@@ -139,12 +147,13 @@ class SignUpView(APIView):
 
                 # Store OTP in the database for verification later
                 user.otp = otp
+                user.otp_created_at = timezone.now()
                 user.save()
                 logger.info(f"OTP stored for user {user.email}")
 
                 return Response(
                     {
-                        "message": "User registered successfully. OTP sent to your email.",
+                    "message": "User registered successfully. OTP sent to your email.",
                         "user": serializer.data,
                     },
                     status=status.HTTP_201_CREATED,
@@ -157,7 +166,7 @@ class SignUpView(APIView):
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+            
 class OTPVerificationView(APIView):
     """
     API view to verify OTP for the given user using email and OTP.
@@ -180,7 +189,28 @@ class OTPVerificationView(APIView):
                     return Response(
                         {"message": "User not found."}, status=status.HTTP_404_NOT_FOUND
                     )
+                    
+                # **Check if OTP is expired**
+                if user.otp_created_at is None:
+                    logger.warning(f"OTP creation time is missing for user {email}.")
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                otp_age = timezone.now() - user.otp_created_at
+                if otp_age > timedelta(minutes=settings.OTP_EXPIRY_MINUTES):
+                    logger.warning(f"OTP for user {email} has expired.")
+                    # Clear expired OTP from user record
+                    user.otp = ""
+                    user.otp_created_at = None
+                    user.save()
 
+                    return Response(
+                        {"message": "OTP has expired. Please request a new one."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
                 # Check if OTP matches
                 if user.otp != otp:
                     logger.warning(f"Invalid OTP for user {email}.")
@@ -370,10 +400,57 @@ class SignInView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+
+class LogoutView(APIView):
+    """
+    API view for user logout. Invalidates the refresh token and reverts role if switched.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            user = request.user
+
+            # Revert role if temporarily switched
+            if user.is_doctor_switched:
+                user.role = 'Doctor'
+                user.is_doctor_switched = False
+                user.save(update_fields=['role', 'is_doctor_switched'])
+
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                logger.warning("Logout failed: Refresh token not provided.")
+                return Response(
+                    {"message": "Refresh token is required."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # Blacklist the refresh token
+
+            logger.info(f"User {user.email} logged out successfully and role reverted if switched.")
+            return Response(
+                {"message": "Logout successful."},
+                status=status.HTTP_200_OK,
+            )
+
+        except TokenError as e:
+            logger.error(f"Invalid token during logout: {str(e)}")
+            return Response(
+                {"message": "Invalid or expired token."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Unexpected error during logout: %s", str(e))
+            return Response(
+                {"message": f"An unexpected error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class ForgotPasswordView(APIView):
     """
-    API view for handling forgot password requests.
-    Generates an OTP and sends it to the user's registered email for verification.
+    API view for handling forgot password requests using SendGrid dynamic templates.
     """
 
     def generate_otp(self):
@@ -384,16 +461,25 @@ class ForgotPasswordView(APIView):
         logger.info(f"Generated OTP: {otp}")
         return otp
 
-    def send_otp_email(self, email, otp):
+    def send_otp_email(self, email, otp, name=None):
         """
         Send the OTP to the user's email using SendGrid.
         """
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject="Password Reset OTP",
-            plain_text_content=f"Your OTP for password reset is {otp}. It is valid for 10 minutes.",
-        )
+        logger.info(f"Sending OTP to {email} using dynamic template...")
+
+        # Prepare message
+        message = Mail()
+        message.from_email = 'no-reply@my-health.today'
+        message.template_id = 'd-57e53ebd7031463c95856cacfc09d52b'
+
+        # Personalization with dynamic data
+        personalization = Personalization()
+        personalization.add_to(To(email))
+        personalization.dynamic_template_data = {
+            "name": name or "User",  # fallback if name is None
+            "otp": otp,
+        }
+        message.add_personalization(personalization)
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
@@ -426,7 +512,8 @@ class ForgotPasswordView(APIView):
 
         # Generate and send OTP
         otp = self.generate_otp()
-        email_response = self.send_otp_email(email, otp)
+        email_response = self.send_otp_email(email, otp, name=user.first_name)
+
         if isinstance(email_response, str):
             logger.error(f"Failed to send OTP to {email}. Error: {email_response}")
             return Response(
@@ -459,25 +546,32 @@ class ChangePasswordView(APIView):
     """
     API view to handle password change with OTP verification.
     """
-
     permission_classes = [IsAuthenticated]
 
-    def send_otp_email(self, email, otp):
+    def send_otp_email(self, email, otp, name=None):
         """
-        Send OTP via SendGrid.
+        Send OTP via SendGrid using a dynamic email template.
         """
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject="Your OTP Code",
-            plain_text_content=f"Your OTP code is {otp}",
-        )
+        message = Mail()
+        message.from_email = 'no-reply@my-health.today'
+        message.template_id = 'd-6cda674d2e124575b8c8a45e88b3596b'
+        
+        personalization = Personalization()
+        personalization.add_to(To(email))
+        personalization.dynamic_template_data = {
+            "name": name or "User",
+            "otp": otp,
+            "purpose": "Change Password"  # Optional additional context for the email
+        }
+        message.add_personalization(personalization)
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
+            logger.info(f"Dynamic OTP email sent to {email}. Status: {response.status_code}")
             return response
         except Exception as e:
+            logger.error(f"Failed to send OTP email: {str(e)}")
             return str(e)
 
     def post(self, request, *args, **kwargs):
@@ -489,21 +583,21 @@ class ChangePasswordView(APIView):
             old_password = request.data.get("old_password")
             new_password = request.data.get("new_password")
 
-            # Validate password
+            # Validate required fields
             if not old_password or not new_password:
                 return Response(
                     {"message": "Old password and new password are required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Validate old password
+            # Validate current password
             if not user.check_password(old_password):
                 return Response(
                     {"message": "Old password is incorrect."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Validate password strength
+            # Enforce password complexity policies
             if len(new_password) < 8:
                 return Response({"message": "Password must be at least 8 characters long."}, status=status.HTTP_400_BAD_REQUEST)
             if not re.search(r'[A-Za-z]', new_password):
@@ -513,26 +607,28 @@ class ChangePasswordView(APIView):
             if not re.search(r'[@$!%*?&]', new_password):
                 return Response({"message": "Password must contain at least one special character."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Generate and store OTP
-            otp_code = str(random.randint(100000, 999999))  # Generate 6-digit OTP
-            user.otp = otp_code  # Store OTP in User model
-            user.otp_created_at = timezone.now()  # Save timestamp
-            user.temp_new_password = new_password  # Temporarily store new password
+            # Generate OTP and persist temporarily
+            otp_code = str(random.randint(100000, 999999))
+            user.otp = otp_code
+            user.otp_created_at = timezone.now()
+            user.temp_new_password = new_password
             user.save()
 
-            # Send OTP via email
-            send_result = self.send_otp_email(user.email, otp_code)
-            if isinstance(send_result, str):  # If email sending fails
+            # Dispatch dynamic template OTP
+            send_result = self.send_otp_email(user.email, otp_code, name=user.first_name)
+            if isinstance(send_result, str):
                 return Response({"message": "Failed to send OTP. Try again later."}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
+            logger.exception("Error processing change password request: %s", str(e))
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
+            
+            
     def put(self, request, *args, **kwargs):
         """
         User enters OTP, If valid, update the password immediately.
@@ -700,22 +796,25 @@ class ResendOTPView(APIView):
 
     def send_otp_email(self, email, otp):
         """
-        Send the OTP to the user's email using SendGrid.
+        Send OTP using a dynamic SendGrid template.
         """
         message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
+            from_email='no-reply@my-health.today',
             to_emails=email,
-            subject="Password Reset OTP - Resend",
-            plain_text_content=f"Your new OTP for password reset is {otp}. It is valid for 10 minutes.",
         )
+        message.template_id = 'd-7c64dfda916a4a2b801af519ccee57c7'
+        message.dynamic_template_data = {
+            "otp": otp,
+            "support_email": "support@example.com",  # optional placeholder
+        }
 
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
             return response
         except Exception as e:
-            logger.error(f"Failed to send OTP email to {email}: {str(e)}")
-            return None  # Return None instead of error details for security reasons
+            logger.error(f"SendGrid Error: {str(e)}")
+            return str(e)
 
     def post(self, request, *args, **kwargs):
         """
@@ -873,50 +972,92 @@ class GoogleLoginView(APIView):
 
 class AppleLoginView(APIView):
     """
-    API view for Apple-based authentication.
-    Handles login or registration using an Apple ID token.
+    API endpoint for handling Sign in with Apple via POST /auth/apple/
     """
 
     def post(self, request):
-        """
-        Handles POST requests for Apple login.
-        """
-        logger.info("Received Apple login request.")
-        strategy = load_strategy(request)  # Load the social authentication strategy
-        token = request.data.get("token")  # Get the Apple ID token from the request
-
-        if not token:
-            logger.warning("Token is missing in the request.")
-            return Response(
-                {"error": "Token is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        code = request.data.get('code')
+        if not code:
+            return Response({"error": "Authorization code is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Use the Apple ID backend to authenticate the user
-            backend = AppleIdAuth(strategy=strategy)
-            user = backend.do_auth(token)
+            # Step 1: Generate client secret
+            client_secret = self._generate_client_secret()
 
-            if user:
-                logger.info("Apple authentication successful for user: %s", user.email)
-                # Generate tokens for the authenticated user
-                jwt_token = get_tokens_for_user(user)
-                return Response(
-                    {"message": "Login successful", "token": jwt_token},
-                    status=status.HTTP_200_OK,
-                )
+            # Step 2: Exchange code for tokens
+            token_response = self._exchange_code_for_token(code, client_secret)
+            id_token = token_response.get('id_token')
 
-            # Return error if authentication fails
-            logger.warning("Apple authentication failed.")
-            return Response(
-                {"error": "Authentication failed"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            if not id_token:
+                return Response({"error": "No ID token received from Apple."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Step 3: Decode and verify ID token
+            user_info = self._decode_id_token(id_token)
+
+            # Step 4: Create or authenticate user
+            user = self._get_or_create_user(user_info)
+
+            # Step 5: Generate DRF auth token
+            token, _ = Token.objects.get_or_create(user=user)
+
+            return Response({"token": token.key}, status=status.HTTP_200_OK)
+
         except Exception as e:
-            logger.exception("Unexpected error during Apple login: %s", str(e))
-            return Response(
-                {"error": "An error occurred. Please try again later."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _generate_client_secret(self):
+        headers = {
+            "kid": settings.APPLE_KEY_ID,
+            "alg": "ES256"
+        }
+        payload = {
+            "iss": settings.APPLE_TEAM_ID,
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 86400 * 180,
+            "aud": "https://appleid.apple.com",
+            "sub": settings.APPLE_CLIENT_ID
+        }
+
+        client_secret = jwt.encode(
+            payload,
+            settings.APPLE_PRIVATE_KEY,
+            algorithm="ES256",
+            headers=headers
+        )
+        return client_secret
+
+    def _exchange_code_for_token(self, code, client_secret):
+        data = {
+            "client_id": settings.APPLE_CLIENT_ID,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": settings.APPLE_REDIRECT_URI,
+        }
+
+        response = requests.post("https://appleid.apple.com/auth/token", data=data)
+        if response.status_code != 200:
+            raise Exception(f"Apple token endpoint error: {response.content}")
+        return response.json()
+
+    def _decode_id_token(self, id_token):
+        decoded = jwt.decode(id_token, options={"verify_signature": False})
+        return decoded
+
+    def _get_or_create_user(self, user_info):
+        sub = user_info.get("sub")
+        email = user_info.get("email")
+
+        if not sub:
+            raise Exception("Apple user ID (sub) missing.")
+
+        user, created = User.objects.get_or_create(apple_sub=sub, defaults={
+            "email": email if email else f"{sub}@appleid.apple.com",
+            "username": email if email else f"user_{sub[:8]}",
+            "is_active": True
+        })
+
+        return user
 
 class UpdateUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -924,35 +1065,87 @@ class UpdateUserProfileAPIView(APIView):
 
     def patch(self, request):
         try:
-            
-            logger.info(
-                "Received request to update user profile for user: %s", request.user.email
-            )
+            logger.info(f"User profile update initiated by: {request.user.email}")
+
             serializer = UserProfileUpdateSerializer(
-                instance=request.user, data=request.data, partial=True
+                instance=request.user,
+                data=request.data,
+                partial=True
             )
 
             if serializer.is_valid():
                 serializer.save()
-                logger.info("User profile updated successfully: %s", request.user.email)
-                return Response(
-                    {"message": "Profile updated successfully.", "data": serializer.data},
-                    status=status.HTTP_200_OK,
-                )
+                user = request.user
+                doctor = getattr(user, "doctor", None)
 
-            logger.warning(
-                "Profile update failed for user: %s, errors: %s",
-                request.user.email,
-                serializer.errors,
-            )
+                # Load default serialized data
+                response_data = serializer.data
+
+                # Clinic handling logic
+                if request.data.get("clinic") == "other":
+                    response_data["work_place"] = "other"
+
+                    clinic_name = request.data.get("clinic_name")
+                    clinic_location = request.data.get("clinic_location")
+                    clinic_website = request.data.get("clinic_website")
+
+                    # Inject clinic info directly into response
+                    response_data["clinic_name"] = clinic_name
+                    response_data["clinic_location"] = clinic_location
+                    response_data["clinic_website"] = clinic_website
+
+                    # Save to DB if applicable
+                    if doctor and clinic_name and clinic_location:
+                        OtherClinic.objects.update_or_create(
+                            doctor=doctor,
+                            clinic_name=clinic_name,
+                            defaults={
+                                "address": clinic_location,
+                                "website": clinic_website
+                            }
+                        )
+
+                        # Optional: Notify via email
+                        try:
+                            html_content = f"""
+                            <strong>Doctor:</strong> {user.get_full_name()}<br>
+                            <strong>Email:</strong> {user.email}<br>
+                            <strong>Clinic Name:</strong> {clinic_name}<br>
+                            <strong>Location:</strong> {clinic_location}<br>
+                            <strong>Website:</strong> {clinic_website or 'N/A'}
+                            """
+                            message = Mail(
+                                from_email='no-reply@my-health.today',
+                                to_emails='new-clinic@my-health.today',
+                                subject='New Other Clinic Added',
+                                html_content=html_content
+                            )
+                            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                            sg.send(message)
+                        except Exception as email_err:
+                            logger.warning(f"SendGrid failed: {email_err}")
+
+                else:
+                    # Ensure work_place is returned as ID and no extra clinic fields are present
+                    response_data["other_clinic"] = None
+                    response_data.pop("clinic_name", None)
+                    response_data.pop("clinic_location", None)
+                    response_data.pop("clinic_website", None)
+
+                return Response({
+                    "message": "Profile updated successfully.",
+                    "data": response_data
+                }, status=status.HTTP_200_OK)
+
+            logger.warning(f"Validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
+        except Exception as ex:
+            logger.exception("Critical failure in UpdateUserProfileAPIView.")
+            return Response(
+                {"message": f"Unexpected server error: {str(ex)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class DeleteProfilePictureAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1004,94 +1197,50 @@ class GetUserProfileAPIView(APIView):
             role = user.role
 
             if not role:
-                logger.warning(
-                    "User role is not assigned for user: %s", request.user.email
-                )
-                return Response(
-                    {"message": "User role is not assigned."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({"message": "User role is not assigned."}, status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = UserProfileSerializer(user, context={"request": request})
+            serializer = UserProfileSerializer(user)
             data = serializer.data
 
             if role == "Doctor":
-                logger.info("Returning doctor profile for user: %s", request.user.email)
+                logger.info("Returning doctor profile.")
 
-                clinic = Clinic.objects.filter(user=user).first()
-                clinic_data = ClinicInfoSerializer(clinic).data if clinic else {}
+                clinic = user.work_place
+                if clinic is None:
+                    try:
+                        doctor = user.doctor
+                        other_clinic = OtherClinic.objects.get(doctor=doctor)
+                        data["other_clinic"] = OtherClinicSerializer(other_clinic).data
+                    except (Doctor.DoesNotExist, OtherClinic.DoesNotExist):
+                        data["other_clinic"] = {}
+                    data["clinic_data"] = {}
+                else:
+                    data["clinic_data"] = ClinicInfoSerializer(clinic).data
+                    data["other_clinic"] = {}
 
-                data["clinic_data"] = clinic_data
+                return Response({
+                    "message": "Doctor profile.",
+                    "data": data,
+                }, status=status.HTTP_200_OK)
 
-                return Response(
-                    {"message": "Doctor profile.", "data": data},
-                    status=status.HTTP_200_OK,
-                )
             elif role == "Patient":
-                logger.info("Returning patient profile for user: %s", request.user.email)
-                return Response(
-                    {"message": "Patient profile.", "data": data},
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                logger.error("Invalid role assigned to user: %s", request.user.email)
-                return Response(
-                    {"message": "Invalid role assigned to user."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({
+                    "message": "Patient profile.",
+                    "data": data
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "message": "Invalid role assigned to user."
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         except AuthenticationFailed as e:
-            logger.warning("Authentication failed: %s", str(e))
             return Response({"message": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
         except Exception as e:
-            logger.exception("Unexpected error fetching user profile: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            logger.exception("Error fetching user profile: %s", str(e))
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ShowPatientEmailPhoneAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def put(self, request):
-        try:
-            user = request.user
-
-            # Ensure the user is a patient
-            if user.role != "Patient":
-                return Response(
-                    {"message": "Only patients can update visibility preferences."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-            # Get the patient's profile
-            try:
-                patient = user.patient_profile  # related_name="patient_profile"
-            except Patient.DoesNotExist:
-                return Response(
-                    {"message": "Patient profile not found."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-            # Deserialize and update preferences
-            serializer = ShowPatientEmailPhoneSerializer(patient, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(
-                    {"message": "Preferences updated successfully.", "data": serializer.data},
-                    status=status.HTTP_200_OK,
-                )
-
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            logger.exception("Error updating patient preferences: %s", str(e))
-            return Response(
-                {"message": f"An unexpected error occurred: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
 
 class UserDeviceTokenAPIView(APIView):
     permission_classes = [IsAuthenticated]

@@ -13,11 +13,17 @@ from .views import(
     DeleteUser,
     DoctorWithdrawAPIView,
     VerifyDocumentAPIView,
+    ReviewReportAPIView,
+    ApproveSpecialization,
+    MergeSpecialization,
+    NewSpecializationAPIView,
+    AdminWithdrawalRequestAPIView,
+    ExportDataAPIView,
 )
 
 urlpatterns = [
     # Define your URL patterns here, for example:
-    path("total-count/", TotalPatientAndDoctorsView.as_view(), name="signup"),
+    path("total-count/", TotalPatientAndDoctorsView.as_view(), name="total-count"),
     # path("total-patient/", Patient_Record.as_view(), name="taker_get"),
     # path("patient-post/", Patient_Record.as_view(), name="taker_get"),
     # path("patient-put/<int:pk>/",Patient_Record.as_view(), name="taker_get"),
@@ -56,4 +62,14 @@ urlpatterns = [
     path("get-accounts/", DoctorWithdrawAPIView.as_view(), name='get-accounts'),
     path("approv-reject-payment/", DoctorWithdrawAPIView.as_view(), name="approv-reject-payment"),
     path("verify-document/", VerifyDocumentAPIView.as_view(), name="verify-document"),
+    path("get-report/", ReviewReportAPIView.as_view(), name="get-report"),
+    path("review-report/", ReviewReportAPIView.as_view(), name="review-report"),
+    # add new specialization by admin
+    path('specialization/', NewSpecializationAPIView.as_view(), name='specialization'),
+    # approve specialization added by doctor from admin side
+    path('approve-specialization/', ApproveSpecialization.as_view(), name="approve-specialization"),
+    path('merge-specialization/', MergeSpecialization.as_view(), name="merge-specialization"),
+    # withdrawal request 
+    path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
+    path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
 ]

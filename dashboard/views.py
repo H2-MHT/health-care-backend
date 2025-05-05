@@ -9,12 +9,12 @@ from reviews.models import Review
 from users.models import User
 from patients.models import Patient
 from datetime import timedelta
-from appointments.models import Appointment
+from doctors.models import BookedAppointment
 from django.utils import timezone
 from rest_framework import status
 from users.models import Notes
 from users.serializers import NotesSerializer
-
+from datetime import datetime
 # Create your views here.
 
 class DashboardAPIView(APIView):
@@ -22,17 +22,23 @@ class DashboardAPIView(APIView):
 
     def get(self, request):
         try:
-            # Ensure only doctors can access this view
             if request.user.role != "Doctor":
                 return Response({"error": "Access restricted to doctors only."}, status=403)
 
-            # Get the doctor associated with the current authenticated user
             try:
                 doctor = Doctor.objects.get(user=request.user)
             except Doctor.DoesNotExist:
                 return Response({"error": "Doctor profile not found."}, status=404)
-
-            # Reviews Data
+            
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Invalid date format. Expected DD-MM-YYYY."}, status=400)
+            # Reviews
             total_reviews = Review.objects.filter(doctor=doctor).count()
             reviews = Review.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user")[:10]
             reviews_data = [
@@ -48,86 +54,93 @@ class DashboardAPIView(APIView):
                 for review in reviews
             ]
 
-            # Appointments Data
-            appointments = Appointment.objects.filter(doctor=doctor).select_related("patient__user", "doctor__user", "clinic")[:10]
-            appointments_data = [
-                {
-                    "appointment_id": appointment.id,
-                    "doctor_id": appointment.doctor.id,
-                    "patient_id": appointment.patient.id,
-                    "patient_name": f"{appointment.patient.user.first_name} {appointment.patient.user.last_name}",
-                    "doctor_name": f"{appointment.doctor.user.first_name} {appointment.doctor.user.last_name}",
-                    "clinic": appointment.clinic.user.first_name if appointment.clinic and appointment.clinic.user else "N/A",
-                    "date_time": appointment.date_time.isoformat(),
-                    "status": appointment.status,
-                }
-                for appointment in appointments
-            ]
-
-            # Upcoming Requests (Future Appointments)
-            upcoming_requests = Appointment.objects.filter(
-                doctor=doctor,
-                date_time__gte=timezone.now()  # Future appointments
-            ).select_related("patient__user", "doctor__user", "clinic")[:10]
-
-            upcoming_requests_data = [
-                {
-                    "appointment_id": appt.id,
-                    "doctor_id": appt.doctor.id,
-                    "patient_name": f"{appt.patient.user.first_name} {appt.patient.user.last_name}",
-                    "doctor_name": f"{appt.doctor.user.first_name} {appt.doctor.user.last_name}",
-                    "clinic": appt.clinic.user.first_name if appt.clinic and appt.clinic.user else "N/A",
-                    "date_time": appt.date_time.isoformat(),
-                    "status": appt.status,
-                }
-                for appt in upcoming_requests
-            ]
-
-            # Archived and Confirmed Appointments
-            archived_appointments = Appointment.objects.filter(doctor=doctor, status="Archived").values(
-                "patient__user__first_name",
-                "patient__user__last_name",
-                "doctor__user__first_name",
-                "doctor__user__last_name",
-                "clinic__user__first_name",
-                "date_time",
-                "status"
-            )
-
-            confirmed_appointments = Appointment.objects.filter(doctor=doctor, status="Confirmed").values(
-                "patient__user__first_name",
-                "patient__user__last_name",
-                "doctor__user__first_name",
-                "doctor__user__last_name",
-                "clinic__user__first_name",
-                "date_time",
-                "status"
-            )
-
-            def format_appointment_data(appointments):
-                return [
+            # Appointments
+            appointments = BookedAppointment.objects.filter(doctor=request.user.id, date__gte=converted_start_date, date__lte=converted_end_date).order_by("date")[:10]
+            appointment_data = []
+            for appointment in appointments:
+                doc = User.objects.filter(pk=appointment.doctor).first()
+                pat = User.objects.filter(pk=appointment.patient).first()
+                appointment_data.append(
                     {
-                        "patient_name": f"{appt['patient__user__first_name']} {appt['patient__user__last_name']}",
-                        "doctor_name": f"{appt['doctor__user__first_name']} {appt['doctor__user__last_name']}",
-                        "clinic": appt["clinic__user__first_name"],
-                        "date": appt["date_time"].isoformat(),
-                        "status": appt["status"],
+                        "appointment_id": appointment.id,
+                        "doctor_id": doc.id if doc else None,
+                        "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                        "patient_id": pat.id if pat else None,
+                        "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                        "date": appointment.date,
+                        "slot": appointment.slot,
+                        "status": appointment.status,
                     }
-                    for appt in appointments
-                ]
+                )
 
-            archived_data = format_appointment_data(archived_appointments)
-            confirmed_data = format_appointment_data(confirmed_appointments)
+            # Upcoming Requests
+            upcoming_requests = BookedAppointment.objects.filter(
+                doctor=request.user.id,
+                date__gte=timezone.now().date(),
+            ).exclude(status__in=["Completed", "Cancelled"]).order_by("date")[:10]
+            upcoming_requests_data = []
+            for appt in upcoming_requests:
+                doc = User.objects.filter(pk=appt.doctor).first()
+                pat = User.objects.filter(pk=appt.patient).first()
+                upcoming_requests_data.append(
+                    {
+                        "appointment_id": appt.id,
+                        "doctor_id": doc.id if doc else None,
+                        "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                        "patient_id": pat.id if pat else None,
+                        "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                        "date": appt.date,
+                        "slot": appt.slot,
+                        "status": appt.status,
+                    }
+                )
+
+            # Archived Appointments
+            archived_appointments = BookedAppointment.objects.filter(
+                doctor=request.user.id, status="Cancelled",
+                date__gte=converted_start_date, date__lte=converted_end_date
+            ).order_by("date")
+            archived_data = []
+            for appt in archived_appointments:
+                pat = User.objects.filter(pk=appt.patient).first()
+                doc = User.objects.filter(pk=appt.doctor).first()
+                archived_data.append({
+                    "appointment_id": appt.id,
+                    "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                    "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                    "date": appt.date.isoformat() if appt.date else None,
+                    "slot": appt.slot,
+                    "status": appt.status,
+                })
+
+            # Confirmed Appointments
+            confirmed_appointments = BookedAppointment.objects.filter(
+                doctor=request.user.id, status="Confirmed",
+                date__gte=converted_start_date, date__lte=converted_end_date
+            ).order_by("date")
+                
+            confirmed_data = []
+            for appt in confirmed_appointments:
+                pat = User.objects.filter(pk=appt.patient).first()
+                doc = User.objects.filter(pk=appt.doctor).first()
+                confirmed_data.append({
+                    "appointment_id": appt.id,
+                    "patient_name": f"{pat.first_name} {pat.last_name}" if pat else "Unknown",
+                    "doctor_name": f"{doc.first_name} {doc.last_name}" if doc else "Unknown",
+                    "date": appt.date.isoformat() if appt.date else None,
+                    "slot": appt.slot,
+                    "status": appt.status,
+                })
+
+
 
             # Doctor Notes
             doctor_notes = Notes.objects.filter(user=request.user, user__role="Doctor").order_by('-created_at')
-            doctor_notes_serializer = NotesSerializer(doctor_notes, many=True)
-            doctor_notes_data = doctor_notes_serializer.data
-                
-            # Diagnoses Data
-            diagnoses = DashboardMedicalHistory.objects.filter(
-                patient__in=Patient.objects.filter(appointment__doctor=doctor)).select_related("patient__user")[:5]
+            doctor_notes_data = NotesSerializer(doctor_notes, many=True).data
 
+            # Patient Diagnoses
+            patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
+            diagnoses = DashboardMedicalHistory.objects.filter(patient__in=patients).select_related("patient__user")[:5]
             diagnoses_data = [
                 {
                     "doctor_name": f"Dr. {doctor.user.first_name} {doctor.user.last_name}",
@@ -139,39 +152,37 @@ class DashboardAPIView(APIView):
                 for history in diagnoses
             ]
 
-
-            # Last Reports for Patients
-            patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
+            # Last Report for Patients
             last_reports_data = []
             for patient in patients:
                 last_diagnosis = DashboardMedicalHistory.objects.filter(patient=patient).order_by("-diagnosis_date").first()
                 last_reports_data.append(
                     {
                         "patient_name": f"{patient.user.first_name} {patient.user.last_name}",
-                        # "condition": last_diagnosis.condition if last_diagnosis else "No Diagnosis",
                         "diagnosis_date": last_diagnosis.diagnosis_date.strftime("%d-%m-%Y") if last_diagnosis and last_diagnosis.diagnosis_date else None,
                         "time": f"{last_diagnosis.diagnosis_date.strftime('%H:%M')} - {last_diagnosis.diagnosis_date.strftime('%H:%M')}" if last_diagnosis and last_diagnosis.diagnosis_date else None,
                         "notes": last_diagnosis.notes if last_diagnosis else "No Notes",
-                        "status": last_diagnosis.status if last_diagnosis and hasattr(last_diagnosis, "status") else "Unknown",
+                        "status": getattr(last_diagnosis, "status", "Unknown"),
                     }
                 )
 
-            # Statistics
-            total_consultations = Appointment.objects.filter(doctor=doctor).count()
-            total_clients = patients.count()
+            # Stats
+            total_consultations = BookedAppointment.objects.filter(doctor=request.user.id).count()
+            patient_ids = BookedAppointment.objects.filter(doctor=request.user.id).values_list('patient', flat=True).distinct()
+            total_clients = patient_ids.count()
             returns_percentage = round((total_clients / total_consultations) * 100 if total_consultations else 0, 2)
 
             # Final Response
             data = {
-                "doctor_id":doctor.id,
+                "doctor_id": doctor.id,
                 "total_reviews": total_reviews,
                 "reviews": reviews_data,
-                "appointments": appointments_data,
+                "appointments": appointment_data,
+                "confirmed_data": confirmed_data,
                 "upcoming_requests": upcoming_requests_data,
+                "archived_data": archived_data,
                 "doctor_notes": doctor_notes_data,
                 "patient_diagnoses": diagnoses_data,
-                "archived_data": archived_data,
-                "confirmed_data": confirmed_data,
                 "last_report": last_reports_data,
                 "total_consultations": total_consultations,
                 "total_clients": total_clients,
@@ -179,6 +190,6 @@ class DashboardAPIView(APIView):
             }
 
             return Response(data, status=status.HTTP_200_OK)
+
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+            return Response({"error": str(e)}, status=400)

@@ -1,16 +1,19 @@
 from rest_framework import serializers
-from .models import Review, Reply
+from .models import Review, Reply, Report
 from patients.models import Patient
+from doctors.models import BookedAppointment, Doctor
 
 from appointments.models import Appointment
 
 class ReviewSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
     reviewer_profile_picture = serializers.SerializerMethodField()
+    doctor = serializers.SerializerMethodField()
+    patient_id = serializers.PrimaryKeyRelatedField(source='patient', queryset=Patient.objects.all(), required=False)
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'reviewer_profile_picture', 'doctor', 'rating', 'title', 'content', 'recommend', 'created_at']
+        fields = ['id', 'reviewer_name', 'doctor', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
 
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
@@ -19,23 +22,16 @@ class ReviewSerializer(serializers.ModelSerializer):
         if obj.patient and obj.patient.user and hasattr(obj.patient.user, 'profile_picture'):
             return obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
         return None
-    def validate(self, data):
-        request = self.context.get('request')
-        user = request.user
+    
+    def get_doctor(self, obj):
+        doctor = {}
+        if obj.doctor:
+            doctor['dcotor_id'] =  obj.doctor.user.id
+            doctor['name'] = obj.doctor.user.get_full_name()
+            doctor['profile_picture'] =  obj.patient.user.profile_picture.url if obj.patient.user.profile_picture else None
+        return doctor
+        
 
-        # Ensure the user is a patient
-        if not hasattr(user, 'patient_profile'):
-            raise serializers.ValidationError("Only patients can create reviews.")
-
-        patient = user.patient_profile
-        doctor = data.get('doctor')
-
-        # Ensure the doctor is assigned to the patient via an active appointment
-        if not Appointment.objects.filter(patient=patient, doctor=doctor, status__in=["Pending", "Confirmed", "Completed"]).exists():
-            raise serializers.ValidationError(
-                {"doctor": "This doctor is not assigned to the logged-in patient through an appointment."}
-            )
-        return data
 
 class ReviewUpdateSerializer(serializers.ModelSerializer):
     reviewer_name = serializers.SerializerMethodField()
@@ -91,3 +87,18 @@ class ReplySerializer(serializers.ModelSerializer):
         if hasattr(obj.user, 'patient') and obj.user.patient.user:
             return obj.user.patient.user.first_name
         return None
+
+class ReportSerializer(serializers.ModelSerializer):
+    review_id = serializers.ReadOnlyField(source="review.id")
+    reported_by = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Report
+        fields = ["id", "review_id", "content", "reported_by", "reason", "status", "created_at"]
+
+    def get_reported_by(self, obj):
+        return obj.reported_by.get_full_name()
+    
+    def get_content(self, obj):
+        return obj.review.content
