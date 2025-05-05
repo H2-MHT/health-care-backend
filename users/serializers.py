@@ -5,6 +5,7 @@ from django.core.files.base import ContentFile
 from django.utils.timesince import timesince
 from .models import Education, Media, Skill, User, Notes, DeviceAccess
 from doctors.models import ConsultationSessionAndFee
+import pycountry
 class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
@@ -82,11 +83,12 @@ class UserSerializer(serializers.ModelSerializer):
     planned_hourly_rate = serializers.CharField(source="doctor.planned_hourly_rate", read_only=True)
     urgent_hourly_rate = serializers.CharField(source="doctor.urgent_hourly_rate", read_only=True)
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+    country_code = serializers.SerializerMethodField()
     class Meta:
         model = User
         fields = [
             "id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
-            "bio", "country", "city", "residence", "role", "speciality", "rating",
+            "bio", "country", "country_code", "city", "residence", "role", "speciality", "rating",
             "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years"
         ]
 
@@ -103,6 +105,15 @@ class UserSerializer(serializers.ModelSerializer):
         if consultation and consultation.urgent_fees and consultation.urgent_session_length:
             return round((consultation.urgent_fees / consultation.urgent_session_length) * 60, 2)
         return None
+    
+    def get_country_code(self, obj):
+        try:
+            return pycountry.countries.get(name=obj.country).alpha_2
+        except AttributeError:
+            for country in pycountry.countries:
+                if country.name.lower() == obj.country.lower():
+                    return country.alpha_2
+            return None 
 
 
 class NotesSerializer(serializers.ModelSerializer):
