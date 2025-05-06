@@ -41,3 +41,15 @@ def translate_prescription_content(context: dict, lang_code: str) -> dict:
                 context[field] = f"Translation failed: {str(e)}"
     return context
 
+
+def translate_reschedule_message(patient_name, doctor_name, old_date, old_slot, new_date, new_slot, lang_code):
+    try:
+        message = (
+            f"Dear {patient_name}, your appointment with Dr. {doctor_name} has been rescheduled "
+            f"from {old_date} at {old_slot} to {new_date} at {new_slot}."
+        )
+        if lang_code and lang_code.lower() != 'en':
+            return GoogleTranslator(source='auto', target=lang_code).translate(message)
+        return message
+    except Exception as e:
+        return f"Translation failed: {str(e)}"
