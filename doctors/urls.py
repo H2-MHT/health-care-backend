@@ -41,7 +41,8 @@ from .views import (
     PatientsAssociatedToDoctorAPIView,
     DoctorWalletAPIView,
     DoctorInfoAPIView,
-    AddSpecializationAPIView
+    AddSpecializationAPIView,
+    UpdateRescheduleStatusAPIView,
     )
 
 
@@ -82,6 +83,7 @@ urlpatterns = [
     # path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
     
     path("appointment/reschedule/", RescheduleAppointmentAPIView.as_view(), name="reschedule-appointment"),
+    path("update-reschedule-status/", UpdateRescheduleStatusAPIView.as_view(), name="update-reschedule-status"),
     path("appointment/cancel/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),

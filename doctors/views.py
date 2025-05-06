@@ -78,8 +78,11 @@ from sendgrid.helpers.mail import Mail
 from django.utils import timezone
 from django.db.models import F
 from decimal import Decimal
+from users.models import AppLanguage
 import uuid
 import re
+from utils.prescription_translation import translate_reschedule_message
+from deep_translator import GoogleTranslator
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -1110,7 +1113,7 @@ class RescheduleAppointmentAPIView(APIView):
             new_date = request.data.get("date")  # Ensure date format matches
 
             if not appointment_id or not new_slot or not new_date:
-                return Response({"error": "Missing required fields."}, status=400)
+                return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
             date_obj = datetime.strptime(new_date, "%d-%m-%Y").date()
 
@@ -1119,17 +1122,17 @@ class RescheduleAppointmentAPIView(APIView):
             ).first()
 
             if not appointment:
-                return Response({"error": "Appointment not found."}, status=404)
+                return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if appointment.status in ["Cancelled", "Completed"]:
-                return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=400)
+                return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=status.HTTP_400_BAD_REQUEST)
 
             is_booked = BookedAppointment.objects.filter(
                 doctor=appointment.doctor, slot=new_slot, date=date_obj
             ).exists()
 
             if is_booked:
-                return Response({"error": "Selected slot is already booked"}, status=400)
+                return Response({"error": "Selected slot is already booked"}, status=status.HTTP_400_BAD_REQUEST)
 
             patient = User.objects.get(id=appointment.patient)
             patient_name = patient.get_full_name()
@@ -1144,16 +1147,31 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.rescheduled_by = request.user
             appointment.save()
 
+
+            app_language = AppLanguage.objects.filter(user=patient).first()
+            patient_language = app_language.code if app_language and app_language.code else "en"
+
+
             # Send WhatsApp Notifications
-            appointment_reschedule_notification_patient(
-                to=request.user.phone_number,
-                old_date=old_date,
-                old_slot=old_slot,
-                new_date=new_date,
-                new_slot=new_slot,
-                doctor_name=doctor_name,
-                patient_name=patient_name
+            translated_message = translate_reschedule_message(
+                old_date,
+                old_slot,
+                new_date,
+                new_slot,
+                doctor_name,
+                patient_name,
+                patient_language
             )
+
+            appointment_reschedule_notification_patient(
+            old_date,
+            old_slot,
+            new_date,
+            new_slot,
+            doctor_name,
+            patient_name,
+            translated_message
+        )
 
             appointment_reschedule_notification_doctor(
                 to=doctor.phone_number,
@@ -1178,10 +1196,86 @@ class RescheduleAppointmentAPIView(APIView):
                     "status": "Rescheduled",
                     "rescheduled_by": request.user.role
                 }
-            }, status=200)
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class UpdateRescheduleStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        try:
+            data = request.data
+            appointment_id = data.get("appointment_id")
+            reply = data.get("reply")
+
+            if not appointment_id or not reply:
+                return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if reply not in ["1", "2"]:
+                app_language = AppLanguage.objects.filter(user_id=request.user.id).first()
+                lang_code = app_language.code if app_language and app_language.code else "en"
+                
+                message = "Invalid reply. Please send 1 to confirm or 2 to cancel."
+
+
+                if lang_code != 'en':
+                    try:
+                        message = GoogleTranslator(source='auto', target=lang_code).translate(message)
+                    except Exception:
+                        pass
+
+                return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment = BookedAppointment.objects.filter(id=appointment_id).first()
+            if not appointment:
+                return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if appointment.status != "Rescheduled":
+                return Response({"error": "Only rescheduled appointments can be updated."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.user.id != appointment.patient:
+                return Response({"error": "Only patient can update reschedule status."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if reply == "1":
+                appointment.status = "Confirmed by patient"
+            elif reply == "2":
+                appointment.status = "Cancelled by patient"
+
+            appointment.save()
+
+            return Response({
+                "message": f"Appointment {appointment.status.lower()} successfully.",
+                "status": appointment.status
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+    def send_reschedule_reminders():
+        twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+
+        pending_appointments = BookedAppointment.objects.filter(
+            status='Rescheduled',
+            updated_at__lte=twenty_four_hours_ago
+        )
+
+        for appointment in pending_appointments:
+            patient = User.objects.get(id=appointment.patient)
+            app_lang = AppLanguage.objects.filter(user=patient).first()
+            lang_code = app_lang.code if app_lang else 'en'
+
+            reminder_text = "Reminder: Please respond to your rescheduled appointment. Send 1 to confirm, 2 to cancel."
+            if lang_code != 'en':
+                reminder_text = GoogleTranslator(source='auto', target=lang_code).translate(reminder_text)
+
+            appointment_reschedule_notification_patient(
+                message=reminder_text
+            )
+
+
 
 
 # Cancel Appointment API

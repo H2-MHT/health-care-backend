@@ -126,4 +126,25 @@ def appointment_reschedule_notification_doctor(to, old_date, old_slot, new_date,
     except Exception as e:
         return {"success": False, "error": str(e)}
     
-    
+
+def appointment_reschedule_notification_patient(to, old_date, old_slot, new_date, new_slot, doctor_name, patient_name):
+    """
+    Sends a WhatsApp message to the patient when an appointment is rescheduled,
+    with instructions to confirm or cancel.
+    """
+    try:
+        message_body = f"Hello {patient_name},\n\n" \
+            f"Your appointment with Dr. {doctor_name} has been rescheduled.\n" \
+            f"Old: {old_date} at {old_slot}\n" \
+            f"New: {new_date} at {new_slot}\n\n" \
+            f"Please reply:\n1 to Confirm\n2 to Cancel"
+
+        msg = client.messages.create(
+            from_=TWILIO_WHATSAPP_NUMBER,
+            to=f"whatsapp:{to}",
+            body=message_body
+        )
+        return {"success": True, "message_id": msg.sid}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
