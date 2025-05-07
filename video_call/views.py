@@ -15,7 +15,17 @@ from django.conf import settings
 import firebase_admin
 from firebase_admin import credentials, messaging
 from agora_token_builder import RtcTokenBuilder
-from .models import Agoratoken
+from .models import (
+            Agoratoken, 
+            Recording, 
+            BookedAppointment, 
+            Doctor, 
+            Patient,
+            MeetingRoom
+)
+from django.core.files.base import ContentFile
+from django.db.models import Q
+import uuid
 
 # Agora credentials
 APP_ID = settings.APP_ID
@@ -390,10 +400,10 @@ def start_agora_recording(channel_name, resource_id, recorder_token):
             
             "storageConfig": {
                 "accessKey": AZURE_ACCOUNT_NAME,
-                "region": 0,
                 "bucket": AZURE_CONTAINER,
                 "secretKey": AZURE_ACCOUNT_KEY,
-                "vendor": 4,
+                "vendor": 5,
+                "region": 0,
                 "fileNamePrefix": ["recordings"]
             }
         }
@@ -454,13 +464,208 @@ class StopRecordingAPIView(APIView):
         channel_name = request.data.get("channel_name")
         resource_id = request.data.get("resource_id")
         sid = request.data.get("sid")
+        senderID =request.data.get('senderID')
+        receiverID = request.data.get('receiverID')
 
         if not channel_name or not resource_id or not sid:
             return JsonResponse({"error": "Missing required fields"}, status=400)
+        
+        try: 
+            sender = User.objects.get(pk=senderID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Sender not found"}, status=404)
+        
+        try: 
+            receiver = User.objects.get(pk=receiverID)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Receiver not found"}, status=404)
 
         try:
             response = stop_agora_recording(channel_name, resource_id, sid)
+            recording_file = response['serverResponse']['fileList']
+            recording = Recording(sender=sender, receiver=receiver, title="Consultation Recording")
+            recording.video_file = recording_file
+            recording.save()
+
             return JsonResponse({"message": "Recording stopped successfully", "data": response})
 
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
+
+class RecordingListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+       try:
+            user = request.user
+            recordings = Recording.objects.filter(Q(sender=user) | Q(receiver=user))
+            
+            data = [
+                {
+                    "id": recording.id,
+                    "name": request.user.get_full_name(),
+                    "title": recording.title,
+                    "file_url": recording.video_file.url if recording.video_file else "",
+                    "created_at": recording.created_at,
+                }
+                for recording in recordings
+            ]
+            return JsonResponse(
+                {
+                    "message": "Recording list retrieved successfully",
+                    "recording": data
+                },
+                status=200
+            )
+       except Exception as e:
+           return JsonResponse({"error": str(e)}, status=500)
+
+class CreateMeetingLink(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            data = request.data
+            appointment_id = data.get('appointment_id')
+            doctor_user_id = data.get('doctor_user_id')
+            patient_user_id = data.get('patient_user_id')
+            
+            if not appointment_id or not doctor_user_id or not patient_user_id:
+                return JsonResponse({'message': 'missing required fields'}, status=400)
+            
+            try:
+                user1 = User.objects.get(pk=doctor_user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'meesage': "Doctor not found"}, status=400)
+            
+            try:
+                user2 = User.objects.get(pk=patient_user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'meesage': "Patient not found"}, status=400)
+            
+            try:
+                appointment = BookedAppointment.objects.get(pk=appointment_id)
+            except BookedAppointment.DoesNotExist:
+                return JsonResponse({'meesage': "Appointment not found"}, status=400)
+            
+            doctor = Doctor.objects.filter(user=user1).first()   
+            if not doctor:
+                return JsonResponse({'message': "User is not a doctor"}, status=400)
+            
+            patient = Patient.objects.filter(user=user2).first()   
+            if not patient:
+                return JsonResponse({'meesage': "User is not a patient"}, status=400)
+            
+            bookedAppointemnt = MeetingRoom.objects.filter(appointment=appointment).exists()        
+            if bookedAppointemnt:
+                return JsonResponse({'message':'This appointment already has a meeting link.'}, status=400)
+            
+            def sanitized_email(email):
+                    return email.replace("@", "_").replace(".", "_")
+                
+            unique_id = uuid.uuid4().hex[:10]
+            channel_name = f"meeting_{unique_id}"   
+              
+            base_url = request.build_absolute_uri('/')[:-1]
+            meeting_link = f"meeting?channel={channel_name}"
+            
+            MeetingRoom.objects.create(
+                doctor=doctor,
+                patient=patient,
+                appointment=appointment,
+                link=meeting_link,
+                channel_name=channel_name,
+                status="Pending"
+            ) 
+            return JsonResponse({'message': 'Meeting link generated successfully'}, status=200)
+        
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+        
+    def patch(self, request):
+        try:
+            appointment_id = request.data.get('appointment_id')
+            try:
+                appointment = BookedAppointment.objects.get(pk=appointment_id)
+            except BookedAppointment.DoesNotExist:
+                return JsonResponse({'meesage': "Appointment not found"}, status=400)
+            try:
+                meeting = MeetingRoom.objects.get(appointment=appointment)
+            except MeetingRoom.DoesNotExist:
+                return JsonResponse({'meesage': "Meeting room not found"}, status=400)
+            
+            meeting.status = 'Expired'
+            meeting.save()
+
+            return JsonResponse({'message': "link status updated to expired successfully"}, status=200)
+        
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+        
+class GenerateMeetingToken(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            data = request.data
+            uid = data.get('uid')
+            appointment_id = data.get('appointment_id')
+            EXPIRE_TIME_IN_SECONDS = 60 * 60 * 2
+            
+            if not uid:
+                return JsonResponse({'message': 'uid is required'}, status=400)
+            
+            if not appointment_id:
+                return JsonResponse({'meessage':'appointment id is required'}, status=400)
+            
+            try:
+                user = User.objects.get(pk=uid) 
+            except User.DoesNotExist:
+                return JsonResponse({'message': 'user not found'}, status=400)
+      
+            try:
+                appointment = BookedAppointment.objects.get(pk=appointment_id) 
+            except BookedAppointment.DoesNotExist:
+                return JsonResponse({'message': 'appointment not found'}, status=400)
+            
+            current_user = request.user
+            if current_user.id != appointment.doctor and current_user.id != appointment.patient:
+                return JsonResponse({'message': 'You are not part of this appointment'}, status=403)
+            
+            if current_user.id == appointment.doctor:
+                remote_user_id = appointment.patient
+            else:
+                remote_user_id = appointment.doctor
+
+            try:
+                remote_user = User.objects.get(pk=remote_user_id)
+            except User.DoesNotExist:
+                return JsonResponse({'message': 'Remote user not found'}, status=400)
+            
+            try:
+                meeting = MeetingRoom.objects.get(appointment=appointment) 
+            except MeetingRoom.DoesNotExist:
+                return JsonResponse({'message': 'link was not generated'}, status=400)
+            
+            if meeting.status == 'Expired':
+                return JsonResponse({'message': 'Link was expired'}, status=400)
+            
+            channel_name = meeting.channel_name
+            expire_timestamp = int(time.time()) + EXPIRE_TIME_IN_SECONDS
+            
+            meetingToken = RtcTokenBuilder.buildTokenWithUid(
+                APP_ID, APP_CERTIFICATE, channel_name, int(current_user.id), 1, expire_timestamp)
+            
+            return JsonResponse(
+                {   
+                    "mesage": "Token generated successfully",
+                    "current_user_id": current_user.id,
+                    "currentUserName": current_user.get_full_name(),
+                    "remote_user_id": remote_user.id,
+                    "remoteUserName": remote_user.get_full_name(),
+                    "channel_name": channel_name,
+                    "token": meetingToken,
+                    "app_id": APP_ID
+                }
+                )
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)         
+            

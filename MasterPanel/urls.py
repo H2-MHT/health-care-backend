@@ -17,6 +17,8 @@ from .views import(
     ApproveSpecialization,
     MergeSpecialization,
     NewSpecializationAPIView,
+    AdminWithdrawalRequestAPIView,
+    ExportDataAPIView,
 )
 
 urlpatterns = [
@@ -66,6 +68,8 @@ urlpatterns = [
     path('specialization/', NewSpecializationAPIView.as_view(), name='specialization'),
     # approve specialization added by doctor from admin side
     path('approve-specialization/', ApproveSpecialization.as_view(), name="approve-specialization"),
-    path('merge-specialization/', MergeSpecialization.as_view(), name="merge-specialization")
-    
+    path('merge-specialization/', MergeSpecialization.as_view(), name="merge-specialization"),
+    # withdrawal request 
+    path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
+    path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
 ]

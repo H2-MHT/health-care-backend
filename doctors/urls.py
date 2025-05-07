@@ -40,6 +40,9 @@ from .views import (
     ClinicsAssociatedToDoctorsAPIView,
     PatientsAssociatedToDoctorAPIView,
     DoctorWalletAPIView,
+    DoctorInfoAPIView,
+    AddSpecializationAPIView,
+    UpdateRescheduleStatusAPIView,
     )
 
 
@@ -49,6 +52,8 @@ urlpatterns = [
     path('doctor-detail/', PublicDoctorDetailAPIView.as_view(), name='doctor-detail'),
     path("delete-appointment/", DeleteAppointmentAPIView.as_view(), name="appointment"),
     path('appointment-list/', CompletedAppointmentListView.as_view(), name='appoitment-list'),
+    path('doctor-info/', DoctorInfoAPIView.as_view(), name="doctor-info"),
+    path('add-specialization/', AddSpecializationAPIView.as_view(), name="add-specialization"),
 
     
     # referral and invitation 
@@ -78,6 +83,7 @@ urlpatterns = [
     # path("my-appointments/", MyAppointmentsAPIView.as_view(), name="my_appointments"),
     
     path("appointment/reschedule/", RescheduleAppointmentAPIView.as_view(), name="reschedule-appointment"),
+    path("update-reschedule-status/", UpdateRescheduleStatusAPIView.as_view(), name="update-reschedule-status"),
     path("appointment/cancel/", CancelAppointmentAPIView.as_view(), name="cancel-appointment"),
     path("appointment/reminders/", AppointmentReminderAPIView.as_view(), name="appointment-reminders"),
     path("appointment/payment-confirmation/", PaymentConfirmationAPIView.as_view(), name="payment-confirmation"),

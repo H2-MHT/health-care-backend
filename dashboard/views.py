@@ -77,7 +77,7 @@ class DashboardAPIView(APIView):
             upcoming_requests = BookedAppointment.objects.filter(
                 doctor=request.user.id,
                 date__gte=timezone.now().date(),
-            ).exclude(status="Completed").order_by("date")[:10]
+            ).exclude(status__in=["Completed", "Cancelled"]).order_by("date")[:10]
             upcoming_requests_data = []
             for appt in upcoming_requests:
                 doc = User.objects.filter(pk=appt.doctor).first()

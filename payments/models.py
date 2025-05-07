@@ -2,7 +2,6 @@ from django.db import models
 from users.models import User
 # Create your models here.
 
-
 class Payment(models.Model):
     appointment = models.OneToOneField(
         "appointments.Appointment", on_delete=models.CASCADE
@@ -27,6 +26,7 @@ class AccountDetail(models.Model):
     confirm_account_number = models.CharField(max_length=30)
     full_name = models.CharField(max_length=100)
     ifsc_code = models.CharField(max_length=20)
+    stripe_account_id = models.CharField(max_length=100, null=True, blank=True)
 
 
     def __str__(self):
@@ -41,6 +41,8 @@ class Transaction(models.Model):
     account = models.ForeignKey(AccountDetail, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_type = models.CharField(max_length=50, choices=[("Deposit", "Deposit"), ("Withdrawal", "Withdrawal")])
+    stripe_payment_link = models.URLField(null=True, blank=True)
+    stripe_payment_link_id = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=20, choices=[("pending", "Pending"), ("success", "Success"), ("failed", "Failed")], default="Pending", null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     rejection_reason = models.TextField(null=True, blank=True)
@@ -49,3 +51,5 @@ class Transaction(models.Model):
     class Meta:
         verbose_name = 'Transection'
         verbose_name_plural = 'Transections'
+        
+        
