@@ -389,6 +389,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://20.77.64.229',
     'http://h2.doctor',
     'https://h2.doctor',
+    'https://stage.h2.doctor',
+    'http://stage.h2.doctor'
     
 ]
 
@@ -407,6 +409,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://20.77.64.229',
     'http://h2.doctor',
     'https://h2.doctor',
+    'https://stage.h2.doctor',
+    'http://stage.h2.doctor'
 ]
 
 
