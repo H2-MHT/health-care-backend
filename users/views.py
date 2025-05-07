@@ -70,6 +70,7 @@ class EducationAPIView(APIView):
                 del data['media']
 
             serializer = EducationSerializer(data=data, context={'request': request})
+            print(serializer, "-------------------------e   ")
 
             if serializer.is_valid():
                 serializer.save(user=request.user)
