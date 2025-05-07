@@ -34,4 +34,5 @@ urlpatterns = [
     # generate meeting token
     path('generate-meeting-token/', GenerateMeetingToken.as_view(), name="generate-meeting-token")
         
+        
 ]
