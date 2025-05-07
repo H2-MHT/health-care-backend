@@ -14,4 +14,5 @@ urlpatterns = [
     path('prescription-list/', PrescriptionListView.as_view(), name='prescription-list'),
     path("consultation-report/", ConsultationReportAPIView.as_view(), name="consultation-report"),
     path("update-consultation-report/", ConsultationReportAPIView.as_view(), name="update-consultation-report"),
+    
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
