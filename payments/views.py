@@ -1,16 +1,33 @@
 # Create your views here.
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 import stripe
 from django.conf import settings
 from .models import Payment, User
+from doctors.models import DoctorWallet
 from appointments.models import Appointment
 from rest_framework.permissions import IsAuthenticated
 from doctors.models import Doctor
 from .serializers import AccountDetailSerializer, TransactionSerializer
 from .models import AccountDetail, Transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import os
+import uuid
+from datetime import datetime
+import random 
+import string
+from weasyprint import HTML
+from django.template.loader import render_to_string
+from django.http import HttpResponse 
+from io import BytesIO
+from django.core.files.base import ContentFile
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileType, FileName, Disposition
+import base64
+from utils.prescription_translation import translate_invoice
+from users.models import AppLanguage
 
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -231,10 +248,107 @@ class AddAccountDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+
+def generate_invoice_pdf(template_path: str, context: dict, request) -> tuple:
+    html_string = render_to_string(template_path, context)
+    pdf_file = BytesIO()
+
+    HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(pdf_file)
+
+    folder_path = os.path.join(settings.MEDIA_ROOT, 'invoices')
+    os.makedirs(folder_path, exist_ok=True)
+
+    filename = f"invoice_{context['reference']}.pdf"
+    file_path = os.path.join(folder_path, filename)
+
+    with open(file_path, 'wb') as f:
+        f.write(pdf_file.getvalue())
+
+    media_url = f"{settings.MEDIA_URL}invoices/{filename}"
+    return pdf_file.getvalue(), media_url
+
+def generate_invoice(request, withdrawal, reference):
+    context = {
+        'reference': reference,
+        'doctor_id': str(withdrawal.account.user.id),
+        'doctor_name': withdrawal.account.user.get_full_name(),
+        'date': withdrawal.timestamp.strftime('%d-%b-%Y'),
+        'amount': str(withdrawal.amount),
+        'account_no': str(withdrawal.account.account_number),
+        'ifsc': withdrawal.account.ifsc_code,
+        'bank_name': withdrawal.account.bank_name,
+        'withdrawal': "Doctor Withdrawal Invoice",
+        'Reference_No': "Reference Number",
+        'Doctor_ID': "Doctor ID",
+        'Doctor_Name': "Doctor Name",
+        'Date_of_Request': "Date of Request",
+        'Amount': "Amount",
+        'bank': "Bank_Name",
+        'Account_No': "Account No",
+        'IFSC_Code': "IFSC Code",
+        'note': "Note: Processing may take up to 5 working days.",
+        'service': "Thank you for using our services."      
+    }
+    
+    try:
+        doctor = User.objects.get(id=int(context['doctor_id']))
+    except User.DoesNotExist:
+        pass
+    
+    try:
+        language = AppLanguage.objects.get(user=doctor)
+        lang_code = language.code
+    except AppLanguage.DoesNotExist:
+        lang_code = "en"
+    
+    context = translate_invoice(context, lang_code)
+    pdf_bytes, pdf_url = generate_invoice_pdf("invoice.html", context, request)
+    return pdf_bytes, pdf_url
+
+def generate_reference():
+    date_part = datetime.now().strftime("%Y%m%d")
+    random_part = ''.join(random.choices(string.digits, k=5))  
+    return f"HC-{date_part}-{random_part}"
+
+
+def send_invoice_email(transaction, recipient_email, request):
+    try:
+        invoice_bytes, invoice_url  = generate_invoice(request, transaction, transaction.reference)
+        encoded_invoice = base64.b64encode(invoice_bytes).decode()
+
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=recipient_email,
+            subject="Your Invoice",
+            plain_text_content="Please find the attached invoice."
+        )
+        
+        attachment = Attachment(
+            FileContent(encoded_invoice),
+            FileName(os.path.basename(invoice_url)),
+            FileType('application/pdf'),
+            Disposition('attachment')
+        )
+        message.attachment = attachment
+        
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+        finally:
+            if os.path.exists(invoice_url):
+                os.remove(invoice_url)
+
+    except Exception as e:
+        return str(e)
+    
+
 class WithdrawalAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         try:
             user_id = request.data.get('user_id')
             account_number = request.data.get('account_number')
@@ -263,37 +377,98 @@ class WithdrawalAPIView(APIView):
                 account_number=account_number.strip(), 
                 full_name__istartswith=full_name.strip()
             ).first()
-
+            
             if not account:
                 print(f"Account not found! Available accounts: {AccountDetail.objects.filter(user__id=user_id).values_list('account_number', 'full_name')}")
                 return Response(
                     {"error": "Account not found for the given doctor details."},
                     status=status.HTTP_404_NOT_FOUND
                 )
-
-            transaction = Transaction.objects.create(
+            # if not account.stripe_account_id:
+            #     return Response({"error": "Stripe account not found for the given doctor details."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = request.user
+            try:
+                wallet = DoctorWallet.objects.get(doctor=user)
+            except DoctorWallet.DoesNotExist:
+                return Response({"error": "Doctor wallet not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            walletAmount  = wallet.balance
+            
+            if amount > walletAmount:
+                return Response({"error": "Insufficient balance."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if amount <= 0:
+                return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        
+            try: 
+                # price = stripe.Price.create(
+                #     unit_amount=int(amount * 100),
+                #     currency=user.currency.lower(), 
+                #     product_data={
+                #         "name": f"Doctor Payment: {account.full_name}",
+                #     }
+                # )
+                # payment_intent_id = str(uuid.uuid4())
+                # payment_link = stripe.PaymentLink.create(
+                #     line_items=[{
+                #         "price": price.id,
+                #         "quantity": 1, 
+                #     }],
+                #     after_completion={
+                #         "type": "redirect",
+                #         "redirect": {
+                #             "url": "https://h2.doctor/superadmin/managepayment"
+                #         },
+                #     },
+                #     transfer_data={
+                #         "destination": account.stripe_account_id 
+                #     },
+                #     metadata={"payment_link_id": payment_intent_id}
+                # )
+    
+                wallet.balance -= amount
+                wallet.save()
+                
+                transaction = Transaction.objects.create(
                 account=account,
                 transaction_type="Withdrawal",
                 amount=amount,
-                status="pending"
-            )
-
-            transaction_serializer = TransactionSerializer(transaction)
-            return Response(
+                status="pending",
+                 # stripe_payment_link = payment_link.url,
+                # stripe_payment_link_id = payment_intent_id    
+                )
+                reference = generate_reference() 
+                invoice_bytes, invoice_url  = generate_invoice(request, transaction, reference)
+                transaction.reference = reference
+                transaction.invoice.save(
+                    f"invoice_{reference}.pdf",
+                    ContentFile(invoice_bytes)
+                )
+                transaction.save()
+                recepient_email = transaction.account.user.email
+                send_invoice_email(transaction, recepient_email, request)
+                
+                transaction_serializer = TransactionSerializer(transaction)
+                return Response(
                 {
                     "message": "Withdrawal request submitted successfully.",
-                    "data": transaction_serializer.data
+                    "data": transaction_serializer.data,
+                    "referal_no": reference,
+                    "invoice": transaction.invoice.url
                 },
-                status=status.HTTP_201_CREATED
-            )
-
+                status=status.HTTP_201_CREATED)
+    
+            except stripe.error.StripeError as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-    def get(self, request, *args, **kwargs):
+    def get(self, request):
         try:
             user_id = request.user.id
             
@@ -322,3 +497,116 @@ class WithdrawalAPIView(APIView):
                 {"error": f"An unexpected error occurred: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class StripeConnectAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        account_detail, _ = AccountDetail.objects.get_or_create(user=user)
+
+        if account_detail.stripe_account_id:
+            return Response({
+                "message": "Stripe account already exists",
+                "stripe_account_id": account_detail.stripe_account_id
+            }, status=status.HTTP_200_OK)
+
+
+        try:
+            capabilities = {
+            "transfers": {"requested": True}
+            }
+
+            if user.country.upper() == "US":
+                capabilities["card_payments"] = {"requested": True}
+                
+            account = stripe.Account.create(
+                type="express",
+                country=user.country,
+                email=user.email,
+                capabilities=capabilities
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        account_detail.stripe_account_id = account.id
+        account_detail.save()
+
+        try:
+            account_link = stripe.AccountLink.create(
+                account=account.id,
+                refresh_url="https://h2.doctor/dashboard",  
+                return_url=f"https://h2.doctor/dashboard",
+                type="account_onboarding"
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": "Stripe account created successfully",
+            "onboarding_url": account_link.url
+        }, status=status.HTTP_201_CREATED)
+        
+    def get(self, request):
+        user = request.user
+
+        try:
+            account_detail = AccountDetail.objects.get(user=user)
+
+            if not account_detail.stripe_account_id:
+                return Response({"error": "Stripe account not found."}, status=400)
+
+            login_link = stripe.Account.create_login_link(account_detail.stripe_account_id)
+
+            return Response({
+                "login_url": login_link.url
+            })
+
+        except AccountDetail.DoesNotExist:
+            return Response({"error": "Account details not found."}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+        
+@method_decorator(csrf_exempt, name='dispatch')
+class StripeWebhookView(APIView):
+    def post(self, request, *args, **kwargs):
+    
+        payload = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        except ValueError:
+            return Response({"error": "Invalid payload"}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.SignatureVerificationError:
+            return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
+     
+        if event["type"] == "payment_intent.succeeded":
+            payment_intent = event["data"]["object"]
+            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
+            
+            try:
+                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
+                transaction.status = "success"  
+                transaction.save()
+            except Transaction.DoesNotExist:
+                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        elif event["type"] == "payment_intent.payment_failed":
+            payment_intent = event["data"]["object"]
+            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
+
+            try:
+                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
+                transaction.status = "failed" 
+                transaction.save()
+            except Transaction.DoesNotExist:
+                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response(status=status.HTTP_200_OK)
+          

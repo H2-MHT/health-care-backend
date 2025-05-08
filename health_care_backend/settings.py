@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'notifications',
     'video_call',
     'django_celery_beat',
+    'NHS',
 ]
 
 REST_FRAMEWORK = {
@@ -388,6 +389,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://20.77.64.229',
     'http://h2.doctor',
     'https://h2.doctor',
+    'https://stage.h2.doctor',
+    'http://stage.h2.doctor'
     
 ]
 
@@ -406,6 +409,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://20.77.64.229',
     'http://h2.doctor',
     'https://h2.doctor',
+    'https://stage.h2.doctor',
+    'http://stage.h2.doctor'
 ]
 
 
@@ -428,3 +433,6 @@ APP_ID = os.getenv("APP_ID")
 APP_CERTIFICATE = os.getenv("APP_CERTIFICATE")
 
 OTP_EXPIRY_MINUTES = 15
+
+NHS_API_KEY = os.getenv("NHS_API_KEY")
+NHS_BASE_URL = os.getenv("NHS_BASE_URL")

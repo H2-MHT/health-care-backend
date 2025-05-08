@@ -170,6 +170,10 @@ class DoctorReviewsAPIView(generics.ListAPIView):
             doctor_id = request.user.doctor.id
             queryset = self.get_queryset(doctor_id)
 
+            search_query = request.query_params.get("search")
+            if search_query:
+                queryset = queryset.filter(title__istartswith=search_query)
+
             # Pagination Parameters
             if 'limit' not in request.query_params:
                 raise ValidationError({"error": "The 'limit' query parameter is required."})

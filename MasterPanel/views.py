@@ -4,13 +4,14 @@ from django.shortcuts import render, get_object_or_404
 
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from django.http import HttpResponse
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
 from doctors.models import Doctor
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
@@ -23,6 +24,28 @@ from reviews.models import Review, Report
 from reviews.serializers import ReportSerializer
 from doctors.models import Specialization
 from .serializers import SpecializationSerializer
+from django.conf import settings
+import stripe
+import os 
+from django.apps import apps
+import csv
+from io import StringIO, BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import landscape
+from reportlab.platypus import (
+    SimpleDocTemplate, 
+    Table, 
+    TableStyle, 
+    Paragraph, 
+    Spacer,
+)
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
@@ -703,4 +726,124 @@ class NewSpecializationAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
             
+class AdminWithdrawalRequestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            if request.user.role != 'SuperAdmin':
+                return Response({"error": "You are not authorized to perform this action"}, status=status.HTTP_403_FORBIDDEN)
             
+            transactions = Transaction.objects.filter(transaction_type="Withdrawal", status="pending").order_by('-timestamp')
+            withdrwal = []
+            
+            for transaction in transactions:
+                data = {
+                    "id": transaction.id,
+                    "name": transaction.account.full_name,
+                    "account_number": transaction.account.account_number,
+                    "amount": transaction.amount,
+                    "transaction_type": transaction.transaction_type,
+                    "payment link": transaction.stripe_payment_link ,
+                    "timestamp": transaction.timestamp
+                }
+                
+                withdrwal.append(data) 
+            return Response({'message': "Retrieved successfully", 'data': withdrwal}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+              
+class ExportDataAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        model_input = request.query_params.get('table_name')
+        export_format = request.query_params.get('file_type', 'csv')
+        user_type_filter = request.query_params.get('user_type')
+
+        if not model_input:
+            return HttpResponse({"error": "Model name is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            model = apps.get_model('users', model_input)
+        except LookupError:
+            return HttpResponse({"error": "Model not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        selected_fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "phone_number",
+            "city",
+            "country",
+            "residence",
+             "email",
+
+        ] 
+
+        if model_input == 'User' and user_type_filter:
+            data = User.objects.filter(role=user_type_filter).values(*selected_fields)
+
+        else:
+            data = User.objects.all().values(*selected_fields)
+
+        if export_format == 'csv':
+            return self.export_csv(data, selected_fields, model_input)
+        elif export_format == 'pdf':
+            return self.export_pdf(data, selected_fields, model_input, role=user_type_filter)
+        else:
+            return HttpResponse({"error": "Invalid format"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def export_csv(self, data, fields, model_name):
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(data)
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{model_name}.csv"'
+        return response
+    
+    def export_pdf(self, data, fields, model_name, role):
+        buffer = BytesIO()
+
+        # Create PDF document
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        elements = []
+
+        # Title
+        styles = getSampleStyleSheet()
+        title_text = f"{model_name.title()} {role} Data"
+        title = Paragraph(title_text, styles['Title'])
+        elements.append(title)
+        elements.append(Spacer(1, 20))  # Space after title
+
+        # Prepare table data: header + rows
+        table_data = [ [field.replace("_", " ").title() for field in fields] ]
+        for row in data:
+            table_data.append([str(row.get(field, "")) for field in fields])
+
+        # Create the table
+        table = Table(table_data, repeatRows=1)
+
+        # Apply table styling
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+
+        # Add table to document
+        elements.append(table)
+
+        # Build PDF
+        doc.build(elements)
+        buffer.seek(0)
+
+        # Return response
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{model_name}_data.pdf"'
+        return response

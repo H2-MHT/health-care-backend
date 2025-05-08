@@ -17,17 +17,27 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.http import HttpResponse
-from .models import Prescription
+from .models import (
+    Prescription,
+    ConsultationReport,
+)
 from rest_framework.permissions import IsAuthenticated
 from .serializers import PrescriptionSerializer
 from django.urls import reverse
 from django.core.files.base import ContentFile
-from doctors.models import BookedAppointment
+from doctors.models import (
+    BookedAppointment,
+    Doctor,
+)
+from patients.models import Patient
 from users.models import User
 from django.shortcuts import get_object_or_404
 import qrcode
 from io import BytesIO
 from django.template.loader import render_to_string
+from utils.prescription_translation import translate_prescription_content
+from users.models import AppLanguage
+from django.shortcuts import redirect
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -85,15 +95,20 @@ def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request)
             os.remove(temp_pdf_name)
 
 
+def prescription_pdf_redirect(request, uid):
+    user = get_object_or_404(User, uid=uid)
+    prescription = get_object_or_404(Prescription, appointment__patient=user.id)
+    return redirect(prescription.pdf_file.url)
+
 def send_prescription_email(request, prescription):
     try:
         doctor_user = User.objects.get(id=prescription.appointment.doctor)
         patient_user = User.objects.get(id=prescription.appointment.patient)
-        prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
-        qr_code_base64 = generate_qr_code_base64(prescription_url)
+        formatted_date = prescription.created_at.strftime("%d %B %Y")
+
         context = {
             'prescription_id': prescription.id,
-            'created_date': prescription.created_at,
+            'created_date': formatted_date,
             'doctor_name': doctor_user.get_full_name(),
             'doctor_email': doctor_user.email,
             'doctor_phone': doctor_user.phone_number,
@@ -103,10 +118,47 @@ def send_prescription_email(request, prescription):
             'patient_phone': patient_user.phone_number,
             'diagnosis': prescription.diagnosis,
             'medicines': prescription.medicines,
-            'qr_code_base64': qr_code_base64,
+            'additional_instruction': prescription.additional_instruction,
+            "prescription": "Prescription",
+            "diagnosis_title": "Diagnosis",
+            "quantity": "Quantity",
+            "time": "Time",
+            "medication": "Medication",
+            "times_day": "Times/day",
+            "duration": "Duration",
+            "notes_title": "Notes",
+            "signature": "Signature",
+            "assurance": "Assurance info",
+            "creating_date": "Date",
+            "due_date": "Due Date",
         }
 
+        try:
+            user_language_pref = AppLanguage.objects.get(user=patient_user)
+        except AppLanguage.DoesNotExist:
+            user_language_pref = AppLanguage(code='en')
+
+        if user_language_pref.code != 'en':
+            context = translate_prescription_content(context, user_language_pref.code)
+        
         template_path = 'prescription.html'
+        pdf_file, _ = generate_pdf(template_path, context, request)
+        prescription.pdf_file.save(f"prescription_{prescription.id}.pdf", ContentFile(pdf_file))
+        prescription.save()
+
+        prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
+        qr_code_base64 = generate_qr_code_base64(prescription_url)
+        context['qr_code_base64'] = qr_code_base64
+        
+        user = User.objects.get(id=prescription.appointment.patient)
+        short_url = request.build_absolute_uri(reverse("prescription_pdf", args=[user.uid]))
+        qr_code_base64 = generate_qr_code_base64(short_url)
+        context['qr_code_base64'] = qr_code_base64
+
+        final_pdf_file, _ = generate_pdf(template_path, context, request)
+        prescription.pdf_file.save(f"prescription_{prescription.id}_with_qr.pdf", ContentFile(final_pdf_file))
+        prescription.save()
+     
         send_pdf_via_sendgrid(template_path, context, patient_user.email, request)
 
         return {"status": "Email sent successfully via SendGrid!"}
@@ -131,11 +183,14 @@ class PrescriptionView(APIView):
 
             # Ensure the logged-in doctor matches the appointment doctor (IntegerField comparison)
             if appointment.doctor != request.user.id:
-                return Response({"error": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"message": "You are not authorized for this appointment."}, status=status.HTTP_403_FORBIDDEN)
+            
+            if appointment.status != "Completed":
+                return Response({'message': 'You can not create the prescription as appointment is not completed yet'}, status=status.HTTP_200_OK)
 
             # Prevent duplicate prescription
             if Prescription.objects.filter(appointment_id=appointment_id).exists():
-                return Response({"error": "Prescription already exists."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "Prescription already exists."}, status=status.HTTP_200_OK)
 
             doctor_user = request.user
             patient_user = User.objects.get(id=appointment.patient)
@@ -161,7 +216,7 @@ class PrescriptionView(APIView):
                 'patient_address': patient_user.city,
                 'patient_phone': patient_user.phone_number,
                 'diagnosis': prescription.diagnosis,
-                'medicines': prescription.medicines
+                'medicines': prescription.medicines,
             }
 
             # Generate PDF and attach to saved model (no QR in DB)
@@ -292,9 +347,10 @@ class PrescriptionListView(APIView):
                         'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
                         "email": patient_user.email if patient_user else "Unknown",
                     },
-                    'pdf_url': request.build_absolute_uri(
-                        reverse('prescription_template') + f"?appointment_id={appointment.id}"
-                    )
+                    'pdf_url': prescription.pdf_file.url
+                    # 'pdf_url': request.build_absolute_uri(
+                    #     reverse('prescription_template') + f"?appointment_id={appointment.id}"
+                    # )
                 })
 
             return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data},status=status.HTTP_200_OK)
@@ -346,4 +402,146 @@ class PrescriptionPDFView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ConsultationReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):        
+        appointment = request.data.get('appointment_id')
+        prescription = request.data.get('prescription')
+        short_description = request.data.get('short_description')
+        translated_text = request.data.get('translated_text')
+        recommendation = request.data.get('recommendation')
+
+        if not appointment or not translated_text:
+            return Response({"error": "Appointment or translated text is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            appointment = BookedAppointment.objects.get(pk=appointment)
+        except BookedAppointment.DoesNotExist:
+            return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        
+        doctor = Doctor.objects.filter(user_id=appointment.doctor).first()
+        patient = Patient.objects.filter(user_id=appointment.patient).first()
+
+        if not doctor or not patient:
+            return Response({"error": "Doctor or patient not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.user.role == "Patient":
+            user = "patient_id"
+            user_id = request.user.patient_profile.id
+        elif request.user.role == "Doctor":
+            user = "doctor_id"
+            user_id = request.user.doctor.id
+            
+        Consultation = ConsultationReport.objects.create(
+            patient=patient,
+            doctor=doctor,
+            appointment=appointment,
+            short_description=short_description,
+            translated_text=translated_text,
+            prescription = prescription,
+            recommendation=recommendation
+        )
+        return Response(
+            { 
+              "message": "Consultation created successfully",
+              "data":{
+                  "id": Consultation.id,
+                   user: user_id,
+                  "appointment_id": Consultation.appointment.id,
+                  "translated_text": Consultation.translated_text,
+                  "created_at": Consultation.created_at
+              }
+            },
+              status=status.HTTP_200_OK)
+    
+
+    def get(self, request):
+        try:
+            appointment_id = request.query_params.get('appointment_id')
+            if not appointment_id:
+                return Response({"error": "Appointment id is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                 appointment = BookedAppointment.objects.get(id =appointment_id)
+            except BookedAppointment.DoesNotExist:
+                return Response({"error": "Invalid appointment id"}, status=status.HTTP_404_NOT_FOUND)
+            
+            prescription = Prescription.objects.filter(appointment=appointment).first()
+            prescription_data = PrescriptionSerializer(prescription).data if prescription else None
+            
+            patient = ""
+            doctor = ""
+            if request.user.role == "Patient":
+                patient = request.user.patient_profile
+                consultations = ConsultationReport.objects.filter(patient=patient, appointment=appointment)
+            elif request.user.role == "Doctor":
+                doctor = request.user.doctor
+                consultations = ConsultationReport.objects.filter(doctor=doctor, appointment=appointment)
+                        
+            data = [
+                {
+                    "id": consultation.id,
+                    "appointment_id": consultation.appointment.id,
+                    "prescription": prescription_data,
+                    "short_description": consultation.short_description,
+                    "translated_text": consultation.translated_text,
+                    "recommendation": consultation.recommendation,
+                    "created_at": consultation.created_at,
+                }
+                for consultation in consultations
+            ]
+            return Response(
+                {
+                    "message": "Consultation list retrieved successfully",
+                    "consultation": data
+                },
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        consultation_id = request.data.get('consultation_id')
+        if not consultation_id:
+            return Response({"error": "Consultation ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            consultation = ConsultationReport.objects.get(pk=consultation_id)
+        except ConsultationReport.DoesNotExist:
+            return Response({"error": "Consultation report not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        short_description = request.data.get('short_description')
+        translated_text = request.data.get('translated_text')
+        recommendation = request.data.get('recommendation')
+
+        if not translated_text and not recommendation and not short_description:
+            return Response({"error": "No fields provided for update."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if translated_text:
+            consultation.translated_text = translated_text
+
+        if recommendation:
+            consultation.recommendation = recommendation
+
+        if short_description:
+            consultation.short_description = short_description
+
+        consultation.save()
+        data=[
+            {
+                "short_description": consultation.short_description,
+                "recommendation": consultation.recommendation,
+                "translated_text": consultation.translated_text
+            }
+        ]
+        return Response(
+            {
+                "message": "Consultation report updated successfully.",
+                "data":data
+            },
+            status=status.HTTP_200_OK)
+
 

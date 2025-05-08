@@ -45,6 +45,7 @@ from .models import (
     DoctorWallet,
     Specialization,
 )
+from reviews.models import Review
 from notifications.models import Notification
 from .serializers import (
     AppointmentManagementSerializer,
@@ -77,8 +78,11 @@ from sendgrid.helpers.mail import Mail
 from django.utils import timezone
 from django.db.models import F
 from decimal import Decimal
+from users.models import AppLanguage
 import uuid
 import re
+from utils.prescription_translation import translate_reschedule_message
+from deep_translator import GoogleTranslator
 # Initialize logger
 logger = logging.getLogger(__name__)
 
@@ -928,7 +932,7 @@ class BookAppointmentAPIView(APIView):
                 return Response({'message': 'Appointment ID and status are required'}, status=status.HTTP_400_BAD_REQUEST)
 
             appointment_status = appointment_status.capitalize()
-            if appointment_status not in ['Confirmed', 'Cancelled']:
+            if appointment_status not in ['Confirmed', 'Cancelled', 'Completed']:
                 return Response({'message': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
@@ -1029,26 +1033,37 @@ class CompletedAppointmentListView(APIView):
                 return Response({"message": "only doctor can perform this action"}, status=status.HTTP_403_FORBIDDEN)
             
             appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
-            
+
             data = {
-            "message": "Appointment list retrieved successfully",
-            "data": [
-                {
+                "message": "Appointment list retrieved successfully",
+                "data": []
+            }
+
+            for appointment in appointments:
+                try:
+                    patient_user = User.objects.get(id=appointment.patient)
+                    patient_data = {
+                        "first_name": patient_user.first_name,
+                        "last_name": patient_user.last_name,
+                        "email": patient_user.email,
+                        "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
+                    }
+                except User.DoesNotExist:
+                    patient_data = {
+                        "first_name": None,
+                        "last_name": None,
+                        "email": None,
+                        "profile_picture": None,
+                    }
+
+                data["data"].append({
                     "appointment_id": appointment.id,
                     "appointment_type": appointment.appointment_type,
                     "date": appointment.date,
                     "status": appointment.status,
                     "slot": appointment.slot,
-                    "patient": {
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "email": user.email,
-                        "profile_picture": user.profile_picture.url if user.profile_picture else None,
-                    }
-                }
-                for appointment in appointments
-            ]}
-            
+                    "patient": patient_data
+                })
             return Response(data, status=200)
                 
         except Exception as e:
@@ -1098,7 +1113,7 @@ class RescheduleAppointmentAPIView(APIView):
             new_date = request.data.get("date")  # Ensure date format matches
 
             if not appointment_id or not new_slot or not new_date:
-                return Response({"error": "Missing required fields."}, status=400)
+                return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
             date_obj = datetime.strptime(new_date, "%d-%m-%Y").date()
 
@@ -1107,17 +1122,17 @@ class RescheduleAppointmentAPIView(APIView):
             ).first()
 
             if not appointment:
-                return Response({"error": "Appointment not found."}, status=404)
+                return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
 
             if appointment.status in ["Cancelled", "Completed"]:
-                return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=400)
+                return Response({"error": f"Cannot reschedule a {appointment.status.lower()} appointment."}, status=status.HTTP_400_BAD_REQUEST)
 
             is_booked = BookedAppointment.objects.filter(
                 doctor=appointment.doctor, slot=new_slot, date=date_obj
             ).exists()
 
             if is_booked:
-                return Response({"error": "Selected slot is already booked"}, status=400)
+                return Response({"error": "Selected slot is already booked"}, status=status.HTTP_400_BAD_REQUEST)
 
             patient = User.objects.get(id=appointment.patient)
             patient_name = patient.get_full_name()
@@ -1132,16 +1147,31 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.rescheduled_by = request.user
             appointment.save()
 
+
+            app_language = AppLanguage.objects.filter(user=patient).first()
+            patient_language = app_language.code if app_language and app_language.code else "en"
+
+
             # Send WhatsApp Notifications
-            appointment_reschedule_notification_patient(
-                to=request.user.phone_number,
-                old_date=old_date,
-                old_slot=old_slot,
-                new_date=new_date,
-                new_slot=new_slot,
-                doctor_name=doctor_name,
-                patient_name=patient_name
+            translated_message = translate_reschedule_message(
+                old_date,
+                old_slot,
+                new_date,
+                new_slot,
+                doctor_name,
+                patient_name,
+                patient_language
             )
+
+            appointment_reschedule_notification_patient(
+            old_date,
+            old_slot,
+            new_date,
+            new_slot,
+            doctor_name,
+            patient_name,
+            translated_message
+        )
 
             appointment_reschedule_notification_doctor(
                 to=doctor.phone_number,
@@ -1166,10 +1196,86 @@ class RescheduleAppointmentAPIView(APIView):
                     "status": "Rescheduled",
                     "rescheduled_by": request.user.role
                 }
-            }, status=200)
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class UpdateRescheduleStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        try:
+            data = request.data
+            appointment_id = data.get("appointment_id")
+            reply = data.get("reply")
+
+            if not appointment_id or not reply:
+                return Response({"error": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if reply not in ["1", "2"]:
+                app_language = AppLanguage.objects.filter(user_id=request.user.id).first()
+                lang_code = app_language.code if app_language and app_language.code else "en"
+                
+                message = "Invalid reply. Please send 1 to confirm or 2 to cancel."
+
+
+                if lang_code != 'en':
+                    try:
+                        message = GoogleTranslator(source='auto', target=lang_code).translate(message)
+                    except Exception:
+                        pass
+
+                return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+            appointment = BookedAppointment.objects.filter(id=appointment_id).first()
+            if not appointment:
+                return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if appointment.status != "Rescheduled":
+                return Response({"error": "Only rescheduled appointments can be updated."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.user.id != appointment.patient:
+                return Response({"error": "Only patient can update reschedule status."}, status=status.HTTP_400_BAD_REQUEST)
+
+            if reply == "1":
+                appointment.status = "Confirmed by patient"
+            elif reply == "2":
+                appointment.status = "Cancelled by patient"
+
+            appointment.save()
+
+            return Response({
+                "message": f"Appointment {appointment.status.lower()} successfully.",
+                "status": appointment.status
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+    def send_reschedule_reminders():
+        twenty_four_hours_ago = timezone.now() - timedelta(hours=24)
+
+        pending_appointments = BookedAppointment.objects.filter(
+            status='Rescheduled',
+            updated_at__lte=twenty_four_hours_ago
+        )
+
+        for appointment in pending_appointments:
+            patient = User.objects.get(id=appointment.patient)
+            app_lang = AppLanguage.objects.filter(user=patient).first()
+            lang_code = app_lang.code if app_lang else 'en'
+
+            reminder_text = "Reminder: Please respond to your rescheduled appointment. Send 1 to confirm, 2 to cancel."
+            if lang_code != 'en':
+                reminder_text = GoogleTranslator(source='auto', target=lang_code).translate(reminder_text)
+
+            appointment_reschedule_notification_patient(
+                message=reminder_text
+            )
+
+
 
 
 # Cancel Appointment API
@@ -2076,7 +2182,7 @@ class CommunicationPreferencesAPIView(APIView):
 
     def put(self, request, *args, **kwargs):
         try:
-            """Update the current user's communication preferences"""
+            """Update the current user communication preferences"""
             preferences, created = CommunicationPreferences.objects.get_or_create(
                 user=request.user
             )
@@ -2105,7 +2211,7 @@ def send_otp(user):
     user.save()
 
     sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
-    from_email = Email("akash.prajapati@techqware.com")  # Update with your sender email
+    from_email = Email("otp@my-health.today")  # sender email
     to_email = To(user.email)
     subject = "Your OTP for Password Change"
     content = Content("text/plain", f"Your OTP for password change is: {otp}")
@@ -2574,3 +2680,94 @@ def send_specialization_approval_email(specialization):
         sg.send(email)
     except Exception as e:
         print("Error sending approval email:", e)
+
+class DoctorInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            userID = request.query_params.get('doctor_user_id') 
+            if not userID:
+                return Response({'message':'doctor id is requeired'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:  
+                user = User.objects.get(pk=userID)
+            except User.DoesNotExist:
+                return Response({'message': 'Doctor does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try: 
+                doctor = Doctor.objects.get(user=user)
+            except Doctor.DoesNotExist:
+                return Response({'message': 'User is not a doctor'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            license_data = LicenceCertificate.objects.filter(user=user).first()
+            
+            if not license_data:
+                doctor_license_data = "not found"
+            else:
+                doctor_license_data = {
+                    "description": license_data.description,
+                    "attatchment": license_data.attachment.url,
+                    "status": license_data.status,
+                    "rejection_reason": license_data.rejection_reason
+                }
+                
+            media_data = MediaDigest.objects.filter(user_doctor=user).first()
+            
+            if not media_data:
+                media_digest = "not found"
+            else:
+                media_digest = {
+                    "title": media_data.title,
+                    "description": media_data.description,
+                    "attatchment": media_data.attachment_file.url,        
+                }
+            reviews = Review.objects.filter(doctor=doctor)
+            
+            if not reviews:
+                doctor_review = "review not found"
+            else:
+                doctor_review = [
+                    {
+                       "patient":{
+                           "id": review.patient.user.id,
+                           "name": review.patient.user.get_full_name()
+                       },
+                        "doctor":{
+                           "id": review.doctor.user.id,
+                           "name": review.doctor.user.get_full_name()
+                       },
+                        "title": review.title,
+                        "content": review.content,
+                        "rating": review.rating,
+                        "recommend": review.recommend
+                    }
+                    for review in reviews
+                ]
+                
+            data = {
+                "id": user.id,
+                "name": user.get_full_name(),
+                "email": user.email,
+                "contact": user.phone_number,
+                "city": user.city,
+                "country": user.country,
+                "expertise": user.expertise,
+                "professional_stat": user.professional_stat,
+                "profile": user.profile_picture.url,
+                "qualification": doctor.qualifications,
+                "speciality": doctor.specialty,
+                "experience_years": doctor.experience_years,
+                "license": doctor_license_data,
+                "media_digest": media_digest,
+                "reviews": doctor_review          
+            }
+            
+            return Response({
+                "message": "Retrieved successfully",
+                "data": data
+            })
+         
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+                

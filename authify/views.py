@@ -8,7 +8,6 @@ import sendgrid
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
-
 from django.conf import settings
 from django.utils.timezone import now
 from rest_framework import status
