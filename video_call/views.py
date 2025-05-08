@@ -36,7 +36,7 @@ AGORA_CUSTOMER_SECRET = "2b1d092a24b948219a11feea23ab0fcb"
 class FirebaseMessagingService:
     def __init__(self):
         try:
-            key_path = "serviceAccountKey1.json" 
+            key_path = "service.json" 
             if not os.path.exists(key_path):
                 raise FileNotFoundError("Firebase key file not found.")
 
