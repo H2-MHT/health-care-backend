@@ -1,5 +1,4 @@
 # Create your views here.
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -16,6 +15,19 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import os
 import uuid
+from datetime import datetime
+import random 
+import string
+from weasyprint import HTML
+from django.template.loader import render_to_string
+from django.http import HttpResponse 
+from io import BytesIO
+from django.core.files.base import ContentFile
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileType, FileName, Disposition
+import base64
+from utils.prescription_translation import translate_invoice
+from users.models import AppLanguage
 
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -236,6 +248,103 @@ class AddAccountDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+
+def generate_invoice_pdf(template_path: str, context: dict, request) -> tuple:
+    html_string = render_to_string(template_path, context)
+    pdf_file = BytesIO()
+
+    HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(pdf_file)
+
+    folder_path = os.path.join(settings.MEDIA_ROOT, 'invoices')
+    os.makedirs(folder_path, exist_ok=True)
+
+    filename = f"invoice_{context['reference']}.pdf"
+    file_path = os.path.join(folder_path, filename)
+
+    with open(file_path, 'wb') as f:
+        f.write(pdf_file.getvalue())
+
+    media_url = f"{settings.MEDIA_URL}invoices/{filename}"
+    return pdf_file.getvalue(), media_url
+
+def generate_invoice(request, withdrawal, reference):
+    context = {
+        'reference': reference,
+        'doctor_id': str(withdrawal.account.user.id),
+        'doctor_name': withdrawal.account.user.get_full_name(),
+        'date': withdrawal.timestamp.strftime('%d-%b-%Y'),
+        'amount': str(withdrawal.amount),
+        'account_no': str(withdrawal.account.account_number),
+        'ifsc': withdrawal.account.ifsc_code,
+        'bank_name': withdrawal.account.bank_name,
+        'withdrawal': "Doctor Withdrawal Invoice",
+        'Reference_No': "Reference Number",
+        'Doctor_ID': "Doctor ID",
+        'Doctor_Name': "Doctor Name",
+        'Date_of_Request': "Date of Request",
+        'Amount': "Amount",
+        'bank': "Bank_Name",
+        'Account_No': "Account No",
+        'IFSC_Code': "IFSC Code",
+        'note': "Note: Processing may take up to 5 working days.",
+        'service': "Thank you for using our services."      
+    }
+    
+    try:
+        doctor = User.objects.get(id=int(context['doctor_id']))
+    except User.DoesNotExist:
+        pass
+    
+    try:
+        language = AppLanguage.objects.get(user=doctor)
+        lang_code = language.code
+    except AppLanguage.DoesNotExist:
+        lang_code = "en"
+    
+    context = translate_invoice(context, lang_code)
+    pdf_bytes, pdf_url = generate_invoice_pdf("invoice.html", context, request)
+    return pdf_bytes, pdf_url
+
+def generate_reference():
+    date_part = datetime.now().strftime("%Y%m%d")
+    random_part = ''.join(random.choices(string.digits, k=5))  
+    return f"HC-{date_part}-{random_part}"
+
+
+def send_invoice_email(transaction, recipient_email, request):
+    try:
+        invoice_bytes, invoice_url  = generate_invoice(request, transaction, transaction.reference)
+        encoded_invoice = base64.b64encode(invoice_bytes).decode()
+
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=recipient_email,
+            subject="Your Invoice",
+            plain_text_content="Please find the attached invoice."
+        )
+        
+        attachment = Attachment(
+            FileContent(encoded_invoice),
+            FileName(os.path.basename(invoice_url)),
+            FileType('application/pdf'),
+            Disposition('attachment')
+        )
+        message.attachment = attachment
+        
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            response = sg.send(message)
+            return response
+        except Exception as e:
+            return str(e)
+        finally:
+            if os.path.exists(invoice_url):
+                os.remove(invoice_url)
+
+    except Exception as e:
+        return str(e)
+    
+
 class WithdrawalAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -275,8 +384,8 @@ class WithdrawalAPIView(APIView):
                     {"error": "Account not found for the given doctor details."},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            if not account.stripe_account_id:
-                return Response({"error": "Stripe account not found for the given doctor details."}, status=status.HTTP_400_BAD_REQUEST)
+            # if not account.stripe_account_id:
+            #     return Response({"error": "Stripe account not found for the given doctor details."}, status=status.HTTP_400_BAD_REQUEST)
             
             user = request.user
             try:
@@ -293,30 +402,30 @@ class WithdrawalAPIView(APIView):
                 return Response({"error": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
         
             try: 
-                price = stripe.Price.create(
-                    unit_amount=int(amount * 100),
-                    currency=user.currency.lower(), 
-                    product_data={
-                        "name": f"Doctor Payment: {account.full_name}",
-                    }
-                )
-                payment_intent_id = str(uuid.uuid4())
-                payment_link = stripe.PaymentLink.create(
-                    line_items=[{
-                        "price": price.id,
-                        "quantity": 1, 
-                    }],
-                    after_completion={
-                        "type": "redirect",
-                        "redirect": {
-                            "url": "https://h2.doctor/superadmin/managepayment"
-                        },
-                    },
-                    transfer_data={
-                        "destination": account.stripe_account_id 
-                    },
-                    metadata={"payment_link_id": payment_intent_id}
-                )
+                # price = stripe.Price.create(
+                #     unit_amount=int(amount * 100),
+                #     currency=user.currency.lower(), 
+                #     product_data={
+                #         "name": f"Doctor Payment: {account.full_name}",
+                #     }
+                # )
+                # payment_intent_id = str(uuid.uuid4())
+                # payment_link = stripe.PaymentLink.create(
+                #     line_items=[{
+                #         "price": price.id,
+                #         "quantity": 1, 
+                #     }],
+                #     after_completion={
+                #         "type": "redirect",
+                #         "redirect": {
+                #             "url": "https://h2.doctor/superadmin/managepayment"
+                #         },
+                #     },
+                #     transfer_data={
+                #         "destination": account.stripe_account_id 
+                #     },
+                #     metadata={"payment_link_id": payment_intent_id}
+                # )
     
                 wallet.balance -= amount
                 wallet.save()
@@ -326,15 +435,27 @@ class WithdrawalAPIView(APIView):
                 transaction_type="Withdrawal",
                 amount=amount,
                 status="pending",
-                stripe_payment_link = payment_link.url,
-                stripe_payment_link_id = payment_intent_id    
+                 # stripe_payment_link = payment_link.url,
+                # stripe_payment_link_id = payment_intent_id    
                 )
+                reference = generate_reference() 
+                invoice_bytes, invoice_url  = generate_invoice(request, transaction, reference)
+                transaction.reference = reference
+                transaction.invoice.save(
+                    f"invoice_{reference}.pdf",
+                    ContentFile(invoice_bytes)
+                )
+                transaction.save()
+                recepient_email = transaction.account.user.email
+                send_invoice_email(transaction, recepient_email, request)
                 
                 transaction_serializer = TransactionSerializer(transaction)
                 return Response(
                 {
                     "message": "Withdrawal request submitted successfully.",
-                    "data": transaction_serializer.data
+                    "data": transaction_serializer.data,
+                    "referal_no": reference,
+                    "invoice": transaction.invoice.url
                 },
                 status=status.HTTP_201_CREATED)
     

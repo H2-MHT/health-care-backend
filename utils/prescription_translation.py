@@ -53,3 +53,15 @@ def translate_reschedule_message(patient_name, doctor_name, old_date, old_slot, 
         return message
     except Exception as e:
         return f"Translation failed: {str(e)}"
+
+def translate_invoice(context, lang_code):
+    try:
+        if lang_code and lang_code.lower() != 'en':
+            for field in context:
+                if field != "bank_name":
+                   context[field] = GoogleTranslator(source='auto', target=lang_code).translate(context[field])
+                else:
+                    context[field] = context[field]
+        return context
+    except Exception as e:
+        return f"Translation failed: {str(e)}"
