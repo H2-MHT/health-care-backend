@@ -105,7 +105,7 @@ stages:
       workspace:
         clean: all
       environment:
-        name: 'staging' 
+        name: 'production' 
         resourceType: VirtualMachine
         resourceName: 'Healthcare-backend' 
       strategy:
