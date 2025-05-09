@@ -668,4 +668,44 @@ class GenerateMeetingToken(APIView):
                 )
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)         
+
+class UserInfoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            channel_name = request.query_params.get('channel_name')     
+            if not channel_name:
+                return JsonResponse({'message': 'channel name is required'}, status=400)
+            
+            meetings = MeetingRoom.objects.filter(channel_name=channel_name)
+            
+            if not meetings:
+                return JsonResponse({'message': 'meeting room not found'}, status=400)
+            
+            data = [
+                {
+                    "appointment_type": meeting.appointment.appointment_type,
+                    "status": meeting.appointment.status,
+                    "meeting_link": meeting.link,
+                    "date": meeting.appointment.date,
+                    "slot": meeting.appointment.slot,
+                    "created_at": meeting.appointment.created_at,
+                    "patient": {
+                        "id": meeting.patient.user.id,
+                        "name": meeting.patient.user.get_full_name(),
+                        "profile_picture": meeting.patient.user.profile_picture.url if meeting.patient.user.profile_picture else None
+                    },
+                    "doctor": {
+                        "id": meeting.doctor.user.id,
+                        "name": meeting.doctor.user.get_full_name(),
+                        "profile_picture": meeting.doctor.user.profile_picture.url if meeting.doctor.user.profile_picture else None
+                    }
+                    
+                }
+                for meeting in meetings
+            ]                
+            return JsonResponse({'message': 'Retrieved Successfully', 'data': data}, status=200)
+        
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
             
