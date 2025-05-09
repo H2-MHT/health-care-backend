@@ -19,11 +19,12 @@ from django.utils.timezone import now
 from utils.pagination import pagination_view,create_paginated_response
 from rest_framework.exceptions import ValidationError
 from doctors.serializers import DoctorSerializer
+import logging
 
 
 # Create your views here.
 
-
+logger = logging.getLogger(__name__)
 class ClinicAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -139,46 +140,39 @@ class ClinicRegisterAPIView(APIView):
             )
 
     def send_registration_email(self, clinic):
-        subject = f"Clinic Onboarding Team"
-        body = f"""
-                    Dear Admin/Team,
-
-                    A new Clinic has onboarded. Below are the details for your action:
-
-                    **Clinic Details:**
-                        - **Clinic ID:** {clinic.id}
-                        - **Clinic Name:** {clinic.public_name}
-                        - **Clinic Email:** {clinic.user.email if clinic.user else 'N/A'}
-                        - **Clinic Phone Number:** {clinic.contact_phone}
-                        - **Clinic Address:** {clinic.address}
-                        - **Clinic Country:** {clinic.user.country if clinic.user else 'N/A'}
-                        - **Clinic Website:** {clinic.website}
-                        - **Clinic Contact Email:** {clinic.contact_email}
-                        - **Clinic Working Time:** {clinic.optional_information}
-                        - **Clinic Administrator Name:** {clinic.administrator_name}
-                        - **Clinic Administrator Email:** {clinic.administrator_email}
-
-                    Best regards,  
-                    My Health Today Team
-                    """
-
-        message = Mail(
-            from_email="it@my-health.today",
-            to_emails="onboarding-clinic@my-health.today",
-            subject=subject,
-            plain_text_content=body.strip(),
-        )
+        logger.info(f"Sending clinic registration email for Clinic ID: {clinic.id}")
 
         try:
+            message = Mail(
+                from_email="it@my-health.today",
+                to_emails="onboarding-clinic@my-health.today",
+            )
+            message.template_id = 'd-adb77e048f6141aeb11e9334e90df836'
+            
+            # Dynamic Template Data for SendGrid
+            message.dynamic_template_data = {
+                "clinic_id": clinic.id,
+                "clinic_name": clinic.public_name if clinic.public_name else "N/A",
+                "clinic_email": clinic.user.email if clinic.user else "N/A",
+                "clinic_phone": clinic.contact_phone if clinic.contact_phone else "N/A",
+                "clinic_address": clinic.address if clinic.address else "N/A",
+                "clinic_country": clinic.user.country if clinic.user else "N/A",
+                "clinic_website": clinic.website if clinic.website else "N/A",
+                "clinic_contact_email": clinic.contact_email if clinic.contact_email else "N/A",
+                "clinic_working_time": clinic.optional_information if clinic.optional_information else "N/A",
+                "administrator_name": clinic.administrator_name if clinic.administrator_name else "N/A",
+                "administrator_email": clinic.administrator_email if clinic.administrator_email else "N/A",
+            }
+
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             response = sg.send(message)
-            print(f"Email sent! Status Code: {response.status_code}")
+            logger.info(f"Clinic registration email sent. Status Code: {response.status_code}")
 
             if response.status_code != 202:
-                print(f"SendGrid Error: {response.body}")
+                logger.error(f"SendGrid Error: {response.body}")
 
         except Exception as e:
-            print(f"Failed to send email: {str(e)}")
+            logger.error(f"Failed to send clinic registration email: {str(e)}")
 
 
 class ClinicInfoAPIView(APIView):
