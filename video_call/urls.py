@@ -9,7 +9,8 @@ from .views import (
     AgoraTokenView,
     RecordingListAPIView,
     CreateMeetingLink,
-    GenerateMeetingToken
+    GenerateMeetingToken,
+    UserInfoAPIView
     
 )
 
@@ -32,6 +33,8 @@ urlpatterns = [
     # Meeting link
     path('meeting-link/', CreateMeetingLink.as_view(), name='meeting-link'),
     # generate meeting token
-    path('generate-meeting-token/', GenerateMeetingToken.as_view(), name="generate-meeting-token")
+    path('generate-meeting-token/', GenerateMeetingToken.as_view(), name="generate-meeting-token"),
+    # user-info
+    path('user-info/', UserInfoAPIView.as_view(), name='user-info')
         
 ]
