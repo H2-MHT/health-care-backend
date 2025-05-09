@@ -7,7 +7,10 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
-from doctors.models import Doctor
+from doctors.models import (
+    Doctor,
+    BookedAppointment,
+)
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
@@ -42,7 +45,11 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-
+from datetime import date
+from utils.pagination import(
+    pagination_view,
+    create_paginated_response,
+)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -234,11 +241,31 @@ class DoctorBlockUnblockView(APIView):
 
 class UserListAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
-    def post(self, request):
-        role = request.data.get("role")
-        user = User.objects.filter(role=role, is_deleted=False)
-        serializer = PatientListSerializer(user, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    def get(self, request):
+        try:
+            role = request.data.get("role")
+            if not role:
+                return Response({"message": "Role is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if role.capitalize() == "Doctor":
+                doctors_data = Doctor.objects.filter(user__role=role, user__is_deleted=False)
+                doctors, headers = pagination_view(doctors_data, request)
+                
+            data = [
+                {
+                    "id": doctor.user.uid,
+                    "name": doctor.user.get_full_name(),
+                    "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
+                    "speciality": doctor.specialty,
+                    "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
+                    "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count()           
+                }
+                for doctor in doctors
+            ]
+            
+            return create_paginated_response(f"{role} list retrieved successfully.",data, headers)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DetailOfUser(APIView):
@@ -847,3 +874,34 @@ class ExportDataAPIView(APIView):
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{model_name}_data.pdf"'
         return response
+
+class DepartmentAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(self, request):
+        try:
+            data = []
+
+            all_specializations = Specialization.objects.all()
+            specializations, headers = pagination_view(all_specializations, request)
+            for spec in specializations:
+                doctors = Doctor.objects.filter(specialty=spec)
+
+                doctor_list = []
+                for doctor in doctors:
+                    doctor_list.append({
+                        'id': doctor.user.id,
+                        'name': doctor.user.get_full_name(),
+                        'profile_picture': doctor.user.profile_picture.url if doctor.user.profile_picture else None
+                    })
+
+                data.append({
+                    'total_doctors': len(doctors),
+                    'specialization': spec.name,
+                    'description': spec.description,
+                    'doctors': doctor_list
+                })
+            return create_paginated_response(f"Retrieved successfully.",data, headers)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+

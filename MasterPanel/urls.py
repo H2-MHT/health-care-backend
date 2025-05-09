@@ -19,6 +19,7 @@ from .views import(
     NewSpecializationAPIView,
     AdminWithdrawalRequestAPIView,
     ExportDataAPIView,
+    DepartmentAPIView,
 )
 
 urlpatterns = [
@@ -72,4 +73,6 @@ urlpatterns = [
     # withdrawal request 
     path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
     path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
+    # department
+    path('department/', DepartmentAPIView.as_view(), name='department')
 ]
