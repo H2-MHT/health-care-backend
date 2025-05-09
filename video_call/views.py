@@ -669,6 +669,7 @@ class GenerateMeetingToken(APIView):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)         
 
+# Api for doctor-patient info using meeting link for specific appointment
 class UserInfoAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
