@@ -43,7 +43,6 @@ from .views import (
     DoctorInfoAPIView,
     AddSpecializationAPIView,
     UpdateRescheduleStatusAPIView,
-    DepartmentAPIView
     )
 
 
@@ -113,7 +112,5 @@ urlpatterns = [
     path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="all-patient-on-doctor"),
     path('get-wallet/', DoctorWalletAPIView.as_view(), name='get-wallet'),
     
-    # department
-    path('department/', DepartmentAPIView.as_view(), name='department')
 
 ]

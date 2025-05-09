@@ -2769,34 +2769,3 @@ class DoctorInfoAPIView(APIView):
          
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-            
-class DepartmentAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        try:
-            data = []
-
-            all_specializations = Specialization.objects.all()
-            specializations, headers = pagination_view(all_specializations, request)
-            for spec in specializations:
-                doctors = Doctor.objects.filter(specialty=spec)
-
-                doctor_list = []
-                for doctor in doctors:
-                    doctor_list.append({
-                        'id': doctor.user.id,
-                        'name': doctor.user.get_full_name(),
-                        'profile_picture': doctor.user.profile_picture.url if doctor.user.profile_picture else None
-                    })
-
-                data.append({
-                    'total_doctors': len(doctors),
-                    'specialization': spec.name,
-                    'description': spec.description,
-                    'doctors': doctor_list
-                })
-            return create_paginated_response(f"Retrieved successfully.",data, headers)
-
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
