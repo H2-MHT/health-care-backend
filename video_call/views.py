@@ -685,6 +685,7 @@ class UserInfoAPIView(APIView):
             
             data = [
                 {
+                    "id": meeting.appointment.id,
                     "appointment_type": meeting.appointment.appointment_type,
                     "status": meeting.appointment.status,
                     "meeting_link": meeting.link,
