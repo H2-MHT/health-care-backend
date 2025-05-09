@@ -2213,12 +2213,22 @@ def send_otp(user):
     sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
     from_email = Email("otp@my-health.today")  # sender email
     to_email = To(user.email)
-    subject = "Your OTP for Password Change"
-    content = Content("text/plain", f"Your OTP for password change is: {otp}")
-    mail = Mail(from_email, to_email, subject, content)
+    
+    # Using SendGrid Template ID
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        template_id="d-d3e8e77296024745a96cd85b2b32ec84"
+    )
+    
+    # Setting dynamic template data (variables)
+    message.dynamic_template_data = {
+        "otp": otp,
+        "user_name": user.get_full_name() if user.get_full_name() else user.email
+    }
 
     try:
-        response = sg.send(mail)
+        response = sg.send(message)
         logger.info(f"Email sent to {user.email} with status code {response.status_code}")
     except Exception as e:
         logger.error(f"Error sending email: {e}")
@@ -2497,33 +2507,33 @@ class RefundAppointmentPaymentAPIView(APIView):
   
   
 def send_refund_email(appointment, cancelled_by, refund_amount):
-    content = f"""
-    Hello,
-    
-    A refund has been processed.
-    
-    Details:
-    - Appointment ID: {appointment.id}
-    - Cancelled By: {cancelled_by.title()}
-    - Slot: {appointment.slot}
-    - Date: {appointment.date}
-    - refund: {refund_amount}
-
-    Regards,
-    My Health System
-    """
-    message = Mail(
-        from_email=settings.SENDGRID_FROM_EMAIL,
-        to_emails='refund@my-health.today',
-        subject='Refund Processed Notification',
-        plain_text_content=content
-    )
+    logger.info(f"Sending refund email for Appointment ID: {appointment.id}")
 
     try:
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails='refund@my-health.today',
+        )
+        message.template_id = 'd-be09ccc9256b4ce2a39cbc30c14461bc'
+        
+        # Dynamic Template Data for SendGrid
+        message.dynamic_template_data = {
+            "appointment_id": appointment.id,
+            "cancelled_by": cancelled_by.title() if cancelled_by else "N/A",
+            "slot": appointment.slot if appointment.slot else "N/A",
+            "date": appointment.date.strftime("%Y-%m-%d") if appointment.date else "N/A",
+            "refund_amount": f"{refund_amount:.2f}" if refund_amount else "0.00"
+        }
+
         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
         response = sg.send(message)
+        logger.info(f"Refund email sent. Status Code: {response.status_code}")
+
+        if response.status_code != 202:
+            logger.error(f"SendGrid Error: {response.body}")
+
     except Exception as e:
-        print(f"Failed to send refund email: {str(e)}")
+        logger.error(f"Failed to send refund email: {str(e)}")
 
 
 class ClinicsAssociatedToDoctorsAPIView(APIView):
@@ -2658,29 +2668,25 @@ class AddSpecializationAPIView(APIView):
             return Response({"error": str(e)}, status=500)
 
 def send_specialization_approval_email(specialization):    
-    subject = f"New Specialization Request: {specialization}"
-
-    message = f"""
-    A doctor has submitted a new specialization request: {specialization}
-
-    Please log in to the admin panel to review and take action.
-
-    Thanks,  
-    My Health Team
-        """
-
     try:
-        sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+        sg = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
         email = Mail(
             from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails='approvals@my-health.today',
-            subject=subject,
-            plain_text_content=message
+            to_emails='approvals@my-health.today'
         )
+
+        # Setting dynamic template data
+        email.dynamic_template_data = {
+            "specialization": specialization
+        }
+
+        # SendGrid template ID
+        email.template_id = 'd-840019d82757486d804edb1e655ebdff'
+
         sg.send(email)
+
     except Exception as e:
         print("Error sending approval email:", e)
-
 class DoctorInfoAPIView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
