@@ -624,7 +624,7 @@ class NewSpecializationAPIView(APIView):
             serializer = SpecializationSerializer(data=request.data)
 
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(is_approved=True)
                 return Response(
                     {
                         "message": "Specialization added successfully",
