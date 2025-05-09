@@ -310,40 +310,80 @@ def generate_reference():
     random_part = ''.join(random.choices(string.digits, k=5))  
     return f"HC-{date_part}-{random_part}"
 
-
-def send_invoice_email(transaction, recipient_email, request):
+def send_invoice_email(transaction, doctor_email, request):
     try:
-        invoice_bytes, invoice_url  = generate_invoice(request, transaction, transaction.reference)
+        invoice_bytes, invoice_url = generate_invoice(request, transaction, transaction.reference)
         encoded_invoice = base64.b64encode(invoice_bytes).decode()
 
-        message = Mail(
+        doctor_message = Mail(
             from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=recipient_email,
+            to_emails=doctor_email,
             subject="Your Invoice",
             plain_text_content="Please find the attached invoice."
         )
-        
+
         attachment = Attachment(
             FileContent(encoded_invoice),
             FileName(os.path.basename(invoice_url)),
             FileType('application/pdf'),
             Disposition('attachment')
         )
-        message.attachment = attachment
+        doctor_message.attachment = attachment
+
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        sg.send(doctor_message)
+
+        try: 
+            user = User.objects.get(pk=transaction.account.user.id)
+        except User.DoesNotExist:
+            user = ""
         
-        try:
-            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
-            response = sg.send(message)
-            return response
-        except Exception as e:
-            return str(e)
-        finally:
-            if os.path.exists(invoice_url):
-                os.remove(invoice_url)
+        doctor = Doctor.objects.get(user=user)
+             
+        admin_email = settings.ADMIN_EMAIL
+        profile_id = transaction.account.user.uid
+        doctor_name = transaction.account.user.get_full_name()
+        specialty = doctor.specialty
+        hourly_rate = doctor.urgent_hourly_rate
+        currency = transaction.account.user.currency
+        commission = round(transaction.amount * 0.10, 2)
+        earnings = round(transaction.amount - commission, 2)
+
+        admin_body = f"""Dear Admin,
+
+A new Doctor Payment Form (DPF) request has been submitted. Below are the details for your action:
+
+Doctor Details:
+Profile ID: {profile_id}
+Name: {doctor_name}
+Specialty: {specialty}
+Hourly Rate: {hourly_rate} {currency}
+Currency: {currency}
+
+Payment Breakdown:
+Platform Commission (10%): {commission} {currency}
+Doctor’s Earning per Consultation: {earnings} {currency}
+
+Action Required:
+Please generate the Doctor Payment Form and add it to the system. Once completed, notify the doctor and provide access to their updated profile.
+"""
+
+        admin_message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=admin_email,
+            subject=f"[DPF-Request-{profile_id}] Doctor Payment Form Request - {doctor_name}",
+            plain_text_content=admin_body
+        )
+        sg.send(admin_message)
+
+        return "Emails sent successfully."
 
     except Exception as e:
         return str(e)
-    
+    finally:
+        if os.path.exists(invoice_url):
+            os.remove(invoice_url)
+
 
 class WithdrawalAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -449,7 +489,7 @@ class WithdrawalAPIView(APIView):
                 recepient_email = transaction.account.user.email
                 send_invoice_email(transaction, recepient_email, request)
                 
-                transaction_serializer = TransactionSerializer(transaction)
+                transaction_serializer = TransactionSerializer(transaction)    
                 return Response(
                 {
                     "message": "Withdrawal request submitted successfully.",
