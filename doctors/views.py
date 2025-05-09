@@ -2771,6 +2771,7 @@ class DoctorInfoAPIView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
             
 class DepartmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
             data = []

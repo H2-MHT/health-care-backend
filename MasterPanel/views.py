@@ -7,7 +7,10 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
-from doctors.models import Doctor, BookedAppointment
+from doctors.models import (
+    Doctor,
+    BookedAppointment,
+)
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
@@ -43,7 +46,10 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from datetime import date
-from utils.pagination import pagination_view, create_paginated_response
+from utils.pagination import(
+    pagination_view,
+    create_paginated_response,
+)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
