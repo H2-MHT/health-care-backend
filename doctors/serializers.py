@@ -14,6 +14,7 @@ from .models import (
     # Slot,
     MediaDigest,
     DoctorWallet,
+    Doctor,
     
 )
 from video_call.models import MeetingRoom
@@ -296,3 +297,8 @@ class DoctorWalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorWallet
         fields = ['id', 'doctor_id', 'balance']
+        
+class AddStripeLinkDoctorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Doctor
+        fields = ['id', 'stripe_link']

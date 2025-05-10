@@ -258,7 +258,8 @@ class UserListAPIView(APIView):
                     "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
                     "speciality": doctor.specialty,
                     "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
-                    "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count()           
+                    "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
+                    "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
                 }
                 for doctor in doctors
             ]
@@ -905,3 +906,28 @@ class DepartmentAPIView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class DoctorStripeLinkAddView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request, *args, **kwargs):
+        doctor_id = request.data.get("doctor_id")
+        stripe_link = request.data.get("stripe_link")
+
+        if not doctor_id or not stripe_link:
+            return Response({"error": "Doctor ID and Stripe link are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+        except Doctor.DoesNotExist:
+            return Response({"error": "Doctor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        doctor.stripe_link = stripe_link
+        doctor.save()
+
+        return Response(
+            {
+                "message": "Stripe link saved successfully",
+                "stripe_link": doctor.stripe_link
+                },
+            status=status.HTTP_200_OK
+            )

@@ -1073,6 +1073,9 @@ class UpdateUserProfileAPIView(APIView):
 
                 # Load default serialized data
                 response_data = serializer.data
+                
+                # Ensure is_online is displayed correctly
+                response_data["is_online"] = user.is_online
 
                 # Clinic handling logic
                 if request.data.get("clinic") == "other":

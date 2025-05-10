@@ -242,7 +242,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "professional_stat",
             "working_time",
             "profile_picture",
-            "experience_years"
+            "experience_years",
+            "is_online",
         ]
         
     def to_representation(self, instance):
@@ -280,8 +281,10 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
     languages = serializers.CharField(required=False)
     show_email = serializers.BooleanField(required=False)
     show_phone = serializers.BooleanField(required=False)
+    is_online = serializers.BooleanField(required=False)  
+
     class Meta(UserProfileSerializer.Meta):
-            fields = UserProfileSerializer.Meta.fields + ['show_email', 'show_phone']
+            fields = UserProfileSerializer.Meta.fields + ['show_email', 'show_phone', 'is_online']
 
     def update(self, instance, validated_data):
         languages = validated_data.pop('languages', [])
@@ -336,6 +339,7 @@ class UserProfileUpdateSerializer(UserProfileSerializer):
         """Customize GET response for languages"""
         data = super().to_representation(instance)
         data['languages'] = list(instance.languages.values_list("id", flat=True))
+        data['is_online'] = instance.is_online
 
         # Include patient fields if available
         if instance.role == "Patient" and hasattr(instance, 'patient_profile'):
