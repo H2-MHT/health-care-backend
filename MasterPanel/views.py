@@ -243,12 +243,12 @@ class UserListAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
     def get(self, request):
         try:
-            role = request.data.get("role")
+            role = request.query_params.get("role")  # Role from query parameters
             if not role:
                 return Response({"message": "Role is required"}, status=status.HTTP_400_BAD_REQUEST)
             
             if role.capitalize() == "Doctor":
-                doctors_data = Doctor.objects.filter(user__role=role, user__is_deleted=False)
+                doctors_data = Doctor.objects.filter(user__role=role.capitalize(), user__is_deleted=False)
                 doctors, headers = pagination_view(doctors_data, request)
                 
             data = [
