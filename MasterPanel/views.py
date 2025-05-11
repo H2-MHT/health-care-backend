@@ -248,23 +248,63 @@ class UserListAPIView(APIView):
                 return Response({"message": "Role is required"}, status=status.HTTP_400_BAD_REQUEST)
             
             if role.capitalize() == "Doctor":
-                doctors_data = Doctor.objects.filter(user__role=role.capitalize(), user__is_deleted=False)
+                doctors_data = Doctor.objects.filter(user__role="Doctor", user__is_deleted=False)
                 doctors, headers = pagination_view(doctors_data, request)
                 
-            data = [
-                {
-                    "id": doctor.user.uid,
-                    "name": doctor.user.get_full_name(),
-                    "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
-                    "speciality": doctor.specialty,
-                    "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
-                    "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
-                    "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
-                }
-                for doctor in doctors
-            ]
+                data = [
+                    {
+                        "id": doctor.user.uid,
+                        "name": doctor.user.get_full_name(),
+                        "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
+                        "speciality": doctor.specialty,
+                        "country": doctor.user.country,
+                        "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
+                        "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
+                        "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                    }
+                    for doctor in doctors
+                ]
             
-            return create_paginated_response(f"{role} list retrieved successfully.",data, headers)
+            elif role.capitalize() == "Patient":
+                patients_data = User.objects.filter(role="Patient", is_deleted=False)
+                patients, headers = pagination_view(patients_data, request)
+                
+                data = [
+                    {
+                        "id": patient.uid,
+                        "name": patient.get_full_name(),
+                        "email": patient.email,
+                        "profile_picture": patient.profile_picture.url if patient.profile_picture else None,
+                        "country": patient.country,
+                        "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
+                        "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
+                    }
+                    for patient in patients
+                ]
+
+            elif role.capitalize() == "Clinic":
+                clinics_data = User.objects.filter(role="Clinic", is_deleted=False)
+                clinics, headers = pagination_view(clinics_data, request)
+                
+                data = [
+                    {
+                        "id": clinic.uid,
+                        "name": clinic.get_full_name(),
+                        "email": clinic.email,
+                        "profile_picture": clinic.profile_picture.url if clinic.profile_picture else None,
+                        "country": clinic.country,
+                        "city": clinic.city,
+                        "phone_number": clinic.phone_number,
+                        "address": clinic.residence,
+                    }
+                    for clinic in clinics
+                ]
+            
+            else:
+                return Response({"message": "Invalid role specified"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return create_paginated_response(f"{role} list retrieved successfully.", data, headers)
+        
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
