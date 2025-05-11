@@ -7,7 +7,10 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
-from doctors.models import Doctor
+from doctors.models import (
+    Doctor,
+    BookedAppointment,
+)
 from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
@@ -42,7 +45,11 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-
+from datetime import date
+from utils.pagination import(
+    pagination_view,
+    create_paginated_response,
+)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -234,11 +241,81 @@ class DoctorBlockUnblockView(APIView):
 
 class UserListAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
-    def post(self, request):
-        role = request.data.get("role")
-        user = User.objects.filter(role=role, is_deleted=False)
-        serializer = PatientListSerializer(user, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def get(self, request):
+        try:
+            role = request.query_params.get("role")  # Role from query parameters
+            if not role:
+                return Response({"message": "Role is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if role.capitalize() == "Doctor":
+                doctors_data = Doctor.objects.filter(user__role="Doctor", user__is_deleted=False)
+                doctors, headers = pagination_view(doctors_data, request)
+                
+                data = [
+                    {
+                        "id": doctor.user.id,  # Pass user_id
+                        "uid": doctor.user.uid,  # Pass user uid
+                        "name": doctor.user.get_full_name(),
+                        "email": doctor.user.email,
+                        "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
+                        "speciality": doctor.specialty,
+                        "country": doctor.user.country,
+                        "phone_number": doctor.user.phone_number,
+                        "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
+                        "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
+                        "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                    }
+                    for doctor in doctors
+                ]
+            
+            elif role.capitalize() == "Patient":
+                patients_data = User.objects.filter(role="Patient", is_deleted=False)
+                patients, headers = pagination_view(patients_data, request)
+                
+                data = [
+                    {
+                        "id": patient.id,  # Pass user_id
+                        "uid": patient.uid,  # Pass user uid
+                        "name": patient.get_full_name(),
+                        "email": patient.email,
+                        "profile_picture": patient.profile_picture.url if patient.profile_picture else None,
+                        "country": patient.country,
+                        "city": patient.city,
+                        "phone_number": patient.phone_number,
+                        "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
+                        "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
+                    }
+                    for patient in patients
+                ]
+
+            elif role.capitalize() == "Clinic":
+                clinics_data = Clinic.objects.filter(user__role="Clinic", user__is_deleted=False)
+                clinics, headers = pagination_view(clinics_data, request)
+                
+                data = [
+                    {
+                        "id": clinic.user.id,  # Pass user_id
+                        "uid": clinic.user.uid,  # Pass user uid
+                        "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
+                        "email": clinic.user.email,
+                        "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
+                        "country": clinic.user.country,
+                        "city": clinic.user.city,
+                        "phone_number": clinic.contact_phone if clinic.contact_phone else clinic.user.phone_number,
+                        "website": clinic.website,
+                        "address": clinic.address,
+                    }
+                    for clinic in clinics
+                ]
+            
+            else:
+                return Response({"message": "Invalid role specified"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return create_paginated_response(f"{role} list retrieved successfully.", data, headers)
+        
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class DetailOfUser(APIView):
@@ -313,14 +390,14 @@ class DoctorWithdrawAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             if request.user.role == 'SuperAdmin':
-                transaction = Transaction.objects.all()
-                transaction_serializer = TransactionSerializer(transaction, many=True)
-                return Response(
-                    {
-                        "message": "Account details fetched successfully.",
-                        # "accounts": account_serializer.data,
-                        "transactions": transaction_serializer.data
-                    },status=status.HTTP_200_OK
+                transactions = Transaction.objects.all()
+                paginated_transactions, headers = pagination_view(transactions, request)
+                transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
+                
+                return create_paginated_response(
+                    "Account details fetched successfully.",
+                    transaction_serializer.data,
+                    headers
                 )
             else:
                 return Response({"error": "You are not authorized to access this data"}, status=status.HTTP_403_FORBIDDEN)
@@ -459,32 +536,37 @@ class VerifyDocumentAPIView(APIView):
         
 class ReviewReportAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
+    
     def get(self, request, *args, **kwargs):
         try:
             user_id = request.query_params.get("user_id")
 
             if user_id:
                 user = User.objects.get(pk=user_id)
-                report = Report.objects.filter(reported_by=user).order_by("-created_at")
+                report_queryset = Report.objects.filter(reported_by=user).order_by("-created_at")
             else:
-                report = Report.objects.all().order_by('-created_at')
+                report_queryset = Report.objects.all().order_by("-created_at")
 
-            report_serializer = ReportSerializer(report, many=True)
+            paginated_reports, headers = pagination_view(report_queryset, request)
+            report_serializer = ReportSerializer(paginated_reports, many=True)
 
-            return Response(
-                {
-                    "message": "Report Fetched Successfully",
-                    "report": report_serializer.data
-                }, 
-                status=status.HTTP_200_OK
+            return create_paginated_response(
+                "Report Fetched Successfully",
+                report_serializer.data,
+                headers
             )
-
+        
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-    
+                
     def patch(self, request, *args, **kwargs):
         try:
             report_id = request.data.get("report_id")
@@ -624,7 +706,7 @@ class NewSpecializationAPIView(APIView):
             serializer = SpecializationSerializer(data=request.data)
 
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(is_approved=True)
                 return Response(
                     {
                         "message": "Specialization added successfully",
@@ -847,3 +929,59 @@ class ExportDataAPIView(APIView):
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{model_name}_data.pdf"'
         return response
+
+class DepartmentAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(self, request):
+        try:
+            data = []
+
+            all_specializations = Specialization.objects.all()
+            specializations, headers = pagination_view(all_specializations, request)
+            for spec in specializations:
+                doctors = Doctor.objects.filter(specialty=spec)
+
+                doctor_list = []
+                for doctor in doctors:
+                    doctor_list.append({
+                        'id': doctor.user.id,
+                        'name': doctor.user.get_full_name(),
+                        'profile_picture': doctor.user.profile_picture.url if doctor.user.profile_picture else None
+                    })
+
+                data.append({
+                    'total_doctors': len(doctors),
+                    'specialization': spec.name,
+                    'description': spec.description,
+                    'doctors': doctor_list
+                })
+            return create_paginated_response(f"Retrieved successfully.",data, headers)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class DoctorStripeLinkAddView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request, *args, **kwargs):
+        doctor_id = request.data.get("doctor_id")
+        stripe_link = request.data.get("stripe_link")
+
+        if not doctor_id or not stripe_link:
+            return Response({"error": "Doctor ID and Stripe link are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+        except Doctor.DoesNotExist:
+            return Response({"error": "Doctor not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        doctor.stripe_link = stripe_link
+        doctor.save()
+
+        return Response(
+            {
+                "message": "Stripe link saved successfully",
+                "stripe_link": doctor.stripe_link
+                },
+            status=status.HTTP_200_OK
+            )

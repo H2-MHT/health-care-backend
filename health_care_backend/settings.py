@@ -436,3 +436,5 @@ OTP_EXPIRY_MINUTES = 15
 
 NHS_API_KEY = os.getenv("NHS_API_KEY")
 NHS_BASE_URL = os.getenv("NHS_BASE_URL")
+
+ADMIN_EMAIL = "dpf@my-health.today"

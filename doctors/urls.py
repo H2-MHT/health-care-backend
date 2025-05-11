@@ -111,5 +111,6 @@ urlpatterns = [
     path("clinics-associated-to-doctors/", ClinicsAssociatedToDoctorsAPIView.as_view(), name="all-clinic-on-doctor"),
     path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="all-patient-on-doctor"),
     path('get-wallet/', DoctorWalletAPIView.as_view(), name='get-wallet'),
+    
 
 ]

@@ -262,34 +262,28 @@ class OTPVerificationView(APIView):
                     doctor.save()
                     logger.info(f"Doctor profile created for {user.email}.")
 
-                    # Send doctor profile email content
-                    subject = f"Doctor Onboarding Team"
-                    body = f"""
-                    Dear Admin/Team,
-
-                    A new Doctor has onboarded. Below are the details for your action:
-
-                    **Doctor Details:**
-                    - **Doctor ID:** {doctor.id}
-                    - **Doctor Name:** {user.get_full_name()}
-                    - **Email:** {user.email}
-                    - **Phone Number:** {user.phone_number}
-                    - **Specialization:** {doctor.specialization}
-                    - **Experience:** {doctor.experience}
-                    - **Availability:** {doctor.availability}
-                    - **Registration Date:** {doctor.created_at}
-                    - **Verification Status:** {doctor.is_verified}
-                    - **Last Login:** {doctor.last_login}
-                    Best regards,  
-                    My Health Today Team
-                    """
-
+                    # Send doctor profile email using SendGrid Template ID
                     message = Mail(
                         from_email="it@my-health.today",
                         to_emails="onboarding-doctor@my-health.today",
-                        subject=subject,
-                        plain_text_content=body.strip(),
                     )
+                    message.template_id = 'd-0def9bd6809a4776996693234b8e301b'
+
+                    # Dynamic template data for email
+                    message.dynamic_template_data = {
+                        "doctor_name": user.get_full_name(),
+                        "email": user.email,
+                        "country": user.country if user.country else "N/A",
+                        "languages": ", ".join([lang.name for lang in user.languages.all()]) if user.languages.exists() else "N/A",
+                        "specilization": doctor.specialty if doctor.specialty else "N/A",
+                        "clinic_name": doctor.user.work_place.name if doctor.user.work_place else "N/A",
+                        "experience": doctor.experience_years if doctor.experience_years else "N/A",
+                        "hourly_rate": f"{doctor.planned_hourly_rate} {user.currency}" if user.currency else f"{doctor.planned_hourly_rate} USD",
+                        "availability": ", ".join(doctor.available_dates) if doctor.available_dates else "N/A",
+                        "bio": user.bio if user.bio else "N/A"
+                    }
+
+
                     try:
                         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
                         response = sg.send(message)
@@ -804,7 +798,7 @@ class ResendOTPView(APIView):
         message.template_id = 'd-7c64dfda916a4a2b801af519ccee57c7'
         message.dynamic_template_data = {
             "otp": otp,
-            "support_email": "support@example.com",  # optional placeholder
+            "support_email": "support@my-health.today",
         }
 
         try:
@@ -1079,6 +1073,9 @@ class UpdateUserProfileAPIView(APIView):
 
                 # Load default serialized data
                 response_data = serializer.data
+                
+                # Ensure is_online is displayed correctly
+                response_data["is_online"] = user.is_online
 
                 # Clinic handling logic
                 if request.data.get("clinic") == "other":
@@ -1099,26 +1096,24 @@ class UpdateUserProfileAPIView(APIView):
                             doctor=doctor,
                             clinic_name=clinic_name,
                             defaults={
-                                "address": clinic_location,
+                                "address": clinic_location, 
                                 "website": clinic_website
-                            }
+                                }
                         )
 
-                        # Optional: Notify via email
                         try:
-                            html_content = f"""
-                            <strong>Doctor:</strong> {user.get_full_name()}<br>
-                            <strong>Email:</strong> {user.email}<br>
-                            <strong>Clinic Name:</strong> {clinic_name}<br>
-                            <strong>Location:</strong> {clinic_location}<br>
-                            <strong>Website:</strong> {clinic_website or 'N/A'}
-                            """
                             message = Mail(
                                 from_email='no-reply@my-health.today',
-                                to_emails='new-clinic@my-health.today',
-                                subject='New Other Clinic Added',
-                                html_content=html_content
+                                to_emails='new-clinic@my-health.today'
                             )
+                            message.dynamic_template_data = {
+                                "doctor_name": user.get_full_name(),
+                                "clinic_name": clinic_name,
+                                "clinic_location": clinic_location,
+                                "clinic_website": clinic_website or 'N/A'
+                            }
+                            message.template_id = 'd-a4139adf144849419bf42201b0b9116e'
+
                             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
                             sg.send(message)
                         except Exception as email_err:
@@ -1132,9 +1127,9 @@ class UpdateUserProfileAPIView(APIView):
                     response_data.pop("clinic_website", None)
 
                 return Response({
-                    "message": "Profile updated successfully.",
+                    "message": "Profile updated successfully.", 
                     "data": response_data
-                }, status=status.HTTP_200_OK)
+                    }, status=status.HTTP_200_OK)
 
             logger.warning(f"Validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

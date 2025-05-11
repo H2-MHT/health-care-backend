@@ -19,6 +19,8 @@ from .views import(
     NewSpecializationAPIView,
     AdminWithdrawalRequestAPIView,
     ExportDataAPIView,
+    DepartmentAPIView,
+    DoctorStripeLinkAddView,
 )
 
 urlpatterns = [
@@ -72,4 +74,9 @@ urlpatterns = [
     # withdrawal request 
     path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
     path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
+    # department
+    path('department/', DepartmentAPIView.as_view(), name='department'),
+    # add stripe link on doctor profile
+    path("add-stripe-link/", DoctorStripeLinkAddView.as_view(), name="add-stripe-link"),
+
 ]
