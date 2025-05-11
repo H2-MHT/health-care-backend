@@ -390,14 +390,14 @@ class DoctorWithdrawAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             if request.user.role == 'SuperAdmin':
-                transaction = Transaction.objects.all()
-                transaction_serializer = TransactionSerializer(transaction, many=True)
-                return Response(
-                    {
-                        "message": "Account details fetched successfully.",
-                        # "accounts": account_serializer.data,
-                        "transactions": transaction_serializer.data
-                    },status=status.HTTP_200_OK
+                transactions = Transaction.objects.all()
+                paginated_transactions, headers = pagination_view(transactions, request)
+                transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
+                
+                return create_paginated_response(
+                    "Account details fetched successfully.",
+                    transaction_serializer.data,
+                    headers
                 )
             else:
                 return Response({"error": "You are not authorized to access this data"}, status=status.HTTP_403_FORBIDDEN)
@@ -536,32 +536,37 @@ class VerifyDocumentAPIView(APIView):
         
 class ReviewReportAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
+    
     def get(self, request, *args, **kwargs):
         try:
             user_id = request.query_params.get("user_id")
 
             if user_id:
                 user = User.objects.get(pk=user_id)
-                report = Report.objects.filter(reported_by=user).order_by("-created_at")
+                report_queryset = Report.objects.filter(reported_by=user).order_by("-created_at")
             else:
-                report = Report.objects.all().order_by('-created_at')
+                report_queryset = Report.objects.all().order_by("-created_at")
 
-            report_serializer = ReportSerializer(report, many=True)
+            paginated_reports, headers = pagination_view(report_queryset, request)
+            report_serializer = ReportSerializer(paginated_reports, many=True)
 
-            return Response(
-                {
-                    "message": "Report Fetched Successfully",
-                    "report": report_serializer.data
-                }, 
-                status=status.HTTP_200_OK
+            return create_paginated_response(
+                "Report Fetched Successfully",
+                report_serializer.data,
+                headers
             )
-
+        
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except Exception as e:
             return Response(
                 {"error": f"An unexpected error occurred: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-    
+                
     def patch(self, request, *args, **kwargs):
         try:
             report_id = request.data.get("report_id")
