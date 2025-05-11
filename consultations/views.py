@@ -549,3 +549,49 @@ class ConsultationReportAPIView(APIView):
             status=status.HTTP_200_OK)
 
 
+class PrescriptionListViewNoAuth(APIView):
+
+    def get(self, request):
+        try:
+            uid = request.query_params.get("uid")
+            if not uid:
+                return Response({"error": "UID is required in query parameters."}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = get_object_or_404(User, uid=uid)
+            appointments = BookedAppointment.objects.filter(patient=user.id, status='Completed')
+
+            if not appointments.exists():
+                return Response({'message': 'No completed appointments found'}, status=status.HTTP_200_OK)
+
+            prescriptions = Prescription.objects.filter(appointment__in=appointments)
+
+            if not prescriptions.exists():
+                return Response({'message': 'No prescriptions found'}, status=status.HTTP_200_OK)
+
+            data = []
+            for prescription in prescriptions:
+                appointment = prescription.appointment
+
+                doctor_user = User.objects.filter(id=appointment.doctor).first()
+                patient_user = User.objects.filter(id=appointment.patient).first()
+
+                data.append({
+                    'appointment_id': appointment.id,
+                    "created_date": prescription.created_at.strftime('%d %b, %Y'),
+                    "doctor": {
+                        "name": f"{doctor_user.first_name} {doctor_user.last_name}" if doctor_user else "Unknown",
+                        "email": doctor_user.email if doctor_user else "Unknown",
+                    },
+                    'patient': {
+                        'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
+                        "email": patient_user.email if patient_user else "Unknown",
+                    },
+                    'pdf_url': prescription.pdf_file.url
+                })
+
+            return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
