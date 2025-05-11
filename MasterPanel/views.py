@@ -241,6 +241,7 @@ class DoctorBlockUnblockView(APIView):
 
 class UserListAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
+
     def get(self, request):
         try:
             role = request.query_params.get("role")  # Role from query parameters
@@ -253,11 +254,14 @@ class UserListAPIView(APIView):
                 
                 data = [
                     {
-                        "id": doctor.user.uid,
+                        "id": doctor.user.id,  # Pass user_id
+                        "uid": doctor.user.uid,  # Pass user uid
                         "name": doctor.user.get_full_name(),
+                        "email": doctor.user.email,
                         "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
                         "speciality": doctor.specialty,
                         "country": doctor.user.country,
+                        "phone_number": doctor.user.phone_number,
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
                         "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
                         "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
@@ -271,11 +275,14 @@ class UserListAPIView(APIView):
                 
                 data = [
                     {
-                        "id": patient.uid,
+                        "id": patient.id,  # Pass user_id
+                        "uid": patient.uid,  # Pass user uid
                         "name": patient.get_full_name(),
                         "email": patient.email,
                         "profile_picture": patient.profile_picture.url if patient.profile_picture else None,
                         "country": patient.country,
+                        "city": patient.city,
+                        "phone_number": patient.phone_number,
                         "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
                     }
@@ -283,19 +290,21 @@ class UserListAPIView(APIView):
                 ]
 
             elif role.capitalize() == "Clinic":
-                clinics_data = User.objects.filter(role="Clinic", is_deleted=False)
+                clinics_data = Clinic.objects.filter(user__role="Clinic", user__is_deleted=False)
                 clinics, headers = pagination_view(clinics_data, request)
                 
                 data = [
                     {
-                        "id": clinic.uid,
-                        "name": clinic.get_full_name(),
-                        "email": clinic.email,
-                        "profile_picture": clinic.profile_picture.url if clinic.profile_picture else None,
-                        "country": clinic.country,
-                        "city": clinic.city,
-                        "phone_number": clinic.phone_number,
-                        "address": clinic.residence,
+                        "id": clinic.user.id,  # Pass user_id
+                        "uid": clinic.user.uid,  # Pass user uid
+                        "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
+                        "email": clinic.user.email,
+                        "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
+                        "country": clinic.user.country,
+                        "city": clinic.user.city,
+                        "phone_number": clinic.contact_phone if clinic.contact_phone else clinic.user.phone_number,
+                        "website": clinic.website,
+                        "address": clinic.address,
                     }
                     for clinic in clinics
                 ]
