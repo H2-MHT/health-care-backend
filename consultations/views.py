@@ -95,7 +95,11 @@ def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request)
             os.remove(temp_pdf_name)
 
 
-def prescription_pdf_redirect(request, uid):
+def prescription_pdf_redirect(request):
+    uid = request.GET.get("uid")
+    if not uid:
+        return Response({"error": "UUID is required in query parameters."}, status=status.HTTP_400_BAD_REQUEST)
+
     user = get_object_or_404(User, uid=uid)
     prescription = get_object_or_404(Prescription, appointment__patient=user.id)
     return redirect(prescription.pdf_file.url)
@@ -151,7 +155,7 @@ def send_prescription_email(request, prescription):
         context['qr_code_base64'] = qr_code_base64
         
         user = User.objects.get(id=prescription.appointment.patient)
-        short_url = request.build_absolute_uri(reverse("prescription_pdf", args=[user.uid]))
+        short_url = request.build_absolute_uri(reverse("prescription_pdf")) + f"?uid={user.uid}"
         qr_code_base64 = generate_qr_code_base64(short_url)
         context['qr_code_base64'] = qr_code_base64
 
