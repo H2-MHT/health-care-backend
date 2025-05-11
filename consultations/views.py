@@ -556,10 +556,12 @@ class PrescriptionListViewNoAuth(APIView):
             uid = request.query_params.get("uid")
             if not uid:
                 return Response({"error": "UID is required in query parameters."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = User.objects.filter(uid=uid.strip()).first()
+            if not user:
+                return Response({"error": f"User with UID {uid} does not exist."}, status=status.HTTP_404_NOT_FOUND)
 
-            user = get_object_or_404(User, uid=uid)
             appointments = BookedAppointment.objects.filter(patient=user.id, status='Completed')
-
             if not appointments.exists():
                 return Response({'message': 'No completed appointments found'}, status=status.HTTP_200_OK)
 
