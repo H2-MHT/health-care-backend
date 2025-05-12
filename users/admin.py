@@ -29,6 +29,12 @@ class TwoFactorMethodAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'is_active')
     verbose_name = "Two-Factor Method"
     verbose_name_plural = "Two-Factor Methods"
+
+class AppLanguageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'language_name', 'code', 'created_at', 'updated_at')
+    verbose_name = "Application Language"
+    verbose_name_plural = "Application Languages"
+    
     
 admin.site.register(Media)
 admin.site.register(Skill)
@@ -38,4 +44,4 @@ admin.site.register(User, UserAdmin)
 admin.site.register(TwoFactorMethod, TwoFactorMethodAdmin)
 
 admin.site.register(DeviceAccess)
-admin.site.register(AppLanguage)
+admin.site.register(AppLanguage, AppLanguageAdmin)

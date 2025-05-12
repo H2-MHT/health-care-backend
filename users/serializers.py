@@ -3,7 +3,15 @@ import os
 import base64
 from django.core.files.base import ContentFile
 from django.utils.timesince import timesince
-from .models import Education, Media, Skill, User, Notes, DeviceAccess
+from .models import (
+    Education,
+    Media,
+    Skill,
+    User,
+    Notes,
+    DeviceAccess,
+    AppLanguage,
+    )
 from doctors.models import ConsultationSessionAndFee
 import pycountry
 class SkillSerializer(serializers.ModelSerializer):
@@ -135,3 +143,23 @@ class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['email', 'role', 'is_doctor_switched']
+        
+class AppLanguageSerializer(serializers.ModelSerializer):
+    language_name = serializers.CharField()
+    code = serializers.CharField()
+
+    class Meta:
+        model = AppLanguage
+        fields = ['language_name', 'code']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+
+        # Clear existing languages for the user
+        AppLanguage.objects.filter(user=user).delete()
+
+        return AppLanguage.objects.create(
+            user=user,
+            language_name=validated_data['language_name'],
+            code=validated_data['code'],
+        )
