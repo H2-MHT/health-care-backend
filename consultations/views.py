@@ -155,7 +155,8 @@ def send_prescription_email(request, prescription):
         context['qr_code_base64'] = qr_code_base64
         
         user = User.objects.get(id=prescription.appointment.patient)
-        short_url = request.build_absolute_uri(reverse("prescription_pdf")) + f"?uid={user.uid}"
+        # short_url = request.build_absolute_uri(reverse("prescription_pdf")) + f"?uid={user.uid}"
+        short_url = f"https://h2.doctor/prescription-view?uid={user.uid}"
         qr_code_base64 = generate_qr_code_base64(short_url)
         context['qr_code_base64'] = qr_code_base64
 
@@ -596,4 +597,3 @@ class PrescriptionListViewNoAuth(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-
