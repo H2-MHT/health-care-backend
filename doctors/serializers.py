@@ -294,9 +294,17 @@ class OtherClinicSerializer(serializers.ModelSerializer):
         fields=['doctor_id','id','clinic_name','address','website','user']
 
 class DoctorWalletSerializer(serializers.ModelSerializer):
+    stripe_link = serializers.SerializerMethodField()
     class Meta:
         model = DoctorWallet
-        fields = ['id', 'doctor_id', 'balance']
+        fields = ['id', 'doctor_id', 'balance', 'stripe_link']
+
+    def get_stripe_link(self, obj):
+        try:
+            doctor = Doctor.objects.get(id=obj.doctor_id)
+            return doctor.stripe_link if doctor.stripe_link else None
+        except Doctor.DoesNotExist:
+            return None
         
 class AddStripeLinkDoctorSerializer(serializers.ModelSerializer):
     class Meta:
