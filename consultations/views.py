@@ -38,6 +38,7 @@ from django.template.loader import render_to_string
 from utils.prescription_translation import translate_prescription_content
 from users.models import AppLanguage
 from django.shortcuts import redirect
+from django.db.models import Q
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -101,7 +102,7 @@ def prescription_pdf_redirect(request):
         return Response({"error": "UUID is required in query parameters."}, status=status.HTTP_400_BAD_REQUEST)
 
     user = get_object_or_404(User, uid=uid)
-    prescription = get_object_or_404(Prescription, appointment__patient=user.id)
+    prescription= get_object_or_404(Prescription, appointment__patient=user.id)
     return redirect(prescription.pdf_file.url)
 
 def send_prescription_email(request, prescription):
@@ -373,36 +374,71 @@ class PrescriptionPDFView(APIView):
                 prescription = Prescription.objects.get(appointment__id=appointment_id)
             except Prescription.DoesNotExist:
                 return Response({'message':'prescription not found'}, status=status.HTTP_404_NOT_FOUND)
-
-            template_path = 'prescription.html'
-            doctor_user = User.objects.get(id=prescription.appointment.doctor)
-            patient_user = User.objects.get(id=prescription.appointment.patient)
-            context = {
-                'prescription_id': prescription.id,
-                'created_date': prescription.created_at,
-                'doctor_name': doctor_user.first_name + " " + doctor_user.last_name,
-                'doctor_email': doctor_user.email,
-                'doctor_phone': doctor_user.phone_number,
-                'hospital_name': '',
-                'hospital_address': '',
-                'patient_name': patient_user.first_name,
-                'patient_email': patient_user.email,
-                'patient_address': patient_user.city,
-                'patient_phone': patient_user.phone_number,
-                'diagnosis': prescription.diagnosis,
-                # 'notes': prescription.appointment.notes,
-                'medicines': prescription.medicines,
-                # 'qr_code_url': request.build_absolute_uri(static('images/QR_Code.svg')),
-            }
+            try:
+                doctor_user = User.objects.get(id=prescription.appointment.doctor)
+            except User.DoesNotExist:
+                return Response({'message':'Presccription does not have a doctor'}, status=status.HTTP_404_NOT_FOUND)
             
-            pdf_content, temp_pdf_name = generate_pdf(template_path, context, request)
-            pdf_filename = os.path.basename(temp_pdf_name)
-            if pdf_filename:
-                prescription.pdf_file.save(f'{pdf_filename}', ContentFile(pdf_content))
-                prescription.save()
-            # Return PDF response
-            response = HttpResponse(pdf_content, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename={temp_pdf_name}'
+            try:
+                patient_user = User.objects.get(id=prescription.appointment.patient)
+            except User.DoesNotExist:
+                return Response({'message':'prescription does not have a patient'}, status=status.HTTP_404_NOT_FOUND)
+            
+            if request.user.id != doctor_user.id and request.user.id != patient_user.id:
+                return Response({'message':'Only associated doctor or patient can view this prescription'}, status=status.HTTP_403_FORBIDDEN)
+            
+            formatted_date = prescription.created_at.strftime("%d %B %Y")
+            context = {
+            'prescription_id': prescription.id,
+            'created_date': formatted_date,
+            'doctor_name': doctor_user.get_full_name(),
+            'doctor_email': doctor_user.email,
+            'doctor_phone': doctor_user.phone_number,
+            'patient_name': patient_user.get_full_name(),
+            'patient_email': patient_user.email,
+            'patient_address': patient_user.city,
+            'patient_phone': patient_user.phone_number,
+            'diagnosis': prescription.diagnosis,
+            'medicines': prescription.medicines,
+            'additional_instruction': prescription.additional_instruction,
+            "prescription": "Prescription",
+            "diagnosis_title": "Diagnosis",
+            "quantity": "Quantity",
+            "time": "Time",
+            "medication": "Medication",
+            "times_day": "Times/day",
+            "duration": "Duration",
+            "notes_title": "Notes",
+            "signature": "Signature",
+            "assurance": "Assurance info",
+            "creating_date": "Date",
+            "due_date": "Due Date",
+           }
+            
+            if request.user.role == 'Patient':
+                active_user = patient_user
+            elif request.user.role == 'Doctor':
+                active_user = doctor_user
+            
+
+            try:
+                user_language_pref = AppLanguage.objects.get(user=active_user)
+            except AppLanguage.DoesNotExist:
+                user_language_pref = AppLanguage(code='en')
+
+            if user_language_pref.code != 'en':
+                context = translate_prescription_content(context, user_language_pref.code)
+            
+            template_path = 'prescription.html'
+            user = User.objects.get(id=prescription.appointment.patient)
+            short_url = f"https://h2.doctor/prescription-view?uid={user.uid}"
+            qr_code_base64 = generate_qr_code_base64(short_url)
+            context['qr_code_base64'] = qr_code_base64
+
+            final_pdf_file, temp_pdf_name = generate_pdf(template_path, context, request)
+            
+            response = HttpResponse(final_pdf_file, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{temp_pdf_name}"'
             return response
 
         except Exception as e:

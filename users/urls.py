@@ -7,6 +7,7 @@ from .views import(EducationAPIView,
                 NotesAPIView,
                 DeviceAccessListCreateAPIView,
                 SwitchRoleAPIView,
+                UserLanguagePreferenceView,
 )
 
 urlpatterns = [
@@ -25,5 +26,9 @@ urlpatterns = [
         
         # switch role
         path('switch-role/', SwitchRoleAPIView.as_view(), name='switch-role'),
+        
+        # App Language Preference
+        path('set-language/', UserLanguagePreferenceView.as_view(), name='set_language'),
+
 
 ]
