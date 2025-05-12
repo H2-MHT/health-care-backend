@@ -8,7 +8,8 @@ from .serializers import (
     SkillSerializer,
     NotesSerializer,
     DeviceAccessSerializer,
-    UserRoleSerializer
+    UserRoleSerializer,
+    AppLanguageSerializer,
 )
 from .models import(
     Education,
@@ -17,6 +18,7 @@ from .models import(
     Skill,
     Notes,
     DeviceAccess,
+    AppLanguage,
 )
 import json
 from django.http import QueryDict
@@ -498,3 +500,43 @@ class SwitchRoleAPIView(APIView):
         }, status=status.HTTP_200_OK)
         
 
+class UserLanguagePreferenceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = AppLanguageSerializer(
+            data=request.data,
+            context={
+                'request': request
+                }
+            )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {
+                    'message': 'Language preference saved successfully',
+                    'data': serializer.data
+                    }, 
+                status=status.HTTP_200_OK
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request):
+        user = request.user
+
+        try:
+            # Get the latest or default language set by the user
+            language = AppLanguage.objects.filter(user=user).order_by('-created_at').first()
+
+            if not language:
+                return Response({"message": "No language Available."}, status=status.HTTP_200_OK)
+
+            return Response({
+                "language_name": language.language_name,
+                "code": language.code,
+                "created_at": language.created_at,
+                "updated_at": language.updated_at
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
