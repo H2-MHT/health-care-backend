@@ -255,6 +255,7 @@ class UserListAPIView(APIView):
                 data = [
                     {
                         "id": doctor.user.id,  # Pass user_id
+                        "doctor_id": doctor.id,  # Pass doctor_id
                         "uid": doctor.user.uid,  # Pass user uid
                         "name": doctor.user.get_full_name(),
                         "email": doctor.user.email,
