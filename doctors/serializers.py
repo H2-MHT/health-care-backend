@@ -301,7 +301,8 @@ class DoctorWalletSerializer(serializers.ModelSerializer):
 
     def get_stripe_link(self, obj):
         try:
-            doctor = Doctor.objects.get(id=obj.doctor_id)
+            # get the Doctor object associated with the User (doctor) in DoctorWallet
+            doctor = Doctor.objects.get(user=obj.doctor)
             return doctor.stripe_link if doctor.stripe_link else None
         except Doctor.DoesNotExist:
             return None
