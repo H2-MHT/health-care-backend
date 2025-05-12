@@ -577,6 +577,11 @@ class PrescriptionListViewNoAuth(APIView):
                 doctor_user = User.objects.filter(id=appointment.doctor).first()
                 patient_user = User.objects.filter(id=appointment.patient).first()
 
+                # URL with the UID
+                pdf_url = request.build_absolute_uri(
+                    f"/prescription-view?uid={uid}"
+                )
+
                 data.append({
                     'appointment_id': appointment.id,
                     "created_date": prescription.created_at.strftime('%d %b, %Y'),
@@ -588,7 +593,7 @@ class PrescriptionListViewNoAuth(APIView):
                         'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
                         "email": patient_user.email if patient_user else "Unknown",
                     },
-                    'pdf_url': prescription.pdf_file.url
+                    'pdf_url': pdf_url
                 })
 
             return Response({"message": "Prescriptions retrieved successfully", "prescriptions": data}, status=status.HTTP_200_OK)
