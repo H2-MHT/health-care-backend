@@ -58,7 +58,7 @@ urlpatterns = [
     path('nhs/', include('NHS.urls')),
     
     # pdf url through scanner
-    path('<str:uid>/', consultation_views.prescription_pdf_redirect, name='prescription_pdf'),
+    path('prescription-view', consultation_views.prescription_pdf_redirect, name='prescription_pdf'),
 
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
