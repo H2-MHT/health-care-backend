@@ -996,7 +996,7 @@ class DoctorStripeLinkAddView(APIView):
             )
 
 class ReviewApproveView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperAdminOrAdmin]
 
     def post(self, request):
         try:
@@ -1028,7 +1028,7 @@ class ReviewApproveView(APIView):
         
 
 class ReplyApproveView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperAdminOrAdmin]
 
     def post(self, request):
         try:
@@ -1059,7 +1059,7 @@ class ReplyApproveView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class CloseDiscussionAPIView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperAdminOrAdmin]
 
     def post(self, request):
         try:
@@ -1073,7 +1073,7 @@ class CloseDiscussionAPIView(APIView):
             return Response({"message": "Review not found."}, status=404)
 
 class DeleteInappropriateReviewOrReplyView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperAdminOrAdmin]
 
     def post(self, request):
         try:
