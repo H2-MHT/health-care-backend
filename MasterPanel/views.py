@@ -1003,13 +1003,12 @@ class ReviewApproveView(APIView):
 
     def post(self, request):
         try:
-            data = request.data
-            review_id = data.get('review_id')
+            review_id = request.data.get('review_id')
             
             try:
-                review = Review.objects.get(id=review_id)
-            except Review.DoesNotExist:
-                return Response({"message": "Review not found"}, status=status.HTTP_404_NOT_FOUND)
+                review = get_object_or_404(Review, id=review_id)
+            except Http404:
+                return Response({"message": f"Review not found with given ID:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
             
             if review.is_approved:
                 return Response({"message": "Review is already approved"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1035,13 +1034,12 @@ class ReplyApproveView(APIView):
 
     def post(self, request):
         try:
-            data = request.data
-            reply_id = data.get('reply_id')
+            reply_id = request.data.get('reply_id')
             
             try:
-                reply = Reply.objects.get(id=reply_id)
-            except Reply.DoesNotExist:
-                return Response({"message": "Reply not found"}, status=status.HTTP_404_NOT_FOUND)
+                reply = get_object_or_404(Reply, id=reply_id)
+            except Http404:
+                return Response({"message": f"Reply not found with given ID:{reply_id}"}, status=status.HTTP_404_NOT_FOUND)
             
             if reply.is_approved:
                 return Response({"message": "Reply is already approved"}, status=status.HTTP_400_BAD_REQUEST)
