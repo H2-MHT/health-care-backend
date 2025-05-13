@@ -4,7 +4,10 @@ from django.shortcuts import render, get_object_or_404
 
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
-from django.http import HttpResponse
+from django.http import (
+    HttpResponse,
+    Http404
+)
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
 from doctors.models import (
@@ -1063,9 +1066,18 @@ class CloseDiscussionAPIView(APIView):
 
     def post(self, request):
         try:
-            data = request.data
-            review_id = data.get('review_id')
-            review = Review.objects.get(id=review_id)
+            review_id = request.data.get('review_id')
+            if not review_id:
+                return Response({"message": "Review ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                review = get_object_or_404(Review, id=review_id)
+            except Http404:
+                return Response({"message": f"Review not found with given id:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if review.is_closed:
+                return Response({"message": "Discussion is already closed"}, status=400)
+            
             review.is_closed = True
             review.save()
             return Response({"message": "Discussion closed successfully"}, status=200)
