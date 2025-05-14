@@ -99,3 +99,5 @@ uvicorn
 reportlab
 pycountry
 deep-translator
+elastic-apm
+psutil

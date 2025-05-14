@@ -61,6 +61,8 @@ INSTALLED_APPS = [
     'video_call',
     'django_celery_beat',
     'NHS',
+    'Subscribe_news',
+    'elasticapm.contrib.django',
 ]
 
 REST_FRAMEWORK = {
@@ -99,7 +101,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'health_care_backend.middleware.ActivityMiddleware'
+    'health_care_backend.middleware.ActivityMiddleware',
+    'elasticapm.contrib.django.middleware.TracingMiddleware',
 ]
 
 ROOT_URLCONF = 'health_care_backend.urls'
@@ -438,3 +441,13 @@ NHS_API_KEY = os.getenv("NHS_API_KEY")
 NHS_BASE_URL = os.getenv("NHS_BASE_URL")
 
 ADMIN_EMAIL = "dpf@my-health.today"
+
+
+ELASTIC_APM = {
+    'SERVICE_NAME': os.getenv('APM_SERVICE_NAME', 'My deployment'),
+    'SECRET_TOKEN': os.getenv('APM_SECRET_TOKEN', 'L0Nys7Bh3r55VurW28'),
+    'SERVER_URL': os.getenv('APM_SERVER_URL', 'https://8e3101f2ba6a4e54bb68ce2f51916d9c.apm.eastus2.azure.elastic-cloud.com'),
+    'ENVIRONMENT': os.getenv('APM_ENVIRONMENT', 'development'),
+    'DEBUG': False  ,
+    'TIMEOUT': 60,
+}
