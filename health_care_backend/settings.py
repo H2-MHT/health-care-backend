@@ -375,7 +375,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'videpo_call': {
+        'video_call': {
             'handlers': ['video_call'],
             'level': 'DEBUG',
             'propagate': False,
@@ -437,5 +437,5 @@ OTP_EXPIRY_MINUTES = 15
 NHS_API_KEY = os.getenv("NHS_API_KEY")
 NHS_BASE_URL = os.getenv("NHS_BASE_URL")
 NHS_SYMPTOM_BASE_URL = os.getenv("NHS_SYMPTOM_BASE_URL")
-
+NHS_CONDITION_BASE_URL = os.getenv("NHS_CONDITION_BASE_URL")
 ADMIN_EMAIL = "dpf@my-health.today"
