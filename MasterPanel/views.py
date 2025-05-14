@@ -1023,8 +1023,20 @@ class ReviewApproveView(APIView):
     def get(self, request):
         try:
             reviews = Review.objects.filter(is_approved=False)
-            serializer = ReviewSerializer(reviews, many=True)
-            return Response({"message": "Retrieved successfully", "data": serializer.data}, status=status.HTTP_200_OK)     
+            data = [
+                 {
+                    "id": review.id,
+                    "patientName": review.patient.user.get_full_name(),
+                    "doctorName": review.doctor.user.get_full_name(),
+                    "rating": review.rating,
+                    "content": review.content,
+                    "date": review.created_at.strftime("%Y-%m-%d"),
+                    "status": review.is_approved
+                }
+                for review in reviews
+            ]
+           
+            return Response({"message": "Retrieved successfully", "data": data}, status=status.HTTP_200_OK)     
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
         
