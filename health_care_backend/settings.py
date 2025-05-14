@@ -61,7 +61,6 @@ INSTALLED_APPS = [
     'video_call',
     'django_celery_beat',
     'NHS',
-    'Subscribe_news',
     'elasticapm.contrib.django',
 ]
 
