@@ -145,9 +145,6 @@ class UserRoleSerializer(serializers.ModelSerializer):
         fields = ['email', 'role', 'is_doctor_switched']
         
 class AppLanguageSerializer(serializers.ModelSerializer):
-    language_name = serializers.CharField()
-    code = serializers.CharField()
-
     class Meta:
         model = AppLanguage
         fields = ['language_name', 'code']
