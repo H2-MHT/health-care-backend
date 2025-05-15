@@ -21,6 +21,10 @@ from .views import(
     ExportDataAPIView,
     DepartmentAPIView,
     DoctorStripeLinkAddView,
+    ReviewApproveView,
+    ReplyApproveView,
+    CloseDiscussionAPIView,
+    DeleteInappropriateReviewOrReplyView
 )
 
 urlpatterns = [
@@ -78,5 +82,10 @@ urlpatterns = [
     path('department/', DepartmentAPIView.as_view(), name='department'),
     # add stripe link on doctor profile
     path("add-stripe-link/", DoctorStripeLinkAddView.as_view(), name="add-stripe-link"),
+    # review
+    path('approve-review/', ReviewApproveView.as_view(), name="approve-review"),
+    path('approve-reply/', ReplyApproveView.as_view(), name="approve-reply"),
+    path('close-discussion/', CloseDiscussionAPIView.as_view(), name="close-discussion"),
+    path('delete-inappropriate/', DeleteInappropriateReviewOrReplyView.as_view(), name="delete-inappropriate"),
 
 ]

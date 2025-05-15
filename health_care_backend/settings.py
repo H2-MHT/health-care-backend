@@ -375,7 +375,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'videpo_call': {
+        'video_call': {
             'handlers': ['video_call'],
             'level': 'DEBUG',
             'propagate': False,
@@ -390,7 +390,9 @@ CORS_ALLOWED_ORIGINS = [
     'http://h2.doctor',
     'https://h2.doctor',
     'https://stage.h2.doctor',
-    'http://stage.h2.doctor'
+    'http://stage.h2.doctor',
+    'https://stagecrm.h2.doctor',
+    'https://crm.h2.doctor'
     
 ]
 
@@ -410,7 +412,10 @@ CSRF_TRUSTED_ORIGINS = [
     'http://h2.doctor',
     'https://h2.doctor',
     'https://stage.h2.doctor',
-    'http://stage.h2.doctor'
+    'http://stage.h2.doctor',
+    'https://stagecrm.h2.doctor',
+    'https://crm.h2.doctor'
+
 ]
 
 
@@ -436,5 +441,6 @@ OTP_EXPIRY_MINUTES = 15
 
 NHS_API_KEY = os.getenv("NHS_API_KEY")
 NHS_BASE_URL = os.getenv("NHS_BASE_URL")
-
+NHS_SYMPTOM_BASE_URL = os.getenv("NHS_SYMPTOM_BASE_URL")
+NHS_CONDITION_BASE_URL = os.getenv("NHS_CONDITION_BASE_URL")
 ADMIN_EMAIL = "dpf@my-health.today"
