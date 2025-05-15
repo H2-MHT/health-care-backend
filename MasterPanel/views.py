@@ -1004,25 +1004,35 @@ class ReviewApproveView(APIView):
     def post(self, request):
         try:
             review_id = request.data.get('review_id')
+            review_status = request.data.get('status')
             
             try:
                 review = get_object_or_404(Review, id=review_id)
             except Http404:
                 return Response({"message": f"Review not found with given ID:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
             
-            if review.is_approved:
-                return Response({"message": "Review is already approved"}, status=status.HTTP_400_BAD_REQUEST)
-
-            review.is_approved = True
+            if not review_status or review_status not in ["Approved", "Rejected"]:
+                return Response({"message": "Invalid review status"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if review.status == review_status:
+                return Response({"message": f"Review is already {review_status}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+            if review_status == "Approved":
+                review.status = review_status
+                
+            elif review_status == "Rejected":
+                review.status = review_status
+    
             review.save()
-            return Response({"message": "Review approved successfully"}, status=status.HTTP_200_OK)
+            return Response({"message": f"Review {review_status} successfully"}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     def get(self, request):
         try:
-            reviews = Review.objects.filter(is_approved=False)
+            review_list = Review.objects.filter(status="Pending").order_by('-created_at')
+            reviews, headers = pagination_view(review_list, request)
             data = [
                  {
                     "id": review.id,
@@ -1031,12 +1041,11 @@ class ReviewApproveView(APIView):
                     "rating": review.rating,
                     "content": review.content,
                     "date": review.created_at.strftime("%Y-%m-%d"),
-                    "status": review.is_approved
+                    "status": review.status
                 }
                 for review in reviews
             ]
-           
-            return Response({"message": "Retrieved successfully", "data": data}, status=status.HTTP_200_OK)     
+            return create_paginated_response("Retrieved successfully.", data, headers)    
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
         
