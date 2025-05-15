@@ -35,7 +35,11 @@ class RegistrationSerializer(serializers.ModelSerializer):
             "profile_picture",
             "phone_number",
             "rating",
-            "reviews"
+            "reviews",
+            "code_of_conduct",
+            "terms_and_condition",
+            "acknowledge",
+            "medical_disclaimer",
         ]
         extra_kwargs = {
             "email": {"required": True}
@@ -54,7 +58,17 @@ class RegistrationSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data["password"] != data["confirm_password"]:
             raise serializers.ValidationError("Passwords must match.")
-        return data
+
+        if data['code_of_conduct'] != True:
+            raise serializers.ValidationError("You must agree to the code of conduct.")
+        
+        if data['acknowledge'] != True:
+            raise serializers.ValidationError("You must have to acknowledge.")
+        
+        if data['medical_disclaimer'] != True:
+            raise serializers.ValidationError("You must agree to the medical disclaimer.")
+        
+        return data    
 
     def create(self, validated_data):
         validated_data.pop("confirm_password", None)

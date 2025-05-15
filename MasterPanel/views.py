@@ -1031,7 +1031,8 @@ class ReviewApproveView(APIView):
         
     def get(self, request):
         try:
-            reviews = Review.objects.filter(status="Pending").order_by('-created_at')
+            review_list = Review.objects.filter(status="Pending").order_by('-created_at')
+            reviews, headers = pagination_view(review_list, request)
             data = [
                  {
                     "id": review.id,
@@ -1044,8 +1045,7 @@ class ReviewApproveView(APIView):
                 }
                 for review in reviews
             ]
-           
-            return Response({"message": "Retrieved successfully", "data": data}, status=status.HTTP_200_OK)     
+            return create_paginated_response("Retrieved successfully.", data, headers)    
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
         
