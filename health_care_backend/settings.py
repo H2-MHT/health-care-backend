@@ -392,7 +392,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://stage.h2.doctor',
     'http://stage.h2.doctor',
     'https://stagecrm.h2.doctor',
-    'https://crm.h2.doctor/',
+    'https://crm.h2.doctor'
     
 ]
 
@@ -414,7 +414,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://stage.h2.doctor',
     'http://stage.h2.doctor',
     'https://stagecrm.h2.doctor',
-    'https://crm.h2.doctor/',
+    'https://crm.h2.doctor'
 
 ]
 
