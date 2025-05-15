@@ -1014,12 +1014,9 @@ class ReviewApproveView(APIView):
             if not review_status or review_status not in ["Approved", "Rejected"]:
                 return Response({"message": "Invalid review status"}, status=status.HTTP_400_BAD_REQUEST)
             
-            if review.status == review_status.capitalize():
-                return Response({"message": "Review is already approved"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if review.status == review_status.capitalize():
-                return Response({"message": "Review is already Rejected"}, status=status.HTTP_400_BAD_REQUEST)
-
+            if review.status == review_status:
+                return Response({"message": f"Review is already {review_status}"}, status=status.HTTP_400_BAD_REQUEST)
+        
             if review_status == "Approved":
                 review.status = review_status
                 
@@ -1027,7 +1024,7 @@ class ReviewApproveView(APIView):
                 review.status = review_status
     
             review.save()
-            return Response({"message": f"Review {review_status.lower()} successfully"}, status=status.HTTP_200_OK)
+            return Response({"message": f"Review {review_status} successfully"}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
