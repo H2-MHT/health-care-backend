@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import AccountDetail, Transaction
 from collections import OrderedDict
-
+from doctors.models import DoctorWallet
+from decimal import Decimal
 
 class AccountDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,11 +11,13 @@ class AccountDetailSerializer(serializers.ModelSerializer):
           
 class TransactionSerializer(serializers.ModelSerializer):
     # status = serializers.SerializerMethodField()
+    currency = serializers.CharField(source='account.user.currency')
     transaction_type = serializers.SerializerMethodField()
-
+    balance = serializers.SerializerMethodField()
+    bank_name = serializers.CharField(source='account.bank_name')
     class Meta:
         model = Transaction
-        fields = ['id', 'account', 'amount', 'transaction_type', 'status', 'rejection_reason', 'timestamp']
+        fields = ['id', 'account', 'amount', 'bank_name', 'transaction_type', 'currency', 'balance', 'reference', 'stripe_payment_link', 'stripe_payment_link_id', 'status', 'rejection_reason', 'timestamp']
 
     # def get_status(self, obj):
     #     return obj.account.get_status_display()
@@ -39,3 +42,13 @@ class TransactionSerializer(serializers.ModelSerializer):
                 ordered_data[key] = value
 
         return ordered_data
+    
+    
+    def get_balance(self, obj):
+        try:
+            wallet = obj.account.user.doctorwallet_set.first()
+            if wallet:
+                return wallet.balance
+            return Decimal('0.0')
+        except Exception as e:
+            return Decimal('0.0')

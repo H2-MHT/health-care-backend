@@ -100,7 +100,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'health_care_backend.middleware.ActivityMiddleware'
+    'health_care_backend.middleware.ActivityMiddleware',
 ]
 
 ROOT_URLCONF = 'health_care_backend.urls'
@@ -454,3 +454,5 @@ NHS_BASE_URL = os.getenv("NHS_BASE_URL")
 NHS_SYMPTOM_BASE_URL = os.getenv("NHS_SYMPTOM_BASE_URL")
 NHS_CONDITION_BASE_URL = os.getenv("NHS_CONDITION_BASE_URL")
 ADMIN_EMAIL = "dpf@my-health.today"
+
+

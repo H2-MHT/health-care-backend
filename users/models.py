@@ -60,6 +60,7 @@ class User(AbstractUser):
         ("Patient", "Patient"),
         ("Doctor", "Doctor"),
         ("Clinic", "Clinic"),
+        ("Admin", "Admin"),
         ("SuperAdmin", "Super Admin"),
     ]
     GENDER_CHOICES = [
