@@ -39,6 +39,7 @@ from utils.prescription_translation import translate_prescription_content
 from users.models import AppLanguage
 from django.shortcuts import redirect
 from django.db.models import Q
+import copy
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -65,10 +66,9 @@ def generate_pdf(template_path: str, context: dict, request) -> tuple:
 
     return pdf_file.getvalue(), temp_pdf_name
 
-def send_pdf_via_sendgrid(template_path, context_dict, recipient_email, request):
-    pdf_content, temp_pdf_name = generate_pdf(template_path, context_dict, request)
+def send_pdf_via_sendgrid(pdf_content, temp_pdf_name, recipient_email):
     encoded_pdf = base64.b64encode(pdf_content).decode()
-
+    
     message = Mail(
         from_email=settings.SENDGRID_FROM_EMAIL,
         to_emails=recipient_email,
@@ -122,7 +122,7 @@ def send_prescription_email(request, prescription):
             'patient_address': patient_user.city,
             'patient_phone': patient_user.phone_number,
             'diagnosis': prescription.diagnosis,
-            'medicines': prescription.medicines,
+            'medicines': copy.deepcopy(prescription.medicines),
             'additional_instruction': prescription.additional_instruction,
             "prescription": "Prescription",
             "diagnosis_title": "Diagnosis",
@@ -137,6 +137,8 @@ def send_prescription_email(request, prescription):
             "creating_date": "Date",
             "due_date": "Due Date",
         }
+        
+        copied_context = copy.deepcopy(context)
 
         try:
             user_language_pref = AppLanguage.objects.get(user=patient_user)
@@ -147,25 +149,20 @@ def send_prescription_email(request, prescription):
             context = translate_prescription_content(context, user_language_pref.code)
         
         template_path = 'prescription.html'
-        pdf_file, _ = generate_pdf(template_path, context, request)
-        prescription.pdf_file.save(f"prescription_{prescription.id}.pdf", ContentFile(pdf_file))
-        prescription.save()
-
-        prescription_url = request.build_absolute_uri(prescription.pdf_file.url)
-        qr_code_base64 = generate_qr_code_base64(prescription_url)
-        context['qr_code_base64'] = qr_code_base64
-        
         user = User.objects.get(id=prescription.appointment.patient)
-        # short_url = request.build_absolute_uri(reverse("prescription_pdf")) + f"?uid={user.uid}"
         short_url = f"https://h2.doctor/prescription-view?uid={user.uid}"
         qr_code_base64 = generate_qr_code_base64(short_url)
         context['qr_code_base64'] = qr_code_base64
 
-        final_pdf_file, _ = generate_pdf(template_path, context, request)
-        prescription.pdf_file.save(f"prescription_{prescription.id}_with_qr.pdf", ContentFile(final_pdf_file))
-        prescription.save()
+        # pdf generated to email
+        pdf_file_to_email, temp_pdf_name_to_email = generate_pdf(template_path, context, request)
+        
+        # pdf genreated to database 
+        copied_context['qr_code_base64'] = qr_code_base64
+        pdf_file_to_db, temp_pdf_name_to_db = generate_pdf(template_path, copied_context, request)
+        prescription.pdf_file.save(temp_pdf_name_to_db, ContentFile(pdf_file_to_db))
      
-        send_pdf_via_sendgrid(template_path, context, patient_user.email, request)
+        send_pdf_via_sendgrid(pdf_file_to_email, temp_pdf_name_to_email, patient_user.email)
 
         return {"status": "Email sent successfully via SendGrid!"}
 
@@ -199,9 +196,8 @@ class PrescriptionView(APIView):
                 return Response({"message": "Prescription already exists."}, status=status.HTTP_200_OK)
 
             doctor_user = request.user
-            patient_user = User.objects.get(id=appointment.patient)
-
-            # Save prescription to DB (No QR here)
+            
+            # Save prescription to DB 
             prescription = Prescription.objects.create(
                 appointment=appointment,
                 doctor=doctor_user,
@@ -209,29 +205,9 @@ class PrescriptionView(APIView):
                 medicines=data.get("medicines"),
                 additional_instruction=data.get("additional_instruction")
             )
-
-            # Prepare PDF context
-            context = {
-                'prescription_id': prescription.id,
-                'created_date': prescription.created_at,
-                'doctor_name': doctor_user.get_full_name(),
-                'doctor_email': doctor_user.email,
-                'doctor_phone': doctor_user.phone_number,
-                'patient_name': patient_user.get_full_name(),
-                'patient_email': patient_user.email,
-                'patient_address': patient_user.city,
-                'patient_phone': patient_user.phone_number,
-                'diagnosis': prescription.diagnosis,
-                'medicines': prescription.medicines,
-            }
-
-            # Generate PDF and attach to saved model (no QR in DB)
-            pdf_file, _ = generate_pdf("prescription.html", context, request)
-            prescription.pdf_file.save(f"prescription_{prescription.id}.pdf", ContentFile(pdf_file))
-
-            # Email PDF with QR
+            
             send_prescription_email(request, prescription)
-
+            
             return Response(
                 {"message": "Prescription saved and email sent!", "prescription_id": prescription.id},
                 status=status.HTTP_201_CREATED

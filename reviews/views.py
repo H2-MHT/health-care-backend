@@ -107,11 +107,11 @@ class ReviewPIView(APIView):
                         doctor__user__last_name__istartswith=last_name
                     )
                 else:
-                    reviews = Review.objects.filter(patient=patient, doctor__user__first_name__istartswith=search_key) | \
-                              Review.objects.filter(patient=patient, doctor__user__last_name__istartswith=search_key)
+                    reviews = Review.objects.filter(patient=patient, status__in=["Pending", "Approved"], doctor__user__first_name__istartswith=search_key) | \
+                              Review.objects.filter(patient=patient, status__in=["Pending", "Approved"], doctor__user__last_name__istartswith=search_key)
 
             else:
-                reviews = Review.objects.filter(patient=patient, is_deleted=False).order_by('-created_at')
+                reviews = Review.objects.filter(patient=patient, is_deleted=False, status__in=["Pending", "Approved"]).order_by('-created_at')
             paginated_data, headers = pagination_view(reviews, request)
             serializer = ReviewSerializer(paginated_data, many=True)
             return create_paginated_response("Review retrieved successfully!", serializer.data, headers)
@@ -137,7 +137,7 @@ class ReviewPIView(APIView):
             return Response({'message': 'review does not belong to the requested user'},
                             status=status.HTTP_403_FORBIDDEN)
         
-        if review.is_approved:
+        if review.status == "Approved":
             return Response({'message': "You can't update this review as it is published"}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = ReviewUpdateSerializer(review, data=request.data, partial=True, context={'request': request})
@@ -177,7 +177,7 @@ class DoctorReviewsAPIView(generics.ListAPIView):
     def get_queryset(self, doctor_id):
         try:
             # Filter reviews related to the specific doctor
-            return Review.objects.filter(doctor_id=doctor_id, is_deleted=False, is_approved=True).order_by('-created_at')
+            return Review.objects.filter(doctor_id=doctor_id, is_deleted=False, status='Approved').order_by('-created_at')
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
