@@ -32,6 +32,7 @@ from utils.pagination import pagination_view, create_paginated_response
 from .tasks import(
     send_email_reminder,
     send_whatsapp_reminder,
+    send_sms_reminder,
 )
 from datetime import timedelta, datetime
 from users.serializers import UserSerializer
@@ -782,7 +783,7 @@ class AppointmentReminderAPIView(APIView):
 
             # Extract start time from slot
             try:
-                start_time_str = appointment.slot.split(" - ")[0]  # Extract 'HH:MM' from '15:30 - 16:00'
+                start_time_str = appointment.slot.split(" - ")[0]  # Extract 'HH:MM' from '06:30 - 07:00'
                 appointment_datetime = datetime.combine(
                     appointment.date, 
                     datetime.strptime(start_time_str, "%H:%M").time()
@@ -790,28 +791,37 @@ class AppointmentReminderAPIView(APIView):
             except ValueError:
                 return Response({"error": "Invalid slot format. Expected 'HH:MM - HH:MM'."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Calculate reminder time
-            reminder_time = None
+            # Make the appointment datetime timezone-aware and convert to UTC
+            appointment_datetime_utc = timezone.make_aware(appointment_datetime, timezone.utc)
+            print(f"Appointment DateTime (UTC): {appointment_datetime_utc}")
+
+            # Calculate reminder time based on notification type
             if reminder.notification_time_type == "days":
-                reminder_time = timezone.make_aware(
-                    appointment_datetime, timezone.get_current_timezone()
-                ) - timedelta(days=reminder.notification_time)
+                reminder_time_utc = appointment_datetime_utc - timedelta(days=reminder.notification_time)
             elif reminder.notification_time_type == "hours":
-                reminder_time = timezone.make_aware(
-                    appointment_datetime, timezone.get_current_timezone()
-                ) - timedelta(hours=reminder.notification_time)
+                reminder_time_utc = appointment_datetime_utc - timedelta(hours=reminder.notification_time)
             elif reminder.notification_time_type == "minutes":
-                reminder_time = timezone.make_aware(
-                    appointment_datetime, timezone.get_current_timezone()
-                ) - timedelta(minutes=reminder.notification_time)
-                
-            # Schedule the reminder task
-            if reminder_time and reminder_time > timezone.now():  # Ensure it's scheduled in the future
-                send_email_reminder.apply_async(args=[reminder.id], utc=reminder_time)
-                send_whatsapp_reminder.apply_async(args=[reminder.id], utc=reminder_time)
-                print(f"Email Reminder scheduled for {reminder_time}")
-                print(f"WhatsApp Reminder scheduled for {reminder_time}")
-                
+                reminder_time_utc = appointment_datetime_utc - timedelta(minutes=reminder.notification_time)
+
+            print(f"Current UTC Time: {timezone.now()}")
+            print(f"Calculated Reminder Time (UTC): {reminder_time_utc}")
+
+            # Ensure reminder is scheduled in the future
+            if reminder_time_utc <= timezone.now():
+                print("Reminder time is in the past. Adjusting to future.")
+                reminder_time_utc = timezone.now() + timedelta(minutes=1)  # Adjust as needed
+
+            # Schedule the reminder task based on the notification method
+            if reminder.notification_method == "email":
+                send_email_reminder.apply_async(args=[reminder.id], eta=reminder_time_utc)
+                print(f"Email Reminder scheduled for {reminder_time_utc}")
+            elif reminder.notification_method == "whatsapp":
+                send_whatsapp_reminder.apply_async(args=[reminder.id], eta=reminder_time_utc)
+                print(f"WhatsApp Reminder scheduled for {reminder_time_utc}")
+            else:
+                send_sms_reminder.apply_async(args=[reminder.id], eta=reminder_time_utc)
+                print(f"SMS Reminder scheduled for {reminder_time_utc}")
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
