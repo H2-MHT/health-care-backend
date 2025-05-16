@@ -6,12 +6,20 @@ from django.db.models import Avg, Count
 
 
 class Review(models.Model):
+    REVIEW_CHOICES = [
+        ('Approved', 'Approved'),
+        ('Pending', 'Pending'),
+        ('Rejected', 'Rejected'),
+    ]
+    appointment = models.ForeignKey('doctors.BookedAppointment', on_delete=models.CASCADE, null=True, blank=True)
     patient = models.ForeignKey("patients.Patient", on_delete=models.CASCADE)
     doctor = models.ForeignKey("doctors.Doctor", on_delete=models.CASCADE)
     rating = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=255, null=True, blank=True)
     content = models.TextField(null=True, blank=True)
     recommend = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=REVIEW_CHOICES, default='Pending')
+    is_closed = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -39,6 +47,7 @@ class Reply(models.Model):
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="replies")
     user = models.ForeignKey("users.User", on_delete=models.CASCADE)  # Could be patient or doctor
     content = models.TextField()
+    is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

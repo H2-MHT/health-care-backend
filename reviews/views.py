@@ -32,6 +32,26 @@ class ReviewPIView(APIView):
                 {"detail": "Doctor ID is required to create a review."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        
+        appointment_id = request.data.get('appointment_id')
+        try:
+            appointment = BookedAppointment.objects.get(pk=appointment_id)
+        except BookedAppointment.DoesNotExist:
+            return Response(
+                {"detail": "The specified appointment does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        appointment_in_review = Review.objects.filter(
+           appointment=appointment
+        )
+        
+        if appointment_in_review.exists():
+            return Response(
+                {"detail": "You have already reviewed this appointment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
 
         try:
             # Verify if the doctor exists
@@ -41,7 +61,7 @@ class ReviewPIView(APIView):
             has_any_appointment = BookedAppointment.objects.filter(
             patient=request.user.id,  # patient is saved as user.id
             doctor=doctor.user.id,    # doctor is also saved as user.id
-            status="Confirmed"
+            status="Completed"
         ).exists()
             if not has_any_appointment:
                 return Response(
@@ -61,7 +81,7 @@ class ReviewPIView(APIView):
         serializer = ReviewSerializer(data=data, context={'request': request})
 
         if serializer.is_valid():
-            serializer.save(patient=patient, doctor=doctor)
+            serializer.save(patient=patient, doctor=doctor, appointment=appointment)
             return Response(
                 {"message": "Review added successfully!", "data": serializer.data},
                 status=status.HTTP_201_CREATED
@@ -87,11 +107,11 @@ class ReviewPIView(APIView):
                         doctor__user__last_name__istartswith=last_name
                     )
                 else:
-                    reviews = Review.objects.filter(patient=patient, doctor__user__first_name__istartswith=search_key) | \
-                              Review.objects.filter(patient=patient, doctor__user__last_name__istartswith=search_key)
+                    reviews = Review.objects.filter(patient=patient, status__in=["Pending", "Approved"], doctor__user__first_name__istartswith=search_key) | \
+                              Review.objects.filter(patient=patient, status__in=["Pending", "Approved"], doctor__user__last_name__istartswith=search_key)
 
             else:
-                reviews = Review.objects.filter(patient=patient, is_deleted=False).order_by('-created_at')
+                reviews = Review.objects.filter(patient=patient, is_deleted=False, status__in=["Pending", "Approved"]).order_by('-created_at')
             paginated_data, headers = pagination_view(reviews, request)
             serializer = ReviewSerializer(paginated_data, many=True)
             return create_paginated_response("Review retrieved successfully!", serializer.data, headers)
@@ -116,6 +136,10 @@ class ReviewPIView(APIView):
         if review.patient != patient:
             return Response({'message': 'review does not belong to the requested user'},
                             status=status.HTTP_403_FORBIDDEN)
+        
+        if review.status == "Approved":
+            return Response({'message': "You can't update this review as it is published"}, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = ReviewUpdateSerializer(review, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -123,7 +147,7 @@ class ReviewPIView(APIView):
                 {"message": "Review updated successfully!", "data": serializer.data},
                 status=status.HTTP_200_OK
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_200_OK)
 
     def delete(self, request):
         if request.user.role != 'Patient':
@@ -153,7 +177,7 @@ class DoctorReviewsAPIView(generics.ListAPIView):
     def get_queryset(self, doctor_id):
         try:
             # Filter reviews related to the specific doctor
-            return Review.objects.filter(doctor_id=doctor_id, is_deleted=False)
+            return Review.objects.filter(doctor_id=doctor_id, is_deleted=False, status='Approved').order_by('-created_at')
         except Exception as e:
             return Response(
                 {"message": f"An unexpected error occurred: {str(e)}"},
@@ -218,6 +242,12 @@ class ReplyAPIView(APIView):
                 review = Review.objects.get(id=review_id)
             except Review.DoesNotExist:
                     return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            if review.is_closed:
+                return Response(
+                    {"detail": "This discussion has been closed by an admin."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
             patient = getattr(user, 'patient_profile', None)
             doctor = Doctor.objects.filter(user=user).first()
@@ -330,6 +360,9 @@ class ReplyAPIView(APIView):
         # Ensure only the reply owner (doctor or patient) can update their own reply
         if reply.user != user:
             return Response({"detail": "You can only update your own reply."}, status=status.HTTP_403_FORBIDDEN)
+        
+        if reply.is_approved:
+            return Response({"detail": "You can not update approved reply."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ReplySerializer(reply, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():

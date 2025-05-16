@@ -73,6 +73,9 @@ stages:
                   echo "restarting gunicorn"
                   sudo systemctl restart gunicorn.socket gunicorn.service
                   echo "restarted gunicorn"
+                  echo "restarting celery"
+                  sudo systemctl restart celery.service
+                  echo "restarted celery"
               displayName: 'restarting'
             - task: Bash@3
               inputs:

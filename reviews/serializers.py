@@ -13,7 +13,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'reviewer_name', 'doctor', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'created_at']
+        fields = ['id', 'reviewer_name', 'doctor', 'patient_id', 'reviewer_profile_picture', 'rating', 'title', 'content', 'recommend', 'status', 'created_at']
 
     def get_reviewer_name(self, obj):
         return obj.patient.user.first_name if obj.patient and obj.patient.user else "Unknown"
@@ -60,7 +60,7 @@ class ReplySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reply
-        fields = ['id', 'user', 'user_name', 'profile_picture', 'user_type', 'patient_name', 'content', 'created_at', 'parent_reply']
+        fields = ['id', 'user', 'user_name', 'profile_picture', 'user_type', 'patient_name', 'content', 'is_approved', 'created_at', 'parent_reply']
 
     def get_user_name(self, obj):
         # Get the user's name based on whether they are a doctor or patient

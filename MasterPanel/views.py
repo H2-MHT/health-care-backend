@@ -4,7 +4,10 @@ from django.shortcuts import render, get_object_or_404
 
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
-from django.http import HttpResponse
+from django.http import (
+    HttpResponse,
+    Http404
+)
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
 from doctors.models import (
@@ -23,8 +26,16 @@ from users.models import User
 from payments.models import Transaction, AccountDetail
 from rest_framework import status
 from doctors.models import LicenceCertificate
-from reviews.models import Review, Report
-from reviews.serializers import ReportSerializer
+from reviews.models import (
+    Review, 
+    Report, 
+    Reply
+)
+from reviews.serializers import (
+    ReportSerializer,
+    ReviewSerializer,
+    ReplySerializer
+)
 from doctors.models import Specialization
 from .serializers import SpecializationSerializer
 from django.conf import settings
@@ -986,3 +997,138 @@ class DoctorStripeLinkAddView(APIView):
                 },
             status=status.HTTP_200_OK
             )
+
+class ReviewApproveView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request):
+        try:
+            review_id = request.data.get('review_id')
+            review_status = request.data.get('status')
+            
+            try:
+                review = get_object_or_404(Review, id=review_id)
+            except Http404:
+                return Response({"message": f"Review not found with given ID:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if not review_status or review_status not in ["Approved", "Rejected"]:
+                return Response({"message": "Invalid review status"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if review.status == review_status:
+                return Response({"message": f"Review is already {review_status}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+            if review_status == "Approved":
+                review.status = review_status
+                
+            elif review_status == "Rejected":
+                review.status = review_status
+    
+            review.save()
+            return Response({"message": f"Review {review_status} successfully"}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def get(self, request):
+        try:
+            review_list = Review.objects.filter(status="Pending").order_by('-created_at')
+            reviews, headers = pagination_view(review_list, request)
+            data = [
+                 {
+                    "id": review.id,
+                    "patientName": review.patient.user.get_full_name(),
+                    "doctorName": review.doctor.user.get_full_name(),
+                    "rating": review.rating,
+                    "content": review.content,
+                    "date": review.created_at.strftime("%Y-%m-%d"),
+                    "status": review.status
+                }
+                for review in reviews
+            ]
+            return create_paginated_response("Retrieved successfully.", data, headers)    
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
+        
+
+class ReplyApproveView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request):
+        try:
+            reply_id = request.data.get('reply_id')
+            
+            try:
+                reply = get_object_or_404(Reply, id=reply_id)
+            except Http404:
+                return Response({"message": f"Reply not found with given ID:{reply_id}"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if reply.is_approved:
+                return Response({"message": "Reply is already approved"}, status=status.HTTP_400_BAD_REQUEST)
+
+            reply.is_approved = True
+            reply.save()
+            return Response({"message": "Reply approved successfully"}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def get(self, request):
+        try:
+            replies = Reply.objects.filter(is_approved=False)
+            serializer = ReplySerializer(replies, many=True)
+            return Response({"message": "Retrieved successfully", "data": serializer.data}, status=status.HTTP_200_OK)     
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class CloseDiscussionAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request):
+        try:
+            review_id = request.data.get('review_id')
+            if not review_id:
+                return Response({"message": "Review ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                review = get_object_or_404(Review, id=review_id)
+            except Http404:
+                return Response({"message": f"Review not found with given id:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if review.is_closed:
+                return Response({"message": "Discussion is already closed"}, status=400)
+            
+            review.is_closed = True
+            review.save()
+            return Response({"message": "Discussion closed successfully"}, status=200)
+        except Review.DoesNotExist:
+            return Response({"message": "Review not found."}, status=404)
+
+class DeleteInappropriateReviewOrReplyView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def post(self, request):
+        try:
+            data = request.data
+            target_type = data.get('target_type')
+            target_id = data.get('target_id')
+            
+            if not target_type or not target_id:
+                return Response({"message": "target_type and target_id are required."}, status=400)
+            
+            if target_type == 'review':
+                try:
+                    review = Review.objects.get(id=target_id)
+                    review.delete()
+                except Review.DoesNotExist:
+                    return Response({"message": "Review not found."}, status=404)
+                 
+            elif target_type == 'reply':
+                try:
+                    reply = Reply.objects.get(id=target_id)
+                    reply.delete()
+                except Reply.DoesNotExist:
+                    return Response({"message": "Reply not found."}, status=404)
+                
+            return Response({"message": f"{target_type.capitalize()} deleted successfully"}, status=200)
+        except Review.DoesNotExist:
+            return Response({"detail": "Review not found."}, status=404)

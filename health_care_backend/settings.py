@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'notifications',
     'video_call',
     'django_celery_beat',
+    'django_celery_results',
     'NHS',
     'elasticapm.contrib.django',
 ]
@@ -377,7 +378,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
-        'videpo_call': {
+        'video_call': {
             'handlers': ['video_call'],
             'level': 'DEBUG',
             'propagate': False,
@@ -392,7 +393,9 @@ CORS_ALLOWED_ORIGINS = [
     'http://h2.doctor',
     'https://h2.doctor',
     'https://stage.h2.doctor',
-    'http://stage.h2.doctor'
+    'http://stage.h2.doctor',
+    'https://stagecrm.h2.doctor',
+    'https://crm.h2.doctor'
     
 ]
 
@@ -412,7 +415,10 @@ CSRF_TRUSTED_ORIGINS = [
     'http://h2.doctor',
     'https://h2.doctor',
     'https://stage.h2.doctor',
-    'http://stage.h2.doctor'
+    'http://stage.h2.doctor',
+    'https://stagecrm.h2.doctor',
+    'https://crm.h2.doctor'
+
 ]
 
 
@@ -423,12 +429,21 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ACCOUNT_SID = os.getenv("ACCOUNT_SID")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
+TWILIO_SMS_NUMBER = os.getenv("TWILIO_SMS_NUMBER")
 
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0'
 # CELERY_BROKER_URL = 'redis://209.38.123.166:6379/0'
-CELERY_ACCEPT_CONTENT = ['json']
+CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ENABLE_UTC = True
+CELERY_RESULT_BACKEND = "django-db"
+
+#celery beat setting  this by default we have to set it
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
 
 # Agora video-call
 APP_ID = os.getenv("APP_ID")
@@ -438,7 +453,8 @@ OTP_EXPIRY_MINUTES = 15
 
 NHS_API_KEY = os.getenv("NHS_API_KEY")
 NHS_BASE_URL = os.getenv("NHS_BASE_URL")
-
+NHS_SYMPTOM_BASE_URL = os.getenv("NHS_SYMPTOM_BASE_URL")
+NHS_CONDITION_BASE_URL = os.getenv("NHS_CONDITION_BASE_URL")
 ADMIN_EMAIL = "dpf@my-health.today"
 
 
