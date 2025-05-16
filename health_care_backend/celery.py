@@ -1,16 +1,15 @@
+
+# your_project/celery.py
+from __future__ import absolute_import, unicode_literals
 import os
-import django 
 from celery import Celery
+from django.conf import settings
 
-# Set default settings for Django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "health_care_backend.settings")
 
-# Ensure Django is fully loaded
-django.setup()
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', "health_care_backend.settings")
 
-# Initialize Celery
-app = Celery("health_care_backend")
-app.config_from_object("django.conf:settings", namespace="CELERY")
+app = Celery('health_care_backend',broker=settings.CELERY_BROKER_URL)
+app.config_from_object('django.conf:settings', namespace='CELERY')
 app.conf.broker_connection_retry_on_startup = True
 
 # Autodiscover tasks
