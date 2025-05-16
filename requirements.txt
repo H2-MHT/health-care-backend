@@ -99,4 +99,4 @@ uvicorn
 reportlab
 pycountry
 deep-translator
-django_celery_results==2.6.0
+django_celery_results
