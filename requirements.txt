@@ -100,5 +100,3 @@ reportlab
 pycountry
 deep-translator
 django_celery_results
-elastic-apm
-psutil
