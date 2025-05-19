@@ -69,6 +69,8 @@ import sendgrid
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, To
 import logging
+from datetime import time
+from django.utils import timezone
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
@@ -95,35 +97,45 @@ class TotalPatientAndDoctorsView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
 
     def get(self, request):
-        start_of_month = make_aware(datetime(datetime.now().year, datetime.now().month, 1))
-
-        total_doctors = Doctor.objects.count()
-        total_patients = Patient.objects.count()
-        total_clinics = Clinic.objects.count()
-
-
-        monthly_doctors = User.objects.filter(
-            created_at__gte=start_of_month, role="Doctor"
-        ).count()
-        monthly_patients = User.objects.filter(
-            created_at__gte=start_of_month, role="Patient"
-        ).count()
-        monthly_clinics = User.objects.filter(
-            created_at__gte=start_of_month, role="Clinic"
-        ).count()
-
-
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        total_doctors = User.objects.filter(is_verified=True,role="Doctor").count()
+        total_patients = User.objects.filter(is_verified=True,role="Patient").count()
+        total_clinics = User.objects.filter(is_verified=True,role="Clinic").count()
+        
+        if not start_date or not end_date:
+            data = {
+                "total_doctors": total_doctors,
+                "total_patients": total_patients,
+                "total_clinics": total_clinics,
+            }
+            return Response({'message': 'Retrieved successfully','data':data}, status=status.HTTP_200_OK)
+            
+        else:
+            converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+            converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
+            end_datetime = timezone.make_aware(datetime.combine(converted_end_date, time.max))
+            
+            doctors = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Doctor").count()     
+            patients = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Patient").count()        
+            clinics = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Clinic").count()
+            
         data = {
-            'total_doctors': total_doctors,
-            'total_patients': total_patients,
-            'total_clinics': total_clinics,
-            'monthly_doctors': monthly_doctors,
-            'monthly_patients': monthly_patients,
-            'monthly_clinics': monthly_clinics,
+            'total': {
+                'total_doctors': total_doctors,
+                'total_patients': total_patients,
+                'total_clinics': total_clinics,
+            },
+           'current':{
+                'filtered_doctors': doctors,
+                'filtered_patients': patients,
+                'filtered_clinics': clinics,
+           }
         }
-        return Response({'total_counts': data})
-
-
+        return Response({'message': 'Retrieved successfully','data': data}, status=status.HTTP_200_OK)
+            
 class PatientListCreateAPIView(APIView):
     """
     API to list and create patients.
