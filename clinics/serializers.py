@@ -5,7 +5,7 @@ import json
 from appointments.serializers import AppointmentSerializer
 
 class ClinicRegisterSerializer(serializers.ModelSerializer):
-    working_time = serializers.CharField(max_length=255)
+    working_time = serializers.CharField(max_length=255,required=False)
     services_provided = serializers.CharField(max_length=255, write_only=True)
     languages = serializers.CharField(max_length=255, write_only=True)
 
