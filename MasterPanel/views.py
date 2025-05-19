@@ -71,6 +71,9 @@ from sendgrid.helpers.mail import Mail, To
 import logging
 from datetime import time
 from django.utils import timezone
+from django.db.models.functions import ExtractMonth, ExtractYear
+from django.db.models import Count
+import calendar
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
@@ -99,12 +102,15 @@ class TotalPatientAndDoctorsView(APIView):
     def get(self, request):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
+        role = request.query_params.get('role')
         
         total_doctors = User.objects.filter(is_verified=True,role="Doctor").count()
         total_patients = User.objects.filter(is_verified=True,role="Patient").count()
         total_clinics = User.objects.filter(is_verified=True,role="Clinic").count()
         
-        if not start_date or not end_date:
+        
+            
+        if not start_date or not end_date or not role:
             data = {
                 "total_doctors": total_doctors,
                 "total_patients": total_patients,
@@ -113,6 +119,9 @@ class TotalPatientAndDoctorsView(APIView):
             return Response({'message': 'Retrieved successfully','data':data}, status=status.HTTP_200_OK)
             
         else:
+            if role not in ["Doctor", "Patient", "Clinic"]:
+                return Response({'message': 'Role must be Doctor, Patient or Clinic'}, status=status.HTTP_400_BAD_REQUEST)
+            
             converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
             converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
             start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
@@ -122,19 +131,45 @@ class TotalPatientAndDoctorsView(APIView):
             patients = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Patient").count()        
             clinics = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Clinic").count()
             
-        data = {
-            'total': {
-                'total_doctors': total_doctors,
-                'total_patients': total_patients,
-                'total_clinics': total_clinics,
-            },
-           'current':{
-                'filtered_doctors': doctors,
-                'filtered_patients': patients,
-                'filtered_clinics': clinics,
-           }
-        }
-        return Response({'message': 'Retrieved successfully','data': data}, status=status.HTTP_200_OK)
+            # month wise count of patients or doctors
+            target_year = converted_start_date.year
+            start_of_year = timezone.make_aware(datetime.combine(date(target_year, 1, 1), time.min))
+            end_of_year = timezone.make_aware(datetime.combine(date(target_year, 12, 31), time.max))
+            
+            monthly_patient_counts = (
+            User.objects.filter(
+                is_verified=True,
+                created_at__range=(start_of_year, end_of_year),
+                role=role
+            )
+            .annotate(month=ExtractMonth('created_at'), year=ExtractYear('created_at'))
+            .values('month', 'year')
+            .annotate(count=Count('id'))
+            .order_by('month')
+            )
+            
+            monthly_data = [
+                {
+                    'month': calendar.month_name[entry['month']],
+                    'count': entry['count']
+                }
+                for entry in monthly_patient_counts
+            ]
+                    
+            data = {
+                'total': {
+                    'total_doctors': total_doctors,
+                    'total_patients': total_patients,
+                    'total_clinics': total_clinics,
+                },
+                'current':{
+                        'filtered_doctors': doctors,
+                        'filtered_patients': patients,
+                        'filtered_clinics': clinics,
+                },
+                f"monthly_{role.lower()}_registrations": monthly_data
+            }
+            return Response({'message': 'Retrieved successfully','data': data}, status=status.HTTP_200_OK)
             
 class PatientListCreateAPIView(APIView):
     """
