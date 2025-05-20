@@ -15,19 +15,21 @@ from django.urls import path
 from chat.consumers import ChatConsumer
 from video_call.consumers import DeepgramConsumer
 from channels.auth import AuthMiddlewareStack
+from video_call.chat import VideoCallConsumer
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "health_care_backend.settings")
 django.setup()
-application = get_asgi_application()
+django_asgi_app= get_asgi_application()
 
 application = ProtocolTypeRouter(
     {
-        "http": application,
+        "http": django_asgi_app,
         "websocket": AuthMiddlewareStack(
             URLRouter(
                 [
                     path("ws/chat/<str:room_name>", ChatConsumer.as_asgi()),
                     path("ws/transcribe/", DeepgramConsumer.as_asgi()), 
+                    path("ws/video/<str:room_name>/", VideoCallConsumer.as_asgi())
                 ]
             )
         ),

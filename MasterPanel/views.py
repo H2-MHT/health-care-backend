@@ -42,6 +42,8 @@ from django.conf import settings
 import stripe
 import os 
 from django.apps import apps
+from django.utils.timezone import make_aware
+from datetime import datetime
 import csv
 from io import StringIO, BytesIO
 from reportlab.pdfgen import canvas
@@ -61,8 +63,23 @@ from utils.pagination import(
     pagination_view,
     create_paginated_response,
 )
-
+from django.utils.crypto import get_random_string
+from rest_framework.permissions import IsAuthenticated
+import sendgrid
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, To
+import logging
+from datetime import time
+from django.utils import timezone
+from django.db.models.functions import ExtractMonth, ExtractYear
+from django.db.models import Count, Sum
+import calendar
+from calendar import monthrange
+from decimal import Decimal
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+logger = logging.getLogger(__name__)
+
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
@@ -85,18 +102,78 @@ class TotalPatientAndDoctorsView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
 
     def get(self, request):
-        total_doctors = Doctor.objects.count()
-        total_patients = Patient.objects.count()
-        total_clinics = Clinic.objects.count()
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        role = request.query_params.get('role')
+        
+        total_doctors = User.objects.filter(is_verified=True,role="Doctor").count()
+        total_patients = User.objects.filter(is_verified=True,role="Patient").count()
+        total_clinics = User.objects.filter(is_verified=True,role="Clinic").count()
+        
+        
+            
+        if not start_date or not end_date or not role:
+            data = {
+                "total_doctors": total_doctors,
+                "total_patients": total_patients,
+                "total_clinics": total_clinics,
+            }
+            return Response({'message': 'Retrieved successfully','data':data}, status=status.HTTP_200_OK)
+            
+        else:
+            if role not in ["Doctor", "Patient", "Clinic"]:
+                return Response({'message': 'Role must be Doctor, Patient or Clinic'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+            converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
+            end_datetime = timezone.make_aware(datetime.combine(converted_end_date, time.max))
+            
+            doctors = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Doctor").count()     
+            patients = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Patient").count()        
+            clinics = User.objects.filter(is_verified=True, created_at__range=(start_datetime, end_datetime), role="Clinic").count()
+            
+            # month wise count of patients or doctors
+            target_year = converted_start_date.year
+            start_of_year = timezone.make_aware(datetime.combine(date(target_year, 1, 1), time.min))
+            end_of_year = timezone.make_aware(datetime.combine(date(target_year, 12, 31), time.max))
+            
+            monthly_patient_counts = (
+            User.objects.filter(
+                is_verified=True,
+                created_at__range=(start_of_year, end_of_year),
+                role=role
+            )
+            .annotate(month=ExtractMonth('created_at'), year=ExtractYear('created_at'))
+            .values('month', 'year')
+            .annotate(count=Count('id'))
+            .order_by('month')
+            )
+            count_dict = {entry['month']: entry['count'] for entry in monthly_patient_counts}
 
-        data = {
-            'total_doctors': total_doctors,
-            'total_patients': total_patients,
-            'total_clinics': total_clinics
-        }
-        return Response({'total_counts': data})
-
-
+            monthly_data = [
+                {
+                    'month': calendar.month_name[month],
+                    'count': count_dict.get(month, 0)
+                }
+                for month in range(1, 13)
+            ]
+                    
+            data = {
+                'total': {
+                    'total_doctors': total_doctors,
+                    'total_patients': total_patients,
+                    'total_clinics': total_clinics,
+                },
+                'current':{
+                        'filtered_doctors': doctors,
+                        'filtered_patients': patients,
+                        'filtered_clinics': clinics,
+                },
+                f"monthly_data": monthly_data
+            }
+            return Response({'message': 'Retrieved successfully','data': data}, status=status.HTTP_200_OK)
+            
 class PatientListCreateAPIView(APIView):
     """
     API to list and create patients.
@@ -269,11 +346,21 @@ class UserListAPIView(APIView):
                         "doctor_id": doctor.id,  # Pass doctor_id
                         "uid": doctor.user.uid,  # Pass user uid
                         "name": doctor.user.get_full_name(),
+                        "gender": doctor.user.gender,
+                        "dob": doctor.user.dob,
                         "email": doctor.user.email,
                         "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
                         "speciality": doctor.specialty,
+                        "city": doctor.user.city,
                         "country": doctor.user.country,
                         "phone_number": doctor.user.phone_number,
+                        "currency": doctor.user.currency,
+                        "expertise": doctor.user.expertise,
+                        "experience_years": doctor.experience_years,
+                        "professional_stat": doctor.user.professional_stat,
+                        "bio": doctor.user.bio,
+                        "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
+                        "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
                         "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
                         "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
@@ -291,9 +378,13 @@ class UserListAPIView(APIView):
                         "uid": patient.uid,  # Pass user uid
                         "name": patient.get_full_name(),
                         "email": patient.email,
+                        "gender": patient.gender,
+                        "dob": patient.dob,
                         "profile_picture": patient.profile_picture.url if patient.profile_picture else None,
                         "country": patient.country,
                         "city": patient.city,
+                        "currency": patient.currency,
+                        "bio": patient.bio,
                         "phone_number": patient.phone_number,
                         "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
@@ -314,6 +405,9 @@ class UserListAPIView(APIView):
                         "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
                         "country": clinic.user.country,
                         "city": clinic.user.city,
+                        "bio": clinic.user.bio,
+                        "currency": clinic.user.currency,
+                        "work_place": clinic.user.work_place,
                         "phone_number": clinic.contact_phone if clinic.contact_phone else clinic.user.phone_number,
                         "website": clinic.website,
                         "address": clinic.address,
@@ -1004,25 +1098,35 @@ class ReviewApproveView(APIView):
     def post(self, request):
         try:
             review_id = request.data.get('review_id')
+            review_status = request.data.get('status')
             
             try:
                 review = get_object_or_404(Review, id=review_id)
             except Http404:
                 return Response({"message": f"Review not found with given ID:{review_id}"}, status=status.HTTP_404_NOT_FOUND)
             
-            if review.is_approved:
-                return Response({"message": "Review is already approved"}, status=status.HTTP_400_BAD_REQUEST)
-
-            review.is_approved = True
+            if not review_status or review_status not in ["Approved", "Rejected"]:
+                return Response({"message": "Invalid review status"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if review.status == review_status:
+                return Response({"message": f"Review is already {review_status}"}, status=status.HTTP_400_BAD_REQUEST)
+        
+            if review_status == "Approved":
+                review.status = review_status
+                
+            elif review_status == "Rejected":
+                review.status = review_status
+    
             review.save()
-            return Response({"message": "Review approved successfully"}, status=status.HTTP_200_OK)
+            return Response({"message": f"Review {review_status} successfully"}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     def get(self, request):
         try:
-            reviews = Review.objects.filter(is_approved=False)
+            review_list = Review.objects.filter(status="Pending").order_by('-created_at')
+            reviews, headers = pagination_view(review_list, request)
             data = [
                  {
                     "id": review.id,
@@ -1031,12 +1135,11 @@ class ReviewApproveView(APIView):
                     "rating": review.rating,
                     "content": review.content,
                     "date": review.created_at.strftime("%Y-%m-%d"),
-                    "status": review.is_approved
+                    "status": review.status
                 }
                 for review in reviews
             ]
-           
-            return Response({"message": "Retrieved successfully", "data": data}, status=status.HTTP_200_OK)     
+            return create_paginated_response("Retrieved successfully.", data, headers)    
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
         
@@ -1123,3 +1226,104 @@ class DeleteInappropriateReviewOrReplyView(APIView):
             return Response({"message": f"{target_type.capitalize()} deleted successfully"}, status=200)
         except Review.DoesNotExist:
             return Response({"detail": "Review not found."}, status=404)
+
+    
+class CreateAdminAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = request.data
+        required_fields = ["first_name", "last_name", "email", "dob", "city", "country"]
+
+        missing_fields = [f for f in required_fields if not data.get(f)]
+        if missing_fields:
+            return Response({"detail": f"Missing fields: {', '.join(missing_fields)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = data.get("email")
+        if User.objects.filter(email=email).exists():
+            return Response({"error": "email already exists."}, status=400)
+
+        temp_password = get_random_string(length=10) 
+
+        user = User(
+            first_name=data.get("first_name"),
+            last_name=data.get("last_name"),
+            email=email,
+            dob=data.get("dob"),
+            city=data.get("city"),
+            country=data.get("country"),
+            role="Admin",
+            temp_password=temp_password,
+            is_verified=True,
+            is_staff=True,
+        )
+        user.set_password(temp_password)
+        user.save()
+
+        self.send_temp_password_email(user.email, temp_password)
+
+        return Response({"message": "Admin account created successfully"}, status=status.HTTP_201_CREATED)
+
+    def send_temp_password_email(self, email, temp_password):
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject='Temporary Password',
+            plain_text_content=f'Your temporary password is {temp_password}'
+            )
+    
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            logger.error(f"Error sending email: {e}")
+
+
+    def get(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
+        return Response({"users": users}, status=status.HTTP_200_OK)
+    
+class RevenueAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date') 
+            end_date = request.query_params.get('end_date')
+
+            if not start_date or not end_date:
+                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
+
+            start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
+            end_datetime = timezone.make_aware(datetime.combine(converted_end_date, time.max))
+
+            appointments = BookedAppointment.objects.filter(
+                created_at__range=(start_datetime, end_datetime),
+                status="Completed"
+            )
+            
+            total_appointments = appointments.aggregate(total=Count('id'))['total'] or 0
+            total_revenue = appointments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            gross_revenue = total_revenue * Decimal('0.20')
+
+            data = {
+                "total_appointments": total_appointments,
+                "total_revenue": total_revenue,
+                "gross_revenue": gross_revenue
+            }
+
+            return Response({"message":"Revenue data retrieved successfully","revenue": data}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

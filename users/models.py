@@ -60,6 +60,7 @@ class User(AbstractUser):
         ("Patient", "Patient"),
         ("Doctor", "Doctor"),
         ("Clinic", "Clinic"),
+        ("Admin", "Admin"),
         ("SuperAdmin", "Super Admin"),
     ]
     GENDER_CHOICES = [
@@ -109,11 +110,14 @@ class User(AbstractUser):
     expertise = models.TextField(blank=True, default="")
     professional_stat = models.TextField(blank=True, default="")
     working_time = models.CharField(max_length=255, blank=True, default="")
+    
     # Agreement
     terms_and_condition = models.BooleanField(
         validators=[validate_terms], default=False
     )
-    
+    code_of_conduct = models.BooleanField(default=False, null=True, blank=True)
+    acknowledge = models.BooleanField(default=False, null=True, blank=True)
+    medical_disclaimer = models.BooleanField(default=False, null=True, blank=True)
     
     # Two-Factor Authentication (Multiple Methods)
     two_factor_methods = models.ManyToManyField("TwoFactorMethod", blank=True)

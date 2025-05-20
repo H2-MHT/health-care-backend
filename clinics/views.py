@@ -190,10 +190,27 @@ class ClinicInfoAPIView(APIView):
 
     def put(self, request, *args, **kwargs):
         try:
-            clinic = Clinic.objects.get(user=request.user)
-            serializer = ClinicInfoSerializer(
-                clinic, data=request.data, partial=True
-            )  # Allow partial updates
+            # Superuser can use clinic_id or user_id
+            if request.user.is_superuser:
+                clinic = None
+
+                clinic_id = request.data.get("clinic_id")
+                user_id = request.data.get("clinic_user_id")
+
+                if clinic_id:
+                    clinic = Clinic.objects.filter(id=clinic_id).first()
+                elif user_id:
+                    clinic = Clinic.objects.filter(user_id=user_id).first()
+
+                if not clinic:
+                    return Response(
+                        {"error": "Clinic not found for the provided ID."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            else:
+                clinic = Clinic.objects.get(user=request.user)
+
+            serializer = ClinicInfoSerializer(clinic, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(
@@ -209,9 +226,13 @@ class ClinicInfoAPIView(APIView):
             )
         except Clinic.DoesNotExist:
             return Response(
-                {"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND
+                {"error": "Clinic not found."}, status=status.HTTP_404_NOT_FOUND
             )
-
+        except Exception as e:
+            return Response(
+                {"error": "Unexpected error occurred", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class ClinicReviewListCreateAPIView(APIView):
     """

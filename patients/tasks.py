@@ -4,8 +4,9 @@ from .models import Reminder
 import sendgrid
 from sendgrid.helpers.mail import Mail
 from django.conf import settings
-from datetime import datetime, timedelta
 from django.utils.timezone import now
+from datetime import datetime, timedelta
+from django.utils import timezone
 from twilio.rest import Client
 
 User = get_user_model()
@@ -24,7 +25,7 @@ def send_email_reminder(reminder_id):
         )
         sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
         message = Mail(
-            from_email="akash.prajapati@techqware.com",
+            from_email="it@my-health.today",
             to_emails=patient.email,
             subject="Appointment Reminder",
             html_content=f"""
@@ -52,9 +53,15 @@ def send_whatsapp_reminder(reminder_id):
         doctor = User.objects.get(id=appointment.doctor)
         # Extract start time from slot
         start_time_str = appointment.slot.split(" - ")[0]  # Extract 'HH:MM'
-        appointment_time = datetime.combine(
-            appointment.date, datetime.strptime(start_time_str, "%H:%M").time()
+        appointment_datetime = datetime.combine(
+            appointment.date, 
+            datetime.strptime(start_time_str, "%H:%M").time()
         )
+
+        # Make appointment datetime timezone-aware (UTC)
+        appointment_datetime_utc = timezone.make_aware(appointment_datetime, timezone.utc)
+        print(f"Appointment DateTime (UTC): {appointment_datetime_utc}")
+
         client = Client(settings.ACCOUNT_SID, settings.AUTH_TOKEN)
         message = client.messages.create(
             from_=settings.TWILIO_WHATSAPP_NUMBER,
@@ -63,7 +70,7 @@ def send_whatsapp_reminder(reminder_id):
         )
         print(f"WhatsApp reminder sent to {patient.phone_number}: {message.sid}")
         # Schedule next reminder if applicable
-        schedule_next_reminder(reminder, appointment_time, "whatsapp")
+        schedule_next_reminder(reminder, appointment_datetime_utc, "whatsapp")
     except Exception as e:
         print(f"Error sending WhatsApp reminder: {e}")
 
@@ -80,9 +87,12 @@ def send_sms_reminder(reminder_id):
         appointment_time = datetime.combine(
             appointment.date, datetime.strptime(start_time_str, "%H:%M").time()
         )
+        # Make the appointment time timezone-aware (UTC)
+        appointment_time = timezone.make_aware(appointment_time, timezone.utc)
+        print(f"Appointment Time (UTC): {appointment_time}")
         client = Client(settings.ACCOUNT_SID, settings.AUTH_TOKEN)
         message = client.messages.create(
-            from_=settings.TWILIO_SMS_NUMBER,
+            from_='+14342681318',
             body=f"Reminder: Your appointment with Dr. {doctor.first_name} is on {appointment.date} at {appointment.slot}.",
             to=patient.phone_number,  # Ensure phone number is in international format
         )
@@ -106,7 +116,7 @@ def schedule_next_reminder(reminder, appointment_time, method):
         if method == "whatsapp":
             send_whatsapp_reminder.apply_async(args=[reminder.id], utc=next_reminder_time)
             print(f"Next WhatsApp reminder scheduled for {next_reminder_time}")
-        elif method == "sms":
+        elif method == "phone":
             send_sms_reminder.apply_async(args=[reminder.id], utc=next_reminder_time)
             print(f"Next SMS reminder scheduled for {next_reminder_time}")
         else:

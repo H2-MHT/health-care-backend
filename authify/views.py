@@ -604,7 +604,7 @@ class ChangePasswordView(APIView):
             otp_code = str(random.randint(100000, 999999))
             user.otp = otp_code
             user.otp_created_at = timezone.now()
-            user.temp_new_password = new_password
+            user.temp_password = new_password
             user.save()
 
             # Dispatch dynamic template OTP
@@ -646,19 +646,14 @@ class ChangePasswordView(APIView):
                 return Response({"message": "Invalid OTP. Please try again."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Update password immediately
-            user.set_password(request.data.get("new_password"))
+            user.set_password(user.temp_password)
+            user.temp_password = ""
             user.otp = ""
             user.otp_created_at = None
             user.save()
             logger.info(f"Password changed successfully for user: {user.email}")
-
-            # Authenticate and log the user in after updating the password
-            user = authenticate(request, email=user.email, password=request.data.get("new_password"))
-            if user is not None:
-                login(request, user)  # Log the user in if authenticated successfully
-                return Response({"message": "Password updated and user logged in successfully."}, status=status.HTTP_200_OK)
-            else:
-                return Response({"message": "Invalid email or password."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)
+     
         except Exception as e:
             logger.exception("Unexpected error fetching user profile: %s", str(e))
             return Response(
