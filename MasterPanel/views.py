@@ -1287,3 +1287,43 @@ class CreateAdminAPIView(APIView):
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
         users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
         return Response({"users": users}, status=status.HTTP_200_OK)
+    
+class RevenueAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date') 
+            end_date = request.query_params.get('end_date')
+
+            if not start_date or not end_date:
+                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
+
+            start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
+            end_datetime = timezone.make_aware(datetime.combine(converted_end_date, time.max))
+
+            appointments = BookedAppointment.objects.filter(
+                created_at__range=(start_datetime, end_datetime),
+                status="Completed"
+            )
+            
+            total_appointments = appointments.aggregate(total=Count('id'))['total'] or 0
+            total_revenue = appointments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            gross_revenue = total_revenue * Decimal('0.20')
+
+            data = {
+                "total_appointments": total_appointments,
+                "total_revenue": total_revenue,
+                "gross_revenue": gross_revenue
+            }
+
+            return Response({"message":"Revenue data retrieved successfully","revenue": data}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
