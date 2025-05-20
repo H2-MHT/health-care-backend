@@ -1323,7 +1323,7 @@ class RevenueAPIView(APIView):
                 "gross_revenue": gross_revenue
             }
 
-            return Response({"revenue": data}, status=status.HTTP_200_OK)
+            return Response({"message":"Revenue data retrieved successfully","revenue": data}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
