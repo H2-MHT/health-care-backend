@@ -26,7 +26,8 @@ from .views import(
     CloseDiscussionAPIView,
     DeleteInappropriateReviewOrReplyView,
     CreateAdminAPIView,
-    RevenueAPIView
+    RevenueAPIView,
+    PastAndAUpcomingAppointmentsAPIView
 )
 
 urlpatterns = [
@@ -91,5 +92,6 @@ urlpatterns = [
     path('delete-inappropriate/', DeleteInappropriateReviewOrReplyView.as_view(), name="delete-inappropriate"),
     path("admin-account/", CreateAdminAPIView.as_view(), name="admin-account"),
     path('revenue/', RevenueAPIView.as_view(), name="revenue"),
+    path('past-upcoming-appointments/', PastAndAUpcomingAppointmentsAPIView.as_view(), name="past-and-upcoming-appointments"),
 
 ]
