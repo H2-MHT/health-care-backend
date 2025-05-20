@@ -72,8 +72,10 @@ import logging
 from datetime import time
 from django.utils import timezone
 from django.db.models.functions import ExtractMonth, ExtractYear
-from django.db.models import Count
+from django.db.models import Count, Sum
 import calendar
+from calendar import monthrange
+from decimal import Decimal
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
@@ -147,13 +149,14 @@ class TotalPatientAndDoctorsView(APIView):
             .annotate(count=Count('id'))
             .order_by('month')
             )
-            
+            count_dict = {entry['month']: entry['count'] for entry in monthly_patient_counts}
+
             monthly_data = [
                 {
-                    'month': calendar.month_name[entry['month']],
-                    'count': entry['count']
+                    'month': calendar.month_name[month],
+                    'count': count_dict.get(month, 0)
                 }
-                for entry in monthly_patient_counts
+                for month in range(1, 13)
             ]
                     
             data = {
@@ -167,7 +170,7 @@ class TotalPatientAndDoctorsView(APIView):
                         'filtered_patients': patients,
                         'filtered_clinics': clinics,
                 },
-                f"monthly_{role.lower()}_registrations": monthly_data
+                f"monthly_data": monthly_data
             }
             return Response({'message': 'Retrieved successfully','data': data}, status=status.HTTP_200_OK)
             
