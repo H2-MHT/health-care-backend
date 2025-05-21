@@ -8,7 +8,7 @@ from clinics.models import Language
 import random
 from django.utils.timezone import now
 from datetime import datetime
-
+from django.utils import timezone 
 
 class CustomUserManager(BaseUserManager):
     """
@@ -280,3 +280,39 @@ class AppLanguage(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.language_name}"
     
+# help and support 
+STATUS_CHOICES = (
+    ("open", "Open"),
+    ("in_progress", "In Progress"),
+    ("resolved", "Resolved"),
+    ("closed", "Closed"),
+)
+
+class Ticket(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    ticket_id = models.CharField(max_length=20, unique=True, editable=False)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    attachment = models.FileField(upload_to='support_attachments/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    admin_comment = models.TextField(blank=True, null=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+
+    def save(self, *args, **kwargs):
+        if not self.ticket_id:
+            role = getattr(self.user, 'role', '').lower()
+            prefix = {
+                'patient': 'PUID',
+                'doctor': 'DUID',
+                'clinic': 'CUID',
+            }.get(role, 'UID')
+            random_number = random.randint(100000, 999999)
+            self.ticket_id = f"{prefix}{random_number}"
+            while Ticket.objects.filter(ticket_id=self.ticket_id).exists():
+                random_number = random.randint(100000, 999999)
+                self.ticket_id = f"{prefix}{random_number}"
+        super().save(*args, **kwargs)
+
