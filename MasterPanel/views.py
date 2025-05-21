@@ -1302,7 +1302,7 @@ class CreateAdminAPIView(APIView):
         except User.DoesNotExist:
             return Response({"message": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        for field in ["first_name", "last_name", "dob", "city", "country"]:
+        for field in ["first_name", "last_name", "email", "dob", "city", "country"]:
             if field in request.data:
                 setattr(user, field, request.data[field])
 
@@ -1312,7 +1312,8 @@ class CreateAdminAPIView(APIView):
             "last_name": user.last_name,
             "dob": user.dob,
             "city": user.city,
-            "country": user.country
+            "country": user.country,
+            "email": user.email
 
         }
         return Response({"message": "Admin data updated successfully.", "data" : updated_data}, status=status.HTTP_200_OK)
