@@ -11,6 +11,7 @@ from .models import (
     Notes,
     DeviceAccess,
     AppLanguage,
+    Ticket,
     )
 from doctors.models import ConsultationSessionAndFee
 import pycountry
@@ -160,3 +161,19 @@ class AppLanguageSerializer(serializers.ModelSerializer):
             language_name=validated_data['language_name'],
             code=validated_data['code'],
         )
+        
+
+class SupportTickeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment']
+        
+        
+class AdminSupportTicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = [
+            'ticket_id', 'title', 'description', 'attachment', 'status',
+            'admin_comment', 'resolved_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['ticket_id', 'created_at', 'updated_at', 'resolved_by', 'resolved_at']
