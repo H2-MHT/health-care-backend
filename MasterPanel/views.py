@@ -1330,3 +1330,115 @@ class CreateAdminAPIView(APIView):
             return Response({"message": "Admin deleted successfully"}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Admin not found"}, status=status.HTTP_404_NOT_FOUND)
+        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
+        return Response({"users": users}, status=status.HTTP_200_OK)
+    
+class RevenueAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date') 
+            end_date = request.query_params.get('end_date')
+
+            if not start_date or not end_date:
+                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
+
+            start_datetime = timezone.make_aware(datetime.combine(converted_start_date, time.min))
+            end_datetime = timezone.make_aware(datetime.combine(converted_end_date, time.max))
+
+            appointments = BookedAppointment.objects.filter(
+                created_at__range=(start_datetime, end_datetime),
+                status="Completed"
+            )
+            
+            total_appointments = appointments.aggregate(total=Count('id'))['total'] or 0
+            total_revenue = appointments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            gross_revenue = total_revenue * Decimal('0.20')
+
+            data = {
+                "total_appointments": total_appointments,
+                "total_revenue": total_revenue,
+                "gross_revenue": gross_revenue
+            }
+
+            return Response({"message":"Revenue data retrieved successfully","revenue": data}, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class PastAndAUpcomingAppointmentsAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:
+            start_date = request.query_params.get('start_date') 
+            end_date = request.query_params.get('end_date')
+
+            if not start_date or not end_date:
+                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
+                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
+            except ValueError:
+                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
+
+            filtered_upcoming_appointments = BookedAppointment.objects.filter(
+                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Pending", "Confirmed"]
+            ).order_by('date')
+            filtered_completed_appointments = BookedAppointment.objects.filter(
+                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Completed", "Cancelled"]
+            ).order_by('date')
+            
+            upcoming_appointments = pagination_view(filtered_upcoming_appointments, request)
+            completed_appointments = pagination_view(filtered_completed_appointments, request)
+            
+            upcoming_appointments_list = []
+            completed_appointments_list = []
+            for appointment in upcoming_appointments[0]:
+                try:
+                    doctor = User.objects.get(id=appointment.doctor)
+                except User.DoesNotExist:
+                    name = "Unknown"
+                name = f"{doctor.first_name} {doctor.last_name}"
+                data =  {
+                    "id": appointment.id,
+                    "doctor_name": name,
+                    "date": appointment.date.strftime('%d-%m-%Y'),
+                    "time": appointment.slot,
+                    "status": appointment.status        
+                }
+                upcoming_appointments_list.append(data)
+            
+            for appointment in completed_appointments[0]:
+
+                try:
+                    doctor = User.objects.get(id=appointment.doctor)
+                except User.DoesNotExist:
+                    name = "Unknown"
+                name = f"{doctor.first_name} {doctor.last_name}"
+                data =  {
+                    "id": appointment.id,
+                    "doctor_name": name,
+                    "date": appointment.date.strftime('%d-%m-%Y'),
+                    "time": appointment.slot,
+                    "status": appointment.status,
+                    "amount": appointment.amount      
+                }
+                completed_appointments_list.append(data)
+    
+            appointments = {
+                "upcoming_appointments": upcoming_appointments_list,
+                "past_appointments": completed_appointments_list
+            }
+
+            return Response({"message":"Appointments retrieved successfully","data": appointments}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
