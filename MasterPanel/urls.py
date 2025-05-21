@@ -27,7 +27,8 @@ from .views import(
     DeleteInappropriateReviewOrReplyView,
     CreateAdminAPIView,
     RevenueAPIView,
-    PastAndAUpcomingAppointmentsAPIView
+    PastAndAUpcomingAppointmentsAPIView,
+    AdminSupportTicketAPIView,
 )
 
 urlpatterns = [
@@ -93,5 +94,7 @@ urlpatterns = [
     path("admin-account/", CreateAdminAPIView.as_view(), name="admin-account"),
     path('revenue/', RevenueAPIView.as_view(), name="revenue"),
     path('past-upcoming-appointments/', PastAndAUpcomingAppointmentsAPIView.as_view(), name="past-and-upcoming-appointments"),
+    
+    path('all-support/', AdminSupportTicketAPIView.as_view(), name='admin-support-list'),
 
 ]

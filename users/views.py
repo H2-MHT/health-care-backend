@@ -542,3 +542,90 @@ class UserLanguagePreferenceView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class SupportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = SupportTickeSerializer(data=request.data)
+        if serializer.is_valid():
+            ticket = serializer.save(user=request.user)
+            return Response({
+                "message": "Support ticket raised successfully",
+                "data": {
+                    "id": ticket.id,
+                    "title": ticket.title,
+                    "description": ticket.description,
+                    "ticket_id": ticket.ticket_id,
+                    "status": ticket.status,
+                    "attachment": ticket.attachment.url if ticket.attachment else None,
+                    "admin_comment": ticket.admin_comment,
+                    "created_at": ticket.created_at,
+                    "updated_at": ticket.updated_at
+                }
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request, ticket_id=None):
+        if ticket_id:
+            # Retrieve specific query
+            try:
+                ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
+                serializer = SupportTickeSerializer(ticket)
+                return Response({
+                    "message": "Support ticket details retrieved successfully",
+                    "data": serializer.data
+                }, status=status.HTTP_200_OK)
+            except Ticket.DoesNotExist:
+                return Response({
+                    "message": "Ticket not found",
+                    "data": {}
+                }, status=status.HTTP_404_NOT_FOUND)
+        else:
+            # Retrieve all queries
+            tickets = Ticket.objects.filter(user=request.user).order_by('-created_at')
+            serializer = SupportTickeSerializer(tickets, many=True)
+            return Response({
+                "message": "Support tickets retrieved successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+    def patch(self, request, ticket_id):
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
+            serializer = SupportTickeSerializer(ticket, data=request.data, partial=True)
+            if serializer.is_valid():
+                ticket = serializer.save()
+                return Response({
+                    "message": "Support ticket updated successfully",
+                    "data": {
+                        "id": ticket.id,
+                        "title": ticket.title,
+                        "description": ticket.description,
+                        "ticket_id": ticket.ticket_id,
+                        "status": ticket.status,
+                        "attachment": ticket.attachment.url if ticket.attachment else None,
+                        "created_at": ticket.created_at,
+                        "updated_at": ticket.updated_at
+                    }
+                }, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Ticket.DoesNotExist:
+            return Response({
+                "message": "Ticket not found",
+                "data": {}
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+    def delete(self, request):
+        ticket_id = request.data.get('ticket_id')
+        if not ticket_id:
+            return Response({"message": "Ticket ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
+            ticket.delete()
+            return Response({"message": "Support ticket deleted successfully"}, status=status.HTTP_200_OK)
+        except Ticket.DoesNotExist:
+            return Response({"message": "Ticket not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": f"An unexpected error occurred: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST) 
+        

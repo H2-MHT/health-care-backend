@@ -76,6 +76,10 @@ from django.db.models import Count, Sum
 import calendar
 from calendar import monthrange
 from decimal import Decimal
+from users.models import Ticket
+from users.serializers import AdminSupportTicketSerializer
+from django.utils.timezone import now
+
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
@@ -1441,3 +1445,39 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
             return Response({"message":"Appointments retrieved successfully","data": appointments}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class AdminSupportTicketAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        tickets = Ticket.objects.all().order_by('-created_at')
+        serializer = AdminSupportTicketSerializer(tickets, many=True)
+        return Response({
+            "message": "All support tickets retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, ticket_id):
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id)
+        except Ticket.DoesNotExist:
+            return Response({
+                "message": "Ticket not found",
+                "data": {}
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AdminSupportTicketSerializer(ticket, data=request.data, partial=True)
+        if serializer.is_valid():
+            if 'status' in request.data and request.data['status'].lower() == 'resolved':
+                ticket.resolved_by = request.user
+                ticket.resolved_at = now()
+            serializer.save()
+            return Response({
+                "message": "Support ticket updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "message": "Invalid data",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
