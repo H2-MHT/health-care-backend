@@ -1285,5 +1285,48 @@ class CreateAdminAPIView(APIView):
     def get(self, request):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
-        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
-        return Response({"users": users}, status=status.HTTP_200_OK)
+        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email", "dob", "city", "country")
+        users, headers = pagination_view(users, request)
+        return create_paginated_response("Admins account fetched successfully", users, headers)
+    
+    def put(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id, role="Admin")
+        except User.DoesNotExist:
+            return Response({"message": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        for field in ["first_name", "last_name", "dob", "city", "country"]:
+            if field in request.data:
+                setattr(user, field, request.data[field])
+
+        user.save()
+        updated_data = {
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "dob": user.dob,
+            "city": user.city,
+            "country": user.country
+
+        }
+        return Response({"message": "Admin data updated successfully.", "data" : updated_data}, status=status.HTTP_200_OK)
+    
+    def delete(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(id=user_id, role="Admin")
+            user.delete()
+            return Response({"message": "Admin deleted successfully"}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=status.HTTP_404_NOT_FOUND)
