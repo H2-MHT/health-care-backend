@@ -65,3 +65,17 @@ def translate_invoice(context, lang_code):
         return context
     except Exception as e:
         return f"Translation failed: {str(e)}"
+
+def translate_consultaion_summary(context, lang_code):
+    try:
+        if lang_code and lang_code.lower() != 'en':
+            translated_context = {}
+            for key, value in context.items():
+                if isinstance(value, str):
+                    translated_context[key] = GoogleTranslator(source='auto', target=lang_code).translate(value)
+                else:
+                    translated_context[key] = value
+            return translated_context
+        return context
+    except Exception as e:
+        return context 

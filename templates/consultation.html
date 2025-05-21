@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ consultation_summary_html }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            color: #333;
+            line-height: 1.6;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #2c3e50;
+        }
+        .info {
+            margin-bottom: 30px;
+        }
+        .info p {
+            margin: 6px 0;
+            font-size: 16px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section h2 {
+            font-size: 20px;
+            color: #34495e;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+        .section p {
+            font-size: 16px;
+            white-space: pre-wrap; /* keep line breaks */
+        }
+        footer {
+            margin-top: 50px;
+            font-size: 14px;
+            color: #777;
+            text-align: center;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ consultation_summary_html }}</h1>
+    </header>
+
+    <div class="info">
+        <p><strong>{{ patient_html }}:</strong> {{ patient_name }}</p>
+        <p><strong>{{ doctor_html }}:</strong> {{ doctor_name }}</p>
+        <p><strong>{{ appointment_id_html }}:</strong> {{ appointment_id }}</p>
+        <p><strong>{{ date_html }}:</strong> {{ date }}</p>
+    </div>
+
+    <div class="section">
+        <h2>{{ short_description_html }}</h2>
+        <p>{{ short_description }}</p>
+    </div>
+
+    <div class="section">
+        <h2>{{ summary_html }}</h2>
+        <p>{{ summary }}</p>
+    </div>
+
+    {% if recommendation %}
+    <div class="section">
+        <h2>{{ recommendation_html }}</h2>
+        <p>{{ recommendation }}</p>
+    </div>
+    {% endif %}
+
+    <footer>
+        <p>{{ generated_by_html }}</p>
+    </footer>
+</body>
+</html>
