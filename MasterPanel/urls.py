@@ -29,7 +29,6 @@ from .views import(
     RevenueAPIView,
     PastAndAUpcomingAppointmentsAPIView,
     AdminSupportTicketAPIView,
-    PastAndAUpcomingAppointmentsAPIView,
     DoctorCountFromClinicAPIView,
     ConsultationReportListAPIView,
     ConsultationReportDownloadAPIView
