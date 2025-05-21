@@ -1229,7 +1229,7 @@ class DeleteInappropriateReviewOrReplyView(APIView):
 
     
 class CreateAdminAPIView(APIView):
-    permission_classes = [IsSuperAdminOrAdmin]
+    permission_classes = [isau]
 
     def post(self, request):
         if request.user.role != "SuperAdmin":
