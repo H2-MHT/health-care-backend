@@ -33,6 +33,7 @@ urlpatterns = [
         
         # support
         path('support/', SupportAPIView.as_view(), name='support'),
-        path('support/<str:ticket_id>/', SupportAPIView.as_view(), name='support-ticket-detail')
+        path('support/<str:ticket_id>/', SupportAPIView.as_view(), name='support-ticket-detail'),
+        path('support/<str:ticket_id>/', SupportAPIView.as_view(), name='support-ticket-detail'),
 
 ]

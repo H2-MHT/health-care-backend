@@ -169,3 +169,11 @@ class SupportTickeSerializer(serializers.ModelSerializer):
         fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment']
         
         
+class AdminSupportTicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = [
+            'ticket_id', 'title', 'description', 'attachment', 'status',
+            'admin_comment', 'resolved_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['ticket_id', 'created_at', 'updated_at', 'resolved_by', 'resolved_at']
