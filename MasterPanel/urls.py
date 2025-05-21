@@ -29,6 +29,9 @@ from .views import(
     RevenueAPIView,
     PastAndAUpcomingAppointmentsAPIView,
     AdminSupportTicketAPIView,
+    DoctorCountFromClinicAPIView,
+    ConsultationReportListAPIView,
+    ConsultationReportDownloadAPIView
 )
 
 urlpatterns = [
@@ -96,5 +99,8 @@ urlpatterns = [
     path('past-upcoming-appointments/', PastAndAUpcomingAppointmentsAPIView.as_view(), name="past-and-upcoming-appointments"),
     
     path('all-support/', AdminSupportTicketAPIView.as_view(), name='admin-support-list'),
+    path('doctor-count-from-clinic/', DoctorCountFromClinicAPIView.as_view(), name="patient-count-from-clinic"),
+    path('consultation-report-list/', ConsultationReportListAPIView.as_view(), name="consultation-report-list"),
+    path('consulation-report-download/<int:pk>/',  ConsultationReportDownloadAPIView.as_view(), name="consultation-report-download"),
 
 ]

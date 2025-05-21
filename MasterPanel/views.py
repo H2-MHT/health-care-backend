@@ -6,7 +6,8 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from django.http import (
     HttpResponse,
-    Http404
+    Http404,
+    FileResponse
 )
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
 from rest_framework.views import APIView
@@ -26,6 +27,7 @@ from users.models import User
 from payments.models import Transaction, AccountDetail, Payment
 from rest_framework import status
 from doctors.models import LicenceCertificate
+from consultations.models import ConsultationReport
 from reviews.models import (
     Review, 
     Report, 
@@ -1528,3 +1530,72 @@ class AdminSupportTicketAPIView(APIView):
             "message": "Invalid data",
             "data": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DoctorCountFromClinicAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:
+            clinic_id = request.query_params.get('clinic_id')
+            if not clinic_id:
+                return Response({"error": "Clinic ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+              
+            try:
+                clinic = Clinic.objects.get(pk=clinic_id) 
+            except Clinic.DoesNotExist:
+                return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            doctors = User.objects.filter(work_place=clinic, role="Doctor")
+            data = {
+                "clinic": clinic_id,
+                "clinic_name": clinic.public_name,
+                "doctor_count": len(doctors),
+                "doctors_name": [doctor.get_full_name() for doctor in doctors]
+            }
+                        
+            return Response({"message":"Doctor count retrieved successfully", "data": data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ConsultationReportListAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request):
+        try:    
+            consultations = ConsultationReport.objects.all()
+            report_list = []
+            for consultation in consultations:
+                if consultation.consultation_report:
+                    report = {
+                        "id": consultation.id,
+                        "view_report": consultation.consultation_report.url,
+                        "download_report": request.build_absolute_uri(f"/MasterPanel/consulation-report-download/{consultation.pk}/")
+                        }
+                    report_list.append(report)
+                
+
+            return Response({
+                "message": "Consultation reports retrieved successfully",
+                "data": report_list
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class ConsultationReportDownloadAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request, pk):
+        try:
+            consultation = ConsultationReport.objects.get(pk=pk)
+            pdf_file = consultation.consultation_report
+
+            response = FileResponse(pdf_file.open('rb'), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{pdf_file.name.split("/")[-1]}"'
+            return response
+
+        except ConsultationReport.DoesNotExist:
+            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
