@@ -24,7 +24,7 @@ from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
 from users.models import User
-from payments.models import Transaction, AccountDetail
+from payments.models import Transaction, AccountDetail, Payment
 from rest_framework import status
 from doctors.models import LicenceCertificate
 from consultations.models import ConsultationReport
@@ -78,6 +78,10 @@ from django.db.models import Count, Sum
 import calendar
 from calendar import monthrange
 from decimal import Decimal
+from users.models import Ticket
+from users.serializers import AdminSupportTicketSerializer
+from django.utils.timezone import now
+
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 logger = logging.getLogger(__name__)
@@ -955,27 +959,74 @@ class ExportDataAPIView(APIView):
             return HttpResponse({"error": "Model name is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            model = apps.get_model('users', model_input)
+            model = apps.get_model('users', model_input) if model_input == 'User' else \
+                    apps.get_model('doctors', model_input) if model_input == 'BookedAppointment' else \
+                    apps.get_model('payments', model_input) if model_input == 'Payment' else \
+                    apps.get_model('payments', model_input) if model_input == 'Transaction' else None
+            if not model:
+                raise LookupError
         except LookupError:
             return HttpResponse({"error": "Model not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        selected_fields = [
-            "id",
-            "first_name",
-            "last_name",
-            "phone_number",
-            "city",
-            "country",
-            "residence",
-             "email",
+        model_fields_map = {
+            'User': ['id', 'first_name', 'last_name', 'phone_number', 'city', 'country', 'residence', 'email'],
+            'BookedAppointment': ['id', 'doctor_name', 'patient_name', 'appointment_type', 'slot',  'status' , 'date', 'amount', 'payment_status'],
+            'Payment': ['id', 'appointment', 'amount', 'total_amount', 'method', 'status', 'payment_notes'],
+            'Transaction' : ['id', 'account', 'amount', 'transaction_type', 'reference']
+        }
 
-        ] 
+        selected_fields = model_fields_map.get(model_input)
+        if not selected_fields:
+            return HttpResponse({"error": "Model fields not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        user_ids = User.objects.filter(role=user_type_filter).values_list('id', flat=True)
 
         if model_input == 'User' and user_type_filter:
             data = User.objects.filter(role=user_type_filter).values(*selected_fields)
 
+        elif model_input == 'BookedAppointment':
+            status_filter = request.query_params.get('status')
+            appointments = BookedAppointment.objects.filter(
+                Q(doctor__in=user_ids) | Q(patient__in=user_ids)
+            ) if user_type_filter else BookedAppointment.objects.all()
+
+            if status_filter:
+                appointments = appointments.filter(status__iexact=status_filter)
+
+            # Get doctor and patient IDs to map names
+            user_ids_in_appts = set(appointments.values_list('doctor', flat=True)) | set(appointments.values_list('patient', flat=True))
+            user_map = {
+                user.id: f"{user.first_name} {user.last_name}".strip()
+                for user in User.objects.filter(id__in=user_ids_in_appts)
+            }
+
+            data = []
+            for appt in appointments:
+                data.append({
+                    "id": appt.id,
+                    "doctor_name": User.objects.get(id=appt.doctor).get_full_name(),
+                    "patient_name": User.objects.get(id=appt.patient).get_full_name(),
+                    "appointment_type": appt.appointment_type,
+                    "slot": str(appt.slot),
+                    "status": appt.status,
+                    "date": appt.date,
+                    "amount": appt.amount,
+                    "payment_status": appt.payment_status
+                })
+
+        elif model_input == 'Payment' and user_type_filter:
+            appointment_ids = BookedAppointment.objects.filter(
+                Q(doctor__in=user_ids) | Q(patient__in=user_ids)
+            ).values_list('id', flat=True)
+            data = Payment.objects.filter(appointment_id__in=appointment_ids).values(*selected_fields)
+
+        elif model_input == 'Transaction' and user_type_filter:
+            account_ids = AccountDetail.objects.filter(user_id__in=user_ids).values_list('id', flat=True)
+            data = Transaction.objects.filter(account_id__in=account_ids).values(*selected_fields)
+
         else:
-            data = User.objects.all().values(*selected_fields)
+            # For all other cases (no filter)
+            data = model.objects.all().values(*selected_fields)
 
         if export_format == 'csv':
             return self.export_csv(data, selected_fields, model_input)
@@ -1002,7 +1053,7 @@ class ExportDataAPIView(APIView):
 
         # Title
         styles = getSampleStyleSheet()
-        title_text = f"{model_name.title()} {role} Data"
+        title_text = f"{model_name.title()} {role or ''} Data"
         title = Paragraph(title_text, styles['Title'])
         elements.append(title)
         elements.append(Spacer(1, 20))  # Space after title
@@ -1021,7 +1072,7 @@ class ExportDataAPIView(APIView):
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ]))
@@ -1287,8 +1338,52 @@ class CreateAdminAPIView(APIView):
     def get(self, request):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
-        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
-        return Response({"users": users}, status=status.HTTP_200_OK)
+        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email", "dob", "city", "country")
+        users, headers = pagination_view(users, request)
+        return create_paginated_response("Admins account fetched successfully", users, headers)
+    
+    def put(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+
+        admin_id = request.query_params.get("admin_id")
+        if not admin_id:
+            return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=admin_id, role="Admin")
+        except User.DoesNotExist:
+            return Response({"message": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        for field in ["first_name", "last_name", "email", "dob", "city", "country"]:
+            if field in request.data:
+                setattr(user, field, request.data[field])
+
+        user.save()
+        updated_data = {
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "dob": user.dob,
+            "city": user.city,
+            "country": user.country,
+            "email": user.email
+
+        }
+        return Response({"message": "Admin data updated successfully.", "data" : updated_data}, status=status.HTTP_200_OK)
+    
+    def delete(self, request):
+        if request.user.role != "SuperAdmin":
+            return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
+        admin_id = request.data.get("admin_id")
+        if not admin_id:
+            return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(id=admin_id, role="Admin")
+            user.delete()
+            return Response({"message": "Admin deleted successfully"}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "Admin not found"}, status=status.HTTP_404_NOT_FOUND)
     
 class RevenueAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
@@ -1399,6 +1494,43 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
             return Response({"message":"Appointments retrieved successfully","data": appointments}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class AdminSupportTicketAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        tickets = Ticket.objects.all().order_by('-created_at')
+        serializer = AdminSupportTicketSerializer(tickets, many=True)
+        return Response({
+            "message": "All support tickets retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def patch(self, request, ticket_id):
+        try:
+            ticket = Ticket.objects.get(ticket_id=ticket_id)
+        except Ticket.DoesNotExist:
+            return Response({
+                "message": "Ticket not found",
+                "data": {}
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AdminSupportTicketSerializer(ticket, data=request.data, partial=True)
+        if serializer.is_valid():
+            if 'status' in request.data and request.data['status'].lower() == 'resolved':
+                ticket.resolved_by = request.user
+                ticket.resolved_at = now()
+            serializer.save()
+            return Response({
+                "message": "Support ticket updated successfully",
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "message": "Invalid data",
+            "data": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
 
 class DoctorCountFromClinicAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]

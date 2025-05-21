@@ -28,6 +28,8 @@ from .views import(
     CreateAdminAPIView,
     RevenueAPIView,
     PastAndAUpcomingAppointmentsAPIView,
+    AdminSupportTicketAPIView,
+    PastAndAUpcomingAppointmentsAPIView,
     DoctorCountFromClinicAPIView,
     ConsultationReportListAPIView,
     ConsultationReportDownloadAPIView
@@ -96,6 +98,8 @@ urlpatterns = [
     path("admin-account/", CreateAdminAPIView.as_view(), name="admin-account"),
     path('revenue/', RevenueAPIView.as_view(), name="revenue"),
     path('past-upcoming-appointments/', PastAndAUpcomingAppointmentsAPIView.as_view(), name="past-and-upcoming-appointments"),
+    
+    path('all-support/', AdminSupportTicketAPIView.as_view(), name='admin-support-list'),
     path('doctor-count-from-clinic/', DoctorCountFromClinicAPIView.as_view(), name="patient-count-from-clinic"),
     path('consultation-report-list/', ConsultationReportListAPIView.as_view(), name="consultation-report-list"),
     path('consulation-report-download/<int:pk>/',  ConsultationReportDownloadAPIView.as_view(), name="consultation-report-download"),

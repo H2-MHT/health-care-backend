@@ -6,7 +6,8 @@ from .models import (
     Media,
     TwoFactorMethod,
     DeviceAccess,
-    AppLanguage
+    AppLanguage,
+    Ticket,
 )
 
 # Register your models here.
@@ -35,7 +36,10 @@ class AppLanguageAdmin(admin.ModelAdmin):
     verbose_name = "Application Language"
     verbose_name_plural = "Application Languages"
     
+class TicketAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'ticket_id', 'title', 'description', 'attachment', 'status', 'created_at', 'updated_at')
     
+admin.site.register(Ticket, TicketAdmin)
 admin.site.register(Media)
 admin.site.register(Skill)
 admin.site.register(Education, EducationAdmin)
