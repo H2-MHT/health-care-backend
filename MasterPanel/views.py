@@ -1229,7 +1229,7 @@ class DeleteInappropriateReviewOrReplyView(APIView):
 
     
 class CreateAdminAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsSuperAdminOrAdmin]
 
     def post(self, request):
         if request.user.role != "SuperAdmin":
@@ -1293,12 +1293,12 @@ class CreateAdminAPIView(APIView):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_id = request.query_params.get("user_id")
-        if not user_id:
+        admin_id = request.query_params.get("admin_id")
+        if not admin_id:
             return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(id=user_id, role="Admin")
+            user = User.objects.get(id=admin_id, role="Admin")
         except User.DoesNotExist:
             return Response({"message": "Admin not found."}, status=status.HTTP_404_NOT_FOUND)
         
@@ -1320,12 +1320,12 @@ class CreateAdminAPIView(APIView):
     def delete(self, request):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
-        user_id = request.data.get("user_id")
-        if not user_id:
+        admin_id = request.data.get("admin_id")
+        if not admin_id:
             return Response({"message": "Admin ID is required."}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            user = User.objects.get(id=user_id, role="Admin")
+            user = User.objects.get(id=admin_id, role="Admin")
             user.delete()
             return Response({"message": "Admin deleted successfully"}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
