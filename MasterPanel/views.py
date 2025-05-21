@@ -1330,8 +1330,6 @@ class CreateAdminAPIView(APIView):
             return Response({"message": "Admin deleted successfully"}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"error": "Admin not found"}, status=status.HTTP_404_NOT_FOUND)
-        users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email")
-        return Response({"users": users}, status=status.HTTP_200_OK)
     
 class RevenueAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
