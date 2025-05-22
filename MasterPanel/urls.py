@@ -26,7 +26,12 @@ from .views import(
     CloseDiscussionAPIView,
     DeleteInappropriateReviewOrReplyView,
     CreateAdminAPIView,
-    RevenueAPIView
+    RevenueAPIView,
+    PastAndAUpcomingAppointmentsAPIView,
+    AdminSupportTicketAPIView,
+    DoctorCountFromClinicAPIView,
+    ConsultationReportListAPIView,
+    ConsultationReportDownloadAPIView
 )
 
 urlpatterns = [
@@ -91,5 +96,11 @@ urlpatterns = [
     path('delete-inappropriate/', DeleteInappropriateReviewOrReplyView.as_view(), name="delete-inappropriate"),
     path("admin-account/", CreateAdminAPIView.as_view(), name="admin-account"),
     path('revenue/', RevenueAPIView.as_view(), name="revenue"),
+    path('past-upcoming-appointments/', PastAndAUpcomingAppointmentsAPIView.as_view(), name="past-and-upcoming-appointments"),
+    
+    path('all-support/', AdminSupportTicketAPIView.as_view(), name='admin-support-list'),
+    path('doctor-count-from-clinic/', DoctorCountFromClinicAPIView.as_view(), name="patient-count-from-clinic"),
+    path('consultation-report-list/', ConsultationReportListAPIView.as_view(), name="consultation-report-list"),
+    path('consulation-report-download/<int:pk>/',  ConsultationReportDownloadAPIView.as_view(), name="consultation-report-download"),
 
 ]
