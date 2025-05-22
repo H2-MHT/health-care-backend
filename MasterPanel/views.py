@@ -1546,15 +1546,48 @@ class DoctorCountFromClinicAPIView(APIView):
             except Clinic.DoesNotExist:
                 return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND)
             
-            doctors = User.objects.filter(work_place=clinic, role="Doctor")
-            data = {
-                "clinic": clinic_id,
+            users = User.objects.filter(work_place=clinic, role="Doctor")
+            paginated_users, headers = pagination_view(users, request)     
+            doctor_list = []
+            for user in paginated_users:
+                try:
+                    doctor = Doctor.objects.get(user=user)
+                except Doctor.DoesNotExist:
+                    continue
+                data = {
+                        "doctor_user_id": doctor.user.id,
+                        "doctor_id": doctor.id,
+                        "uid": doctor.user.uid,
+                        "name": doctor.user.get_full_name(),
+                        "gender": doctor.user.gender,
+                        "dob": doctor.user.dob,
+                        "email": doctor.user.email,
+                        "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
+                        "speciality": doctor.specialty,
+                        "city": doctor.user.city,
+                        "country": doctor.user.country,
+                        "phone_number": doctor.user.phone_number,
+                        "currency": doctor.user.currency,
+                        "expertise": doctor.user.expertise,
+                        "experience_years": doctor.experience_years,
+                        "professional_stat": doctor.user.professional_stat,
+                        "bio": doctor.user.bio,
+                        "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
+                        "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
+                        "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
+                        "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
+                        "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                    }  
+                doctor_list.append(data)
+            
+            doctor_in_clinic = {
+                "clinic_id": clinic_id,
                 "clinic_name": clinic.public_name,
-                "doctor_count": len(doctors),
-                "doctors_name": [doctor.get_full_name() for doctor in doctors]
-            }
-                        
-            return Response({"message":"Doctor count retrieved successfully", "data": data}, status=status.HTTP_200_OK)
+                "doctor_count": len(users),
+                "doctors": doctor_list
+            }            
+            return create_paginated_response("Doctor count retrieved successfully", doctor_in_clinic, headers)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
