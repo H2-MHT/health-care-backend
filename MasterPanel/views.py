@@ -47,6 +47,8 @@ from django.apps import apps
 from django.utils.timezone import make_aware
 from datetime import datetime
 import csv
+import io
+from rest_framework.parsers import MultiPartParser
 from io import StringIO, BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -81,6 +83,11 @@ from decimal import Decimal
 from users.models import Ticket
 from users.serializers import AdminSupportTicketSerializer
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
+import secrets
+import string
+
+User = get_user_model()
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -1088,6 +1095,107 @@ class ExportDataAPIView(APIView):
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{model_name}_data.pdf"'
         return response
+
+class ImportDataView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    parser_classes = [MultiPartParser]
+
+    REQUIRED_FIELDS = [
+        'first_name',
+        'last_name',
+        'email',
+        'gender',
+        'city',
+        'country',
+        'currency',
+        'role',
+    ]
+
+    def post(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No file was provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_obj.name.endswith('.csv'):
+            return Response({'error': 'Only CSV files are supported'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            decoded_file = file_obj.read().decode('utf-8')
+            io_string = io.StringIO(decoded_file)
+            reader = csv.DictReader(io_string)
+
+            header_fields = reader.fieldnames
+            missing_fields = [field for field in self.REQUIRED_FIELDS if field not in header_fields]
+            if missing_fields:
+                return Response(
+                    {'error': 'Missing required fields', 'missing_fields': missing_fields},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            created_users = []
+            for row_num, row in enumerate(reader, start=2):
+                if not all(row.get(field) for field in self.REQUIRED_FIELDS):
+                    return Response({'error': f'Missing values in row: {row}'}, status=status.HTTP_400_BAD_REQUEST)
+
+                random_password = self.generate_password()
+
+                if row['role'] not in ['Admin', 'Doctor', 'Patient', 'Clinic']:
+                    return Response(
+                        {'error': f"Invalid role '{row['role']}' at row {row_num}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                user = User.objects.create_user(
+                    first_name=row['first_name'],
+                    last_name=row['last_name'],
+                    email=row['email'],
+                    gender=row['gender'],
+                    city=row['city'],
+                    country=row['country'],
+                    currency=row['currency'],
+                    role=row['role'],
+                    password=random_password,
+                    is_verified=True
+                )
+                
+                model_input = row['role']
+                if model_input != 'Admin':
+                    model = apps.get_model('doctors', model_input) if model_input == 'Doctor' else \
+                        apps.get_model('patients', model_input) if model_input == 'Patient' else \
+                        apps.get_model('clinics', model_input) if model_input == 'Clinic' else \
+                        apps.get_model('MasterPanel', model_input) if model_input == 'Admin' else None
+                    if not model:
+                        raise LookupError
+                    else:
+                        model.objects.create(user=user)
+
+                self.send_temp_password_email(user.email, random_password)
+                created_users.append(user.email)
+
+            return Response({'message': 'Users created successfully', 'users': created_users}, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def generate_password(self, length=10):
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+    
+    def send_temp_password_email(self, email, password):
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject='Your Password',
+            plain_text_content=f'Your login password is:"{password}"'
+            )
+    
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            logger.error(f"Error sending email: {e}")
+
+  
 
 class DepartmentAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
