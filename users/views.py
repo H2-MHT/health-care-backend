@@ -590,7 +590,15 @@ class SupportAPIView(APIView):
                 "data": serializer.data
             }, status=status.HTTP_200_OK)
             
-    def patch(self, request, ticket_id):
+    def patch(self, request):
+        ticket_id = request.query_params.get("ticket_id")
+
+        if not ticket_id:
+            return Response({
+                "message": "Ticket ID is required",
+                "data": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
             serializer = SupportTickeSerializer(ticket, data=request.data, partial=True)
@@ -605,6 +613,8 @@ class SupportAPIView(APIView):
                         "ticket_id": ticket.ticket_id,
                         "status": ticket.status,
                         "attachment": ticket.attachment.url if ticket.attachment else None,
+                        "resolved_at": ticket.resolved_at,
+                        "admin_comment": ticket.admin_comment,
                         "created_at": ticket.created_at,
                         "updated_at": ticket.updated_at
                     }

@@ -166,14 +166,25 @@ class AppLanguageSerializer(serializers.ModelSerializer):
 class SupportTickeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
-        fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment']
+        fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment', "resolved_at", "created_at", "updated_at"]
         
         
 class AdminSupportTicketSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+    admin_comment = serializers.CharField(allow_blank=True, required=False)
+    role = serializers.CharField(source='user.role', read_only=True, default="")
+
     class Meta:
         model = Ticket
         fields = [
-            'ticket_id', 'title', 'description', 'attachment', 'status',
-            'admin_comment', 'resolved_at', 'created_at', 'updated_at'
+            'ticket_id', 'role','user_name', 'title', 'description', 'attachment',
+            'status', 'admin_comment', 'resolved_at', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['ticket_id', 'created_at', 'updated_at', 'resolved_by', 'resolved_at']
+
+    def get_user_name(self, obj):
+        first_name = obj.user.first_name or ""
+        last_name = obj.user.last_name or ""
+        full_name = f"{first_name} {last_name}".strip()
+        return full_name if full_name else obj.user.email
+    
+
