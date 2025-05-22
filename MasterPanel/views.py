@@ -1509,7 +1509,14 @@ class AdminSupportTicketAPIView(APIView):
             "data": serializer.data
         }, status=status.HTTP_200_OK)
 
-    def patch(self, request, ticket_id):
+    def patch(self, request):
+        ticket_id = request.data.get("ticket_id")
+        if not ticket_id:
+            return Response({
+                "message": "Ticket ID is required",
+                "data": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             ticket = Ticket.objects.get(ticket_id=ticket_id)
         except Ticket.DoesNotExist:
@@ -1520,8 +1527,7 @@ class AdminSupportTicketAPIView(APIView):
 
         serializer = AdminSupportTicketSerializer(ticket, data=request.data, partial=True)
         if serializer.is_valid():
-            if 'status' in request.data and request.data['status'].lower() == 'resolved':
-                ticket.resolved_by = request.user
+            if request.data.get("status", "").lower() == "resolved":
                 ticket.resolved_at = now()
             serializer.save()
             return Response({
