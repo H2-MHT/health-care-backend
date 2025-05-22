@@ -1339,8 +1339,8 @@ class CreateAdminAPIView(APIView):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
         users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email", "dob", "city", "country")
-        users, headers = pagination_view(users, request)
-        return create_paginated_response("Admins account fetched successfully", users, headers)
+        paginated_users, headers = pagination_view(users, request)
+        return create_paginated_response("Admins account fetched successfully", paginated_users, headers)
     
     def put(self, request):
         if request.user.role != "SuperAdmin":
