@@ -365,6 +365,7 @@ class UserListAPIView(APIView):
                         "experience_years": doctor.experience_years,
                         "professional_stat": doctor.user.professional_stat,
                         "bio": doctor.user.bio,
+                        "is_active": doctor.user.is_active,
                         "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
@@ -392,6 +393,7 @@ class UserListAPIView(APIView):
                         "currency": patient.currency,
                         "bio": patient.bio,
                         "phone_number": patient.phone_number,
+                        "is_active": patient.is_active,
                         "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
                     }
@@ -404,7 +406,7 @@ class UserListAPIView(APIView):
                 
                 data = [
                     {
-                        "id": clinic.user.id,  # Pass user_id
+                        "id": clinic.id,
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
@@ -417,6 +419,7 @@ class UserListAPIView(APIView):
                         "phone_number": clinic.contact_phone if clinic.contact_phone else clinic.user.phone_number,
                         "website": clinic.website,
                         "address": clinic.address,
+                        "is_active": clinic.user.is_active,
                     }
                     for clinic in clinics
                 ]
@@ -1542,12 +1545,18 @@ class DoctorCountFromClinicAPIView(APIView):
                 return Response({"error": "Clinic ID is required"}, status=status.HTTP_400_BAD_REQUEST)
               
             try:
-                clinic = Clinic.objects.get(pk=clinic_id) 
+                clinic = Clinic.objects.get(pk=clinic_id, user__role="Clinic", user__is_deleted=False) 
             except Clinic.DoesNotExist:
-                return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND) 
             
-            users = User.objects.filter(work_place=clinic, role="Doctor")
-            paginated_users, headers = pagination_view(users, request)     
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                users = User.objects.filter(first_name__istartswith=search_key, work_place=clinic, role="Doctor") | \
+                        User.objects.filter(last_name__istartswith=search_key, work_place=clinic, role="Doctor")
+            else:
+                users = User.objects.filter(work_place=clinic, role="Doctor")
+            paginated_users, headers = pagination_view(users, request)  
+              
             doctor_list = []
             for user in paginated_users:
                 try:
@@ -1571,6 +1580,7 @@ class DoctorCountFromClinicAPIView(APIView):
                         "expertise": doctor.user.expertise,
                         "experience_years": doctor.experience_years,
                         "professional_stat": doctor.user.professional_stat,
+                        "is_active": user.is_active,
                         "bio": doctor.user.bio,
                         "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
@@ -1581,9 +1591,7 @@ class DoctorCountFromClinicAPIView(APIView):
                 doctor_list.append(data)
             
             doctor_in_clinic = {
-                "clinic_id": clinic_id,
-                "clinic_name": clinic.public_name,
-                "doctor_count": len(users),
+                "clinic_name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                 "doctors": doctor_list
             }            
             return create_paginated_response("Doctor count retrieved successfully", doctor_in_clinic, headers)
