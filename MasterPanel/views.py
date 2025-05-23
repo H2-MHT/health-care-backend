@@ -407,6 +407,7 @@ class UserListAPIView(APIView):
                 data = [
                     {
                         "id": clinic.id,
+                        "clinic_user_id": clinic.user.id,  # Pass user_id
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
