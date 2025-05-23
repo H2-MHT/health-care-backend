@@ -86,6 +86,7 @@ from django.utils.timezone import now
 from django.contrib.auth import get_user_model
 import secrets
 import string
+from django.urls import reverse
 
 User = get_user_model()
 
@@ -995,12 +996,20 @@ class ExportDataAPIView(APIView):
 
         elif model_input == 'BookedAppointment':
             status_filter = request.query_params.get('status')
+            appointment_type = request.query_params.get('appointment_type')
+            if appointment_type not in ['past', 'upcoming']:
+                return Response({"error": "Invalid appointment type"}, status=status.HTTP_400_BAD_REQUEST)
             appointments = BookedAppointment.objects.filter(
                 Q(doctor__in=user_ids) | Q(patient__in=user_ids)
             ) if user_type_filter else BookedAppointment.objects.all()
 
             if status_filter:
                 appointments = appointments.filter(status__iexact=status_filter)
+
+            if appointment_type == 'past':
+                appointments = appointments.filter(date__lt=now().date())
+            elif appointment_type == 'upcoming':
+                appointments = appointments.filter(date__gte=now().date())
 
             # Get doctor and patient IDs to map names
             user_ids_in_appts = set(appointments.values_list('doctor', flat=True)) | set(appointments.values_list('patient', flat=True))
@@ -1178,6 +1187,10 @@ class ImportDataView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request):
+        csv_url = f"http://127.0.0.1:8000{reverse('csv-format')}"
+        return Response({'csv_url': csv_url})
 
     def generate_password(self, length=10):
         alphabet = string.ascii_letters + string.digits
@@ -1197,7 +1210,18 @@ class ImportDataView(APIView):
         except Exception as e:
             logger.error(f"Error sending email: {e}")
 
-  
+class UserCSVTemplateAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request, *args, **kwargs):
+        response = HttpResponse(
+            content_type='text/csv',
+        )
+        response['Content-Disposition'] = 'attachment; filename="format.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])
+        return response
 
 class DepartmentAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]

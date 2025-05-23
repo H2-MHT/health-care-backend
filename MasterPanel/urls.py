@@ -32,7 +32,8 @@ from .views import(
     AdminSupportTicketAPIView,
     DoctorCountFromClinicAPIView,
     ConsultationReportListAPIView,
-    ConsultationReportDownloadAPIView
+    ConsultationReportDownloadAPIView,
+    UserCSVTemplateAPIView
 )
 
 urlpatterns = [
@@ -87,6 +88,7 @@ urlpatterns = [
     path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
     path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
     path('import-data/', ImportDataView.as_view(), name='import-data'),
+    path('csv-format/', UserCSVTemplateAPIView.as_view(), name='csv-format'),
     # department
     path('department/', DepartmentAPIView.as_view(), name='department'),
     # add stripe link on doctor profile
