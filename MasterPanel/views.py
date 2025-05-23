@@ -1644,11 +1644,13 @@ class AdminSupportTicketAPIView(APIView):
 
     def get(self, request):
         tickets = Ticket.objects.all().order_by('-created_at')
-        serializer = AdminSupportTicketSerializer(tickets, many=True)
-        return Response({
-            "message": "All support tickets retrieved successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        paginated_tickets, headers = pagination_view(tickets, request)
+        serializer = AdminSupportTicketSerializer(paginated_tickets, many=True)
+        return create_paginated_response(
+            "All support tickets retrieved successfully",
+            serializer.data,
+            headers
+            )
 
     def patch(self, request):
         ticket_id = request.data.get("ticket_id")
