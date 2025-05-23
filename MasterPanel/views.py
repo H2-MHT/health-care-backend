@@ -172,17 +172,22 @@ class TotalPatientAndDoctorsView(APIView):
                 }
                 for month in range(1, 13)
             ]
+            
+            total_appointmetns = BookedAppointment.objects.filter(status__in=["Completed", "Confirmed", "Pending"]).count()
+            current_month_appointments = BookedAppointment.objects.filter(status__in=["Completed", "Confirmed", "Pending"], date__range=(start_datetime, end_datetime)).count()
                     
             data = {
                 'total': {
                     'total_doctors': total_doctors,
                     'total_patients': total_patients,
                     'total_clinics': total_clinics,
+                    'total_appointments': total_appointmetns
                 },
                 'current':{
                         'filtered_doctors': doctors,
                         'filtered_patients': patients,
                         'filtered_clinics': clinics,
+                        'filtered_appointments': current_month_appointments
                 },
                 f"monthly_data": monthly_data
             }
@@ -1568,71 +1573,72 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
 
     def get(self, request):
         try:
-            start_date = request.query_params.get('start_date') 
-            end_date = request.query_params.get('end_date')
+            search_key = request.query_params.get("search_key", "").strip()
 
-            if not start_date or not end_date:
-                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+            if search_key:
+                users = User.objects.filter(
+                    (Q(first_name__istartswith=search_key) | Q(last_name__istartswith=search_key)) & Q(role="Doctor")
+                )
+            else:
+                users = User.objects.filter(role="Doctor")
 
-            try:
-                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
-                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
-            except ValueError:
-                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
-
+            doctor_ids = list(users.values_list('id', flat=True))
             filtered_upcoming_appointments = BookedAppointment.objects.filter(
-                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Pending", "Confirmed"]
+                status__in=["Pending", "Confirmed"],
+                doctor__in=doctor_ids
             ).order_by('date')
+
             filtered_completed_appointments = BookedAppointment.objects.filter(
-                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Completed", "Cancelled"]
+                status__in=["Completed", "Cancelled"],
+                doctor__in=doctor_ids
             ).order_by('date')
-            
+
+            doctor_dict = {user.id: user for user in users}
+
             upcoming_appointments = pagination_view(filtered_upcoming_appointments, request)
             completed_appointments = pagination_view(filtered_completed_appointments, request)
-            
+
             upcoming_appointments_list = []
             completed_appointments_list = []
-            for appointment in upcoming_appointments[0]:
-                try:
-                    doctor = User.objects.get(id=appointment.doctor)
-                except User.DoesNotExist:
-                    name = "Unknown"
-                name = f"{doctor.first_name} {doctor.last_name}"
-                data =  {
-                    "id": appointment.id,
-                    "doctor_name": name,
-                    "date": appointment.date.strftime('%d-%m-%Y'),
-                    "time": appointment.slot,
-                    "status": appointment.status        
-                }
-                upcoming_appointments_list.append(data)
-            
-            for appointment in completed_appointments[0]:
 
-                try:
-                    doctor = User.objects.get(id=appointment.doctor)
-                except User.DoesNotExist:
-                    name = "Unknown"
-                name = f"{doctor.first_name} {doctor.last_name}"
-                data =  {
+            for appointment in upcoming_appointments[0]:
+                doctor = doctor_dict.get(appointment.doctor)
+                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+
+                data = {
                     "id": appointment.id,
                     "doctor_name": name,
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
                     "status": appointment.status,
-                    "amount": appointment.amount      
+                    "type": appointment.appointment_type
+                }
+                upcoming_appointments_list.append(data)
+
+            for appointment in completed_appointments[0]:
+                doctor = doctor_dict.get(appointment.doctor)
+                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+
+                data = {
+                    "id": appointment.id,
+                    "doctor_name": name,
+                    "date": appointment.date.strftime('%d-%m-%Y'),
+                    "time": appointment.slot,
+                    "status": appointment.status,
+                    "type": appointment.appointment_type,
+                    "amount": appointment.amount
                 }
                 completed_appointments_list.append(data)
-    
+
             appointments = {
                 "upcoming_appointments": upcoming_appointments_list,
                 "past_appointments": completed_appointments_list
             }
 
-            return Response({"message":"Appointments retrieved successfully","data": appointments}, status=status.HTTP_200_OK)
+            return Response({"message": "Appointments retrieved successfully", "data": appointments}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 class AdminSupportTicketAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
