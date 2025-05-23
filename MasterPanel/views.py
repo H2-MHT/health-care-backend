@@ -1789,3 +1789,21 @@ class ConsultationReportDownloadAPIView(APIView):
             return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+class DoctorCountWithSpecialization(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(Self, request):
+        try:
+            doctor_count = []
+            specializations = Specialization.objects.filter(is_approved=True)
+            for specialization in specializations:
+                doctors = User.objects.filter(role="Doctor", professional_stat=str(specialization.id)).count()
+                data = {
+                    "specialization": specialization.name,
+                    "doctor_count": doctors
+                }
+                doctor_count.append(data)
+
+            return Response({'message': "Retrieved successfully.", 'data': doctor_count}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
