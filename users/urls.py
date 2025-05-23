@@ -31,9 +31,8 @@ urlpatterns = [
         # App Language Preference
         path('set-language/', UserLanguagePreferenceView.as_view(), name='set_language'),
         
-        # support
+        # support for user
         path('support/', SupportAPIView.as_view(), name='support'),
         path('support/<str:ticket_id>/', SupportAPIView.as_view(), name='support-ticket-detail'),
-        path('support/<str:ticket_id>/', SupportAPIView.as_view(), name='support-ticket-detail'),
-
+        
 ]
