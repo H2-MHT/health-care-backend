@@ -33,7 +33,8 @@ from .views import(
     DoctorCountFromClinicAPIView,
     ConsultationReportListAPIView,
     ConsultationReportDownloadAPIView,
-    UserCSVTemplateAPIView
+    UserCSVTemplateAPIView,
+    DoctorCountWithSpecialization
 )
 
 urlpatterns = [
@@ -106,5 +107,6 @@ urlpatterns = [
     path('doctor-count-from-clinic/', DoctorCountFromClinicAPIView.as_view(), name="patient-count-from-clinic"),
     path('consultation-report-list/', ConsultationReportListAPIView.as_view(), name="consultation-report-list"),
     path('consulation-report-download/<int:pk>/',  ConsultationReportDownloadAPIView.as_view(), name="consultation-report-download"),
+    path('doctors-belong-to-specialization/', DoctorCountWithSpecialization.as_view(), name="doctor-with-specialization"),
 
 ]
