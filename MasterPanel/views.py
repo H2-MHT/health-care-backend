@@ -47,6 +47,8 @@ from django.apps import apps
 from django.utils.timezone import make_aware
 from datetime import datetime
 import csv
+import io
+from rest_framework.parsers import MultiPartParser
 from io import StringIO, BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -81,6 +83,12 @@ from decimal import Decimal
 from users.models import Ticket
 from users.serializers import AdminSupportTicketSerializer
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
+import secrets
+import string
+from django.urls import reverse
+
+User = get_user_model()
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -164,17 +172,22 @@ class TotalPatientAndDoctorsView(APIView):
                 }
                 for month in range(1, 13)
             ]
+            
+            total_appointmetns = BookedAppointment.objects.filter(status__in=["Completed", "Confirmed", "Pending"]).count()
+            current_month_appointments = BookedAppointment.objects.filter(status__in=["Completed", "Confirmed", "Pending"], date__range=(start_datetime, end_datetime)).count()
                     
             data = {
                 'total': {
                     'total_doctors': total_doctors,
                     'total_patients': total_patients,
                     'total_clinics': total_clinics,
+                    'total_appointments': total_appointmetns
                 },
                 'current':{
                         'filtered_doctors': doctors,
                         'filtered_patients': patients,
                         'filtered_clinics': clinics,
+                        'filtered_appointments': current_month_appointments
                 },
                 f"monthly_data": monthly_data
             }
@@ -365,6 +378,9 @@ class UserListAPIView(APIView):
                         "experience_years": doctor.experience_years,
                         "professional_stat": doctor.user.professional_stat,
                         "bio": doctor.user.bio,
+                        "is_active": doctor.user.is_active,
+                        "planned_hourly_rate": doctor.planned_hourly_rate,
+                        "urgent_hourly_rate": doctor.urgent_hourly_rate,
                         "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
@@ -392,6 +408,7 @@ class UserListAPIView(APIView):
                         "currency": patient.currency,
                         "bio": patient.bio,
                         "phone_number": patient.phone_number,
+                        "is_active": patient.is_active,
                         "total_appointments": BookedAppointment.objects.filter(patient=patient.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(patient=patient.id, status="Completed").count(),
                     }
@@ -404,7 +421,8 @@ class UserListAPIView(APIView):
                 
                 data = [
                     {
-                        "id": clinic.user.id,  # Pass user_id
+                        "id": clinic.id,
+                        "clinic_user_id": clinic.user.id,  # Pass user_id
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
@@ -413,10 +431,10 @@ class UserListAPIView(APIView):
                         "city": clinic.user.city,
                         "bio": clinic.user.bio,
                         "currency": clinic.user.currency,
-                        "work_place": clinic.user.work_place,
-                        "phone_number": clinic.contact_phone if clinic.contact_phone else clinic.user.phone_number,
+                        "phone_number": clinic.user.phone_number,
                         "website": clinic.website,
                         "address": clinic.address,
+                        "is_active": clinic.user.is_active,
                     }
                     for clinic in clinics
                 ]
@@ -502,7 +520,20 @@ class DoctorWithdrawAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             if request.user.role == 'SuperAdmin':
-                transactions = Transaction.objects.all()
+                doctor_id = request.query_params.get('doctor_id')
+                if not doctor_id:
+                    transactions = Transaction.objects.all()
+                else:
+                    try:
+                        user = User.objects.get(id=doctor_id)
+                        doctor = Doctor.objects.filter(user=user).first()
+                        if not doctor:
+                            return Response({"error": "Requested user is not a doctor"}, status=status.HTTP_404_NOT_FOUND)
+                        
+                        transactions = Transaction.objects.filter(account__user=user)
+                    except User.DoesNotExist:
+                        return Response({"error": "Doctor not found with requested id."}, status=status.HTTP_404_NOT_FOUND)
+                
                 paginated_transactions, headers = pagination_view(transactions, request)
                 transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
                 
@@ -986,12 +1017,20 @@ class ExportDataAPIView(APIView):
 
         elif model_input == 'BookedAppointment':
             status_filter = request.query_params.get('status')
+            appointment_type = request.query_params.get('appointment_type')
+            if appointment_type not in ['past', 'upcoming']:
+                return Response({"error": "Invalid appointment type"}, status=status.HTTP_400_BAD_REQUEST)
             appointments = BookedAppointment.objects.filter(
                 Q(doctor__in=user_ids) | Q(patient__in=user_ids)
             ) if user_type_filter else BookedAppointment.objects.all()
 
             if status_filter:
                 appointments = appointments.filter(status__iexact=status_filter)
+
+            if appointment_type == 'past':
+                appointments = appointments.filter(date__lt=now().date())
+            elif appointment_type == 'upcoming':
+                appointments = appointments.filter(date__gte=now().date())
 
             # Get doctor and patient IDs to map names
             user_ids_in_appts = set(appointments.values_list('doctor', flat=True)) | set(appointments.values_list('patient', flat=True))
@@ -1087,6 +1126,123 @@ class ExportDataAPIView(APIView):
         # Return response
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{model_name}_data.pdf"'
+        return response
+
+class ImportDataView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    parser_classes = [MultiPartParser]
+
+    REQUIRED_FIELDS = [
+        'first_name',
+        'last_name',
+        'email',
+        'gender',
+        'city',
+        'country',
+        'currency',
+        'role',
+    ]
+
+    def post(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No file was provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_obj.name.endswith('.csv'):
+            return Response({'error': 'Only CSV files are supported'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            decoded_file = file_obj.read().decode('utf-8')
+            io_string = io.StringIO(decoded_file)
+            reader = csv.DictReader(io_string)
+
+            header_fields = reader.fieldnames
+            missing_fields = [field for field in self.REQUIRED_FIELDS if field not in header_fields]
+            if missing_fields:
+                return Response(
+                    {'error': 'Missing required fields', 'missing_fields': missing_fields},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            created_users = []
+            for row_num, row in enumerate(reader, start=2):
+                if not all(row.get(field) for field in self.REQUIRED_FIELDS):
+                    return Response({'error': f'Missing values in row: {row}'}, status=status.HTTP_400_BAD_REQUEST)
+
+                random_password = self.generate_password()
+
+                if row['role'] not in ['Admin', 'Doctor', 'Patient', 'Clinic']:
+                    return Response(
+                        {'error': f"Invalid role '{row['role']}' at row {row_num}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                user = User.objects.create_user(
+                    first_name=row['first_name'],
+                    last_name=row['last_name'],
+                    email=row['email'],
+                    gender=row['gender'],
+                    city=row['city'],
+                    country=row['country'],
+                    currency=row['currency'],
+                    role=row['role'],
+                    password=random_password,
+                    is_verified=True
+                )
+                
+                model_input = row['role']
+                if model_input != 'Admin':
+                    model = apps.get_model('doctors', model_input) if model_input == 'Doctor' else \
+                        apps.get_model('patients', model_input) if model_input == 'Patient' else \
+                        apps.get_model('clinics', model_input) if model_input == 'Clinic' else \
+                        apps.get_model('MasterPanel', model_input) if model_input == 'Admin' else None
+                    if not model:
+                        raise LookupError
+                    else:
+                        model.objects.create(user=user)
+
+                self.send_temp_password_email(user.email, random_password)
+                created_users.append(user.email)
+
+            return Response({'message': 'Users created successfully', 'users': created_users}, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def get(self, request):
+        csv_url = f"http://h2.doctor{reverse('csv-format')}"
+
+        return Response({'csv_url': csv_url})
+
+    def generate_password(self, length=10):
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+    
+    def send_temp_password_email(self, email, password):
+        message = Mail(
+            from_email=settings.SENDGRID_FROM_EMAIL,
+            to_emails=email,
+            subject='Your Password',
+            plain_text_content=f'Your login password is:"{password}"'
+            )
+    
+        try:
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            sg.send(message)
+        except Exception as e:
+            logger.error(f"Error sending email: {e}")
+
+class UserCSVTemplateAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+
+    def get(self, request, *args, **kwargs):
+        response = HttpResponse(
+            content_type='text/csv',
+        )
+        response['Content-Disposition'] = 'attachment; filename="format.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])
         return response
 
 class DepartmentAPIView(APIView):
@@ -1339,8 +1495,8 @@ class CreateAdminAPIView(APIView):
         if request.user.role != "SuperAdmin":
             return Response({"message": "You don't have permission."}, status=status.HTTP_400_BAD_REQUEST)
         users = User.objects.filter(role="Admin").values("id", "first_name", "last_name", "email", "dob", "city", "country")
-        users, headers = pagination_view(users, request)
-        return create_paginated_response("Admins account fetched successfully", users, headers)
+        paginated_users, headers = pagination_view(users, request)
+        return create_paginated_response("Admins account fetched successfully", paginated_users, headers)
     
     def put(self, request):
         if request.user.role != "SuperAdmin":
@@ -1430,83 +1586,93 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
 
     def get(self, request):
         try:
-            start_date = request.query_params.get('start_date') 
-            end_date = request.query_params.get('end_date')
+            search_key = request.query_params.get("search_key", "").strip()
 
-            if not start_date or not end_date:
-                return Response({"error": "start_date and end_date are required."}, status=status.HTTP_400_BAD_REQUEST)
+            if search_key:
+                users = User.objects.filter(
+                    (Q(first_name__istartswith=search_key) | Q(last_name__istartswith=search_key)) & Q(role="Doctor")
+                )
+            else:
+                users = User.objects.filter(role="Doctor")
 
-            try:
-                converted_start_date = datetime.strptime(start_date, '%d-%m-%Y').date()
-                converted_end_date = datetime.strptime(end_date, '%d-%m-%Y').date()
-            except ValueError:
-                return Response({"error": "Date format must be dd-mm-yyyy."}, status=status.HTTP_400_BAD_REQUEST)
-
+            doctor_ids = list(users.values_list('id', flat=True))
             filtered_upcoming_appointments = BookedAppointment.objects.filter(
-                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Pending", "Confirmed"]
+                status__in=["Pending", "Confirmed"],
+                doctor__in=doctor_ids
             ).order_by('date')
+
             filtered_completed_appointments = BookedAppointment.objects.filter(
-                date__gte=converted_start_date, date__lte=converted_end_date, status__in=["Completed", "Cancelled"]
+                status__in=["Completed", "Cancelled"],
+                doctor__in=doctor_ids
             ).order_by('date')
-            
+
+            doctor_dict = {user.id: user for user in users}
+
             upcoming_appointments = pagination_view(filtered_upcoming_appointments, request)
             completed_appointments = pagination_view(filtered_completed_appointments, request)
-            
+
             upcoming_appointments_list = []
             completed_appointments_list = []
-            for appointment in upcoming_appointments[0]:
-                try:
-                    doctor = User.objects.get(id=appointment.doctor)
-                except User.DoesNotExist:
-                    name = "Unknown"
-                name = f"{doctor.first_name} {doctor.last_name}"
-                data =  {
-                    "id": appointment.id,
-                    "doctor_name": name,
-                    "date": appointment.date.strftime('%d-%m-%Y'),
-                    "time": appointment.slot,
-                    "status": appointment.status        
-                }
-                upcoming_appointments_list.append(data)
-            
-            for appointment in completed_appointments[0]:
 
-                try:
-                    doctor = User.objects.get(id=appointment.doctor)
-                except User.DoesNotExist:
-                    name = "Unknown"
-                name = f"{doctor.first_name} {doctor.last_name}"
-                data =  {
+            for appointment in upcoming_appointments[0]:
+                doctor = doctor_dict.get(appointment.doctor)
+                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+
+                data = {
                     "id": appointment.id,
                     "doctor_name": name,
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
                     "status": appointment.status,
-                    "amount": appointment.amount      
+                    "type": appointment.appointment_type
+                }
+                upcoming_appointments_list.append(data)
+
+            for appointment in completed_appointments[0]:
+                doctor = doctor_dict.get(appointment.doctor)
+                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+
+                data = {
+                    "id": appointment.id,
+                    "doctor_name": name,
+                    "date": appointment.date.strftime('%d-%m-%Y'),
+                    "time": appointment.slot,
+                    "status": appointment.status,
+                    "type": appointment.appointment_type,
+                    "amount": appointment.amount
                 }
                 completed_appointments_list.append(data)
-    
+
             appointments = {
                 "upcoming_appointments": upcoming_appointments_list,
                 "past_appointments": completed_appointments_list
             }
 
-            return Response({"message":"Appointments retrieved successfully","data": appointments}, status=status.HTTP_200_OK)
+            return Response({"message": "Appointments retrieved successfully", "data": appointments}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 class AdminSupportTicketAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
         tickets = Ticket.objects.all().order_by('-created_at')
-        serializer = AdminSupportTicketSerializer(tickets, many=True)
-        return Response({
-            "message": "All support tickets retrieved successfully",
-            "data": serializer.data
-        }, status=status.HTTP_200_OK)
+        paginated_tickets, headers = pagination_view(tickets, request)
+        serializer = AdminSupportTicketSerializer(paginated_tickets, many=True)
+        return create_paginated_response(
+            "All support tickets retrieved successfully",
+            serializer.data,
+            headers
+            )
 
-    def patch(self, request, ticket_id):
+    def patch(self, request):
+        ticket_id = request.data.get("ticket_id")
+        if not ticket_id:
+            return Response({
+                "message": "Ticket ID is required",
+                "data": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             ticket = Ticket.objects.get(ticket_id=ticket_id)
         except Ticket.DoesNotExist:
@@ -1517,8 +1683,7 @@ class AdminSupportTicketAPIView(APIView):
 
         serializer = AdminSupportTicketSerializer(ticket, data=request.data, partial=True)
         if serializer.is_valid():
-            if 'status' in request.data and request.data['status'].lower() == 'resolved':
-                ticket.resolved_by = request.user
+            if request.data.get("status", "").lower() == "resolved":
                 ticket.resolved_at = now()
             serializer.save()
             return Response({
@@ -1542,19 +1707,57 @@ class DoctorCountFromClinicAPIView(APIView):
                 return Response({"error": "Clinic ID is required"}, status=status.HTTP_400_BAD_REQUEST)
               
             try:
-                clinic = Clinic.objects.get(pk=clinic_id) 
+                clinic = Clinic.objects.get(pk=clinic_id, user__role="Clinic", user__is_deleted=False) 
             except Clinic.DoesNotExist:
-                return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response({"error": "Clinic not found"}, status=status.HTTP_404_NOT_FOUND) 
             
-            doctors = User.objects.filter(work_place=clinic, role="Doctor")
-            data = {
-                "clinic": clinic_id,
-                "clinic_name": clinic.public_name,
-                "doctor_count": len(doctors),
-                "doctors_name": [doctor.get_full_name() for doctor in doctors]
-            }
-                        
-            return Response({"message":"Doctor count retrieved successfully", "data": data}, status=status.HTTP_200_OK)
+            search_key = request.query_params.get("search_key", "").strip()
+            if search_key:
+                users = User.objects.filter(first_name__istartswith=search_key, work_place=clinic, role="Doctor") | \
+                        User.objects.filter(last_name__istartswith=search_key, work_place=clinic, role="Doctor")
+            else:
+                users = User.objects.filter(work_place=clinic, role="Doctor")
+            paginated_users, headers = pagination_view(users, request)  
+              
+            doctor_list = []
+            for user in paginated_users:
+                try:
+                    doctor = Doctor.objects.get(user=user)
+                except Doctor.DoesNotExist:
+                    continue
+                data = {
+                        "doctor_user_id": doctor.user.id,
+                        "doctor_id": doctor.id,
+                        "uid": doctor.user.uid,
+                        "name": doctor.user.get_full_name(),
+                        "gender": doctor.user.gender,
+                        "dob": doctor.user.dob,
+                        "email": doctor.user.email,
+                        "profile_picture": doctor.user.profile_picture.url if doctor.user.profile_picture else None,
+                        "speciality": doctor.specialty,
+                        "city": doctor.user.city,
+                        "country": doctor.user.country,
+                        "phone_number": doctor.user.phone_number,
+                        "currency": doctor.user.currency,
+                        "expertise": doctor.user.expertise,
+                        "experience_years": doctor.experience_years,
+                        "professional_stat": doctor.user.professional_stat,
+                        "is_active": user.is_active,
+                        "bio": doctor.user.bio,
+                        "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
+                        "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
+                        "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
+                        "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
+                        "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                    }  
+                doctor_list.append(data)
+            
+            doctor_in_clinic = {
+                "clinic_name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
+                "doctors": doctor_list
+            }            
+            return create_paginated_response("Doctor count retrieved successfully", doctor_in_clinic, headers)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1599,3 +1802,21 @@ class ConsultationReportDownloadAPIView(APIView):
             return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+class DoctorCountWithSpecialization(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(Self, request):
+        try:
+            doctor_count = []
+            specializations = Specialization.objects.filter(is_approved=True)
+            for specialization in specializations:
+                doctors = User.objects.filter(role="Doctor", professional_stat=str(specialization.id)).count()
+                data = {
+                    "specialization": specialization.name,
+                    "doctor_count": doctors
+                }
+                doctor_count.append(data)
+
+            return Response({'message': "Retrieved successfully.", 'data': doctor_count}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

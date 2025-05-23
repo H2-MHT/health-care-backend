@@ -19,6 +19,7 @@ from .views import(
     NewSpecializationAPIView,
     AdminWithdrawalRequestAPIView,
     ExportDataAPIView,
+    ImportDataView,
     DepartmentAPIView,
     DoctorStripeLinkAddView,
     ReviewApproveView,
@@ -31,7 +32,9 @@ from .views import(
     AdminSupportTicketAPIView,
     DoctorCountFromClinicAPIView,
     ConsultationReportListAPIView,
-    ConsultationReportDownloadAPIView
+    ConsultationReportDownloadAPIView,
+    UserCSVTemplateAPIView,
+    DoctorCountWithSpecialization
 )
 
 urlpatterns = [
@@ -85,6 +88,8 @@ urlpatterns = [
     # withdrawal request 
     path('withdrawal-request/', AdminWithdrawalRequestAPIView.as_view(), name='withdrawal-request'),
     path('export-data/', ExportDataAPIView.as_view(), name='export-data'),
+    path('import-data/', ImportDataView.as_view(), name='import-data'),
+    path('csv-format/', UserCSVTemplateAPIView.as_view(), name='csv-format'),
     # department
     path('department/', DepartmentAPIView.as_view(), name='department'),
     # add stripe link on doctor profile
@@ -102,5 +107,6 @@ urlpatterns = [
     path('doctor-count-from-clinic/', DoctorCountFromClinicAPIView.as_view(), name="patient-count-from-clinic"),
     path('consultation-report-list/', ConsultationReportListAPIView.as_view(), name="consultation-report-list"),
     path('consulation-report-download/<int:pk>/',  ConsultationReportDownloadAPIView.as_view(), name="consultation-report-download"),
+    path('doctors-belong-to-specialization/', DoctorCountWithSpecialization.as_view(), name="doctor-with-specialization"),
 
 ]
