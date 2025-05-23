@@ -1189,7 +1189,8 @@ class ImportDataView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request):
-        csv_url = f"http://127.0.0.1:8000{reverse('csv-format')}"
+        csv_url = f"http://h2.doctor{reverse('csv-format')}"
+
         return Response({'csv_url': csv_url})
 
     def generate_password(self, length=10):
