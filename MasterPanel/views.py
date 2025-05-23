@@ -372,6 +372,8 @@ class UserListAPIView(APIView):
                         "experience_years": doctor.experience_years,
                         "professional_stat": doctor.user.professional_stat,
                         "bio": doctor.user.bio,
+                        "planned_hourly_rate": doctor.planned_hourly_rate,
+                        "urgent_hourly_rate": doctor.urgent_hourly_rate,
                         "total_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id).count(),
                         "completed_appointments": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").count(),
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
