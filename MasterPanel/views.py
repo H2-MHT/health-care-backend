@@ -520,7 +520,20 @@ class DoctorWithdrawAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             if request.user.role == 'SuperAdmin':
-                transactions = Transaction.objects.all()
+                doctor_id = request.query_params.get('doctor_id')
+                if not doctor_id:
+                    transactions = Transaction.objects.all()
+                else:
+                    try:
+                        user = User.objects.get(id=doctor_id)
+                        doctor = Doctor.objects.filter(user=user).first()
+                        if not doctor:
+                            return Response({"error": "Requested user is not a doctor"}, status=status.HTTP_404_NOT_FOUND)
+                        
+                        transactions = Transaction.objects.filter(account__user=user)
+                    except User.DoesNotExist:
+                        return Response({"error": "Doctor not found with requested id."}, status=status.HTTP_404_NOT_FOUND)
+                
                 paginated_transactions, headers = pagination_view(transactions, request)
                 transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
                 
