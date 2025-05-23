@@ -173,14 +173,17 @@ class AdminSupportTicketSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     admin_comment = serializers.CharField(allow_blank=True, required=False)
     role = serializers.CharField(source='user.role', read_only=True, default="")
-
+    status = serializers.SerializerMethodField()
     class Meta:
         model = Ticket
         fields = [
             'ticket_id', 'role','user_name', 'title', 'description', 'attachment',
             'status', 'admin_comment', 'resolved_at', 'created_at', 'updated_at'
         ]
-
+        
+    def get_status(self, obj):
+        return obj.get_status_display()
+    
     def get_user_name(self, obj):
         first_name = obj.user.first_name or ""
         last_name = obj.user.last_name or ""
