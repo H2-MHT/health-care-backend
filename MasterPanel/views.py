@@ -533,7 +533,20 @@ class DoctorWithdrawAPIView(APIView):
                         transactions = Transaction.objects.filter(account__user=user)
                     except User.DoesNotExist:
                         return Response({"error": "Doctor not found with requested id."}, status=status.HTTP_404_NOT_FOUND)
-                
+
+                # Calculate total wallet amount: Deposit (+), Withdrawal (-)
+                # Wallet calculation only on success transactions
+                total_wallet_amount = transactions.filter(status='success').aggregate(
+                    total=Sum(
+                        Case(
+                            When(transaction_type="Deposit", then=F('amount')),
+                            When(transaction_type="Withdrawal", then=F('amount') * -1),
+                            default=0,
+                            output_field=DecimalField()
+                        )
+                    )
+                )['total'] or 0
+
                 paginated_transactions, headers = pagination_view(transactions, request)
                 transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
                 
@@ -542,6 +555,8 @@ class DoctorWithdrawAPIView(APIView):
                     transaction_serializer.data,
                     headers
                 )
+                response.data['total_wallet_amount'] = str(total_wallet_amount)
+                return response
             else:
                 return Response({"error": "You are not authorized to access this data"}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
@@ -1624,7 +1639,7 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
                     "status": appointment.status,
-                    "type": appointment.appointment_type
+                    "appointment_type": appointment.appointment_type
                 }
                 upcoming_appointments_list.append(data)
 
@@ -1638,7 +1653,7 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
                     "status": appointment.status,
-                    "type": appointment.appointment_type,
+                    "appointment_type": appointment.appointment_type,
                     "amount": appointment.amount
                 }
                 completed_appointments_list.append(data)
