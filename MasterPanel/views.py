@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 
 # Create your views here.
-
+from django.db.models import Sum, Case, When, F, DecimalField
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from django.http import (
@@ -547,10 +547,14 @@ class DoctorWithdrawAPIView(APIView):
                     )
                 )['total'] or 0
 
+                # if amount is negative, set it to 0
+                if total_wallet_amount < 0:
+                    total_wallet_amount = 0
+
                 paginated_transactions, headers = pagination_view(transactions, request)
                 transaction_serializer = TransactionSerializer(paginated_transactions, many=True)
                 
-                return create_paginated_response(
+                response= create_paginated_response(
                     "Account details fetched successfully.",
                     transaction_serializer.data,
                     headers
