@@ -300,7 +300,6 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-
     def save(self, *args, **kwargs):
         if not self.ticket_id:
             role = getattr(self.user, 'role', '').lower()
