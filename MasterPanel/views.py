@@ -852,7 +852,7 @@ class MergeSpecialization(APIView):
                             "name": specialization.name,
                             "description": specialization.description if specialization.description else "No description available",
                             "is_approved": specialization.is_approved,
-                            "created_at": specialization.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                            "created_at": specialization.created_date.strftime("%Y-%m-%d") if specialization.created_date else None,
                             }
                         for specialization in specializations
                     ]
