@@ -27,6 +27,7 @@ from users.models import User
 from payments.models import Transaction, AccountDetail, Payment
 from rest_framework import status
 from doctors.models import LicenceCertificate
+from sendgrid.helpers.mail import Mail, From, To
 from consultations.models import ConsultationReport
 from reviews.models import (
     Review, 
@@ -1256,19 +1257,24 @@ class ImportDataView(APIView):
         alphabet = string.ascii_letters + string.digits
         return ''.join(secrets.choice(alphabet) for _ in range(length))
     
-    def send_temp_password_email(self, email, password):
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject='Your Password',
-            plain_text_content=f'Your login password is:"{password}"'
-            )
-    
+    def send_temp_password_email(self, email, temp_password, name="User"):
         try:
+            message = Mail(
+                from_email=From(settings.SENDGRID_FROM_EMAIL, "Health Help"),
+                to_emails=To(email)
+            )
+            message.template_id = 'd-f7b46f3ac1dc4d1e964ac7054a71f9e1'
+            
+            # dynamic template
+            message.dynamic_template_data = {
+                "name": name,
+                "temp_password": temp_password
+        }
+
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
         except Exception as e:
-            logger.error(f"Error sending email: {e}")
+            logger.error(f"Error sending temporary password email to {email}: {str(e)}")
 
 class UserCSVTemplateAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
