@@ -351,18 +351,24 @@ class UserListAPIView(APIView):
 
     def get(self, request):
         try:
-            role = request.query_params.get("role")  # Role from query parameters
-            search_query = request.query_params.get("search", "").strip()
+            role = request.query_params.get("role")
+            search_key = request.query_params.get("search_key", "").strip()
+
             if not role:
                 return Response({"message": "Role is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if role.capitalize() == "Doctor":
+
+            role = role.capitalize()
+            data = []
+
+            if role == "Doctor":
                 doctors_data = Doctor.objects.filter(user__role="Doctor", user__is_deleted=False)
-                if search_query:
+
+                if search_key:
                     doctors_data = doctors_data.filter(
-                        Q(user__first_name__icontains=search_query) |
-                        Q(user__last_name__icontains=search_query)
-                        )
+                        Q(user__first_name__istartswith=search_key) |
+                        Q(user__last_name__istartswith=search_key)
+                    )
+
                 doctors, headers = pagination_view(doctors_data, request)
                 
                 data = [
@@ -395,13 +401,14 @@ class UserListAPIView(APIView):
                     }
                     for doctor in doctors
                 ]
-            
-            elif role.capitalize() == "Patient":
+
+            elif role == "Patient":
                 patients_data = User.objects.filter(role="Patient", is_deleted=False)
-                if search_query:
+
+                if search_key:
                     patients_data = patients_data.filter(
-                        Q(first_name__icontains=search_query) |
-                        Q(last_name__icontains=search_query)
+                        Q(first_name__istartswith=search_key) |
+                        Q(last_name__istartswith=search_key)
                     )
                 patients, headers = pagination_view(patients_data, request)
                 
@@ -426,14 +433,13 @@ class UserListAPIView(APIView):
                     for patient in patients
                 ]
 
-            elif role.capitalize() == "Clinic":
+            elif role == "Clinic":
                 clinics_data = Clinic.objects.filter(user__role="Clinic", user__is_deleted=False)
-                
-                if search_query:
+
+                if search_key:
                     clinics_data = clinics_data.filter(
-                        Q(public_name__icontains=search_query) |
-                        Q(user__first_name__icontains=search_query) |
-                        Q(user__last_name__icontains=search_query)
+                        Q(user__first_name__istartswith=search_key) |
+                        Q(user__last_name__istartswith=search_key)
                     )
                 clinics, headers = pagination_view(clinics_data, request)
                 
