@@ -827,6 +827,7 @@ class ApproveSpecialization(APIView):
                 {
                     "id": spec.id,
                     "name": spec.name,
+                    "created_at": spec.created_date.strftime("%Y-%m-%d") if spec.created_date else None,
                 }
                 for spec in specialization
             ]     
