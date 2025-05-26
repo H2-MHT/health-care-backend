@@ -19,7 +19,12 @@ from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
+from .serializers import(
+    PatientListSerializer,
+    DoctorSerializer,
+    PatientDetailSerializer,
+    DoctorDetailSerializer,
+)
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
@@ -478,7 +483,15 @@ class DetailOfUser(APIView):
     def post(self, request, pk):
         role = request.data.get("role")
         user = get_object_or_404(User, id=pk, role=role, is_deleted=False)
-        serializer = PatientDetailSerializer(user)
+        if role == 'Patient':
+            serializer = PatientDetailSerializer(user)
+        elif role == 'Doctor':
+            if not hasattr(user, 'doctor'):
+                return Response({"detail": "Doctor profile not found for this user."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = DoctorDetailSerializer(user.doctor)
+        else:
+            return Response({"detail": "Unsupported role."}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
