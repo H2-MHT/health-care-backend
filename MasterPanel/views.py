@@ -456,7 +456,7 @@ class UserListAPIView(APIView):
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
-                        "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
+                        "profile_picture": clinic.user.profile_picture.url if clinic.user.profile_picture else None,
                         "country": clinic.user.country,
                         "city": clinic.user.city,
                         "bio": clinic.user.bio,
