@@ -1251,11 +1251,6 @@ class ImportDataView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-    def get(self, request):
-        csv_url = f"http://h2.doctor{reverse('csv-format')}"
-
-        return Response({'csv_url': csv_url})
 
     def generate_password(self, length=10):
         alphabet = string.ascii_letters + string.digits
@@ -1279,10 +1274,8 @@ class UserCSVTemplateAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
 
     def get(self, request, *args, **kwargs):
-        response = HttpResponse(
-            content_type='text/csv',
-        )
-        response['Content-Disposition'] = 'attachment; filename="format.csv"'
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="user_import_template.csv"'
 
         writer = csv.writer(response)
         writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])
