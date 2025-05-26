@@ -456,7 +456,7 @@ class UserListAPIView(APIView):
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
-                        "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
+                        "profile_picture": clinic.user.profile_picture.url if clinic.user.profile_picture else None,
                         "country": clinic.user.country,
                         "city": clinic.user.city,
                         "bio": clinic.user.bio,
@@ -1200,11 +1200,10 @@ class ImportDataView(APIView):
         'first_name',
         'last_name',
         'email',
-        'gender',
         'city',
         'country',
-        'currency',
         'role',
+        'phone_number'
     ]
 
     def post(self, request):
@@ -1245,11 +1244,10 @@ class ImportDataView(APIView):
                     first_name=row['first_name'],
                     last_name=row['last_name'],
                     email=row['email'],
-                    gender=row['gender'],
                     city=row['city'],
                     country=row['country'],
-                    currency=row['currency'],
                     role=row['role'],
+                    phone_number=row['phone_number'],
                     password=random_password,
                     is_verified=True
                 )
@@ -1304,7 +1302,7 @@ class UserCSVTemplateAPIView(APIView):
         response['Content-Disposition'] = 'attachment; filename="user_import_template.csv"'
 
         writer = csv.writer(response)
-        writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])
+        writer.writerow(['first_name', 'last_name', 'email', 'role', 'city', 'country', 'phone_number'])
         return response
 
 class DepartmentAPIView(APIView):

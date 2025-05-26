@@ -39,6 +39,13 @@ class Clinic(models.Model):
 
     def __str__(self):
         return self.user.first_name if self.user else str(self.id)
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.user and self.clinic_logo:
+            if self.user.profile_picture != self.clinic_logo:
+                self.user.profile_picture = self.clinic_logo
+                self.user.save()
 
 
 class ClinicReview(models.Model):
