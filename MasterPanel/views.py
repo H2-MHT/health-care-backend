@@ -25,6 +25,7 @@ from .serializers import(
     PatientDetailSerializer,
     DoctorDetailSerializer,
 )
+from clinics.serializers import ClinicDetailSerializer
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
@@ -485,6 +486,8 @@ class DetailOfUser(APIView):
         user = get_object_or_404(User, id=pk, role=role, is_deleted=False)
         if role == 'Patient':
             serializer = PatientDetailSerializer(user)
+        elif role == 'Clinic':
+            serializer = ClinicDetailSerializer(user.clinic_user)
         elif role == 'Doctor':
             if not hasattr(user, 'doctor'):
                 return Response({"detail": "Doctor profile not found for this user."}, status=status.HTTP_404_NOT_FOUND)
