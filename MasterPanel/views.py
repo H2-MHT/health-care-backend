@@ -1543,10 +1543,12 @@ class CreateAdminAPIView(APIView):
         message = Mail(
             from_email=settings.SENDGRID_FROM_EMAIL,
             to_emails=email,
-            subject='Temporary Password',
-            plain_text_content=f'Your temporary password is {temp_password}'
-            )
-    
+        )
+        message.template_id = 'd-f7b46f3ac1dc4d1e964ac7054a71f9e1'
+        message.dynamic_template_data = {
+            "temp_password": temp_password,
+        }
+
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
