@@ -19,7 +19,12 @@ from clinics.models import Clinic
 from patients.models import Patient
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .serializers import PatientListSerializer, DoctorSerializer, PatientDetailSerializer
+from .serializers import(
+    PatientListSerializer,
+    DoctorSerializer,
+    PatientDetailSerializer,
+    DoctorDetailSerializer,
+)
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
@@ -478,7 +483,15 @@ class DetailOfUser(APIView):
     def post(self, request, pk):
         role = request.data.get("role")
         user = get_object_or_404(User, id=pk, role=role, is_deleted=False)
-        serializer = PatientDetailSerializer(user)
+        if role == 'Patient':
+            serializer = PatientDetailSerializer(user)
+        elif role == 'Doctor':
+            if not hasattr(user, 'doctor'):
+                return Response({"detail": "Doctor profile not found for this user."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = DoctorDetailSerializer(user.doctor)
+        else:
+            return Response({"detail": "Unsupported role."}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -827,6 +840,7 @@ class ApproveSpecialization(APIView):
                 {
                     "id": spec.id,
                     "name": spec.name,
+                    "created_at": spec.created_date.strftime("%Y-%m-%d") if spec.created_date else None,
                 }
                 for spec in specialization
             ]     
@@ -847,7 +861,13 @@ class MergeSpecialization(APIView):
                     "message": "Specializations list retrieved successfully",
                     "number_of_specializations": len(specializations),
                     "specializations": [
-                        {"id": specialization.id, "name": specialization.name}
+                        {
+                            "id": specialization.id,
+                            "name": specialization.name,
+                            "description": specialization.description if specialization.description else "No description available",
+                            "is_approved": specialization.is_approved,
+                            "created_at": specialization.created_date.strftime("%Y-%m-%d") if specialization.created_date else None,
+                            }
                         for specialization in specializations
                     ]
                 }
