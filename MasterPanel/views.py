@@ -847,7 +847,13 @@ class MergeSpecialization(APIView):
                     "message": "Specializations list retrieved successfully",
                     "number_of_specializations": len(specializations),
                     "specializations": [
-                        {"id": specialization.id, "name": specialization.name}
+                        {
+                            "id": specialization.id,
+                            "name": specialization.name,
+                            "description": specialization.description if specialization.description else "No description available",
+                            "is_approved": specialization.is_approved,
+                            "created_at": specialization.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                            }
                         for specialization in specializations
                     ]
                 }
