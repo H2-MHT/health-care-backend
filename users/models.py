@@ -281,14 +281,14 @@ class AppLanguage(models.Model):
         return f"{self.user.email} - {self.language_name}"
     
 # help and support 
-STATUS_CHOICES = (
-    ("open", "Open"),
-    ("in_progress", "In Progress"),
-    ("resolved", "Resolved"),
-    ("closed", "Closed"),
-)
 
 class Ticket(models.Model):
+    STATUS_CHOICES = (
+        ("open", "Open"),
+        ("in_progress", "In Progress"),
+        ("resolved", "Resolved"),
+        ("closed", "Closed"),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     ticket_id = models.CharField(max_length=20, unique=True, editable=False)
     title = models.CharField(max_length=255)
