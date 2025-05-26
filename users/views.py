@@ -10,7 +10,7 @@ from .serializers import (
     DeviceAccessSerializer,
     UserRoleSerializer,
     AppLanguageSerializer,
-    SupportTickeSerializer,
+    SupportTicketSerializer,
 )
 from .models import(
     Education,
@@ -547,7 +547,7 @@ class SupportAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = SupportTickeSerializer(data=request.data)
+        serializer = SupportTicketSerializer(data=request.data)
         if serializer.is_valid():
             ticket = serializer.save(user=request.user)
             return Response({
@@ -571,7 +571,7 @@ class SupportAPIView(APIView):
             # Retrieve specific query
             try:
                 ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
-                serializer = SupportTickeSerializer(ticket)
+                serializer = SupportTicketSerializer(ticket)
                 return Response({
                     "message": "Support ticket details retrieved successfully",
                     "data": serializer.data
@@ -584,7 +584,7 @@ class SupportAPIView(APIView):
         else:
             # Retrieve all queries
             tickets = Ticket.objects.filter(user=request.user).order_by('-created_at')
-            serializer = SupportTickeSerializer(tickets, many=True)
+            serializer = SupportTicketSerializer(tickets, many=True)
             return Response({
                 "message": "Support tickets retrieved successfully",
                 "data": serializer.data
@@ -601,7 +601,7 @@ class SupportAPIView(APIView):
 
         try:
             ticket = Ticket.objects.get(ticket_id=ticket_id, user=request.user)
-            serializer = SupportTickeSerializer(ticket, data=request.data, partial=True)
+            serializer = SupportTicketSerializer(ticket, data=request.data, partial=True)
             if serializer.is_valid():
                 ticket = serializer.save()
                 return Response({
