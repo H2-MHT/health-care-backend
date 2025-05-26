@@ -164,10 +164,13 @@ class AppLanguageSerializer(serializers.ModelSerializer):
         
 
 class SupportTicketSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
     class Meta:
         model = Ticket
         fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment', "resolved_at", "created_at", "updated_at"]
         
+    def get_status(self, obj):
+        return obj.get_status_display()
         
 class AdminSupportTicketSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
