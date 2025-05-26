@@ -35,6 +35,7 @@ urlpatterns = [
     path("login/google/", GoogleLoginView.as_view(), name="google-login"),
     path("login/apple/", AppleLoginView.as_view(), name="apple-login"),
     path("update-profile/", UpdateUserProfileAPIView.as_view(), name="update-profile"),
+    path("update-profile/<int:user_id>/", UpdateUserProfileAPIView.as_view(), name="update-profile"),
     path('delete-profile-picture/', DeleteProfilePictureAPIView.as_view(), name='delete-profile-picture'),
     
     # firebase device token

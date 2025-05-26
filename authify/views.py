@@ -45,6 +45,8 @@ from clinics.serializers import ClinicInfoSerializer
 import logging
 from sendgrid.helpers.mail import Mail, To, Personalization
 from django.utils.timezone import now
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 
 
 # from doctors.models import LoginHistory
@@ -1051,12 +1053,27 @@ class UpdateUserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def patch(self, request):
+    def patch(self, request, user_id=None):
         try:
+            User = get_user_model()
+
+            # Default: user updates their own profile
+            user_to_update = request.user
+
+            if user_id is not None:
+                if request.user.is_staff:
+                    user_to_update = get_object_or_404(User, id=user_id)
+                    logger.info(f"Admin {request.user.email} is updating profile for user ID {user_id}")
+                else:
+                    return Response({
+                        "message": "Unauthorized: Only admin can update another user's profile."
+                    }, status=status.HTTP_403_FORBIDDEN)
+            else:
+                logger.info(f"User profile update initiated by: {request.user.email}")
             logger.info(f"User profile update initiated by: {request.user.email}")
 
             serializer = UserProfileUpdateSerializer(
-                instance=request.user,
+                instance=user_to_update,
                 data=request.data,
                 partial=True
             )

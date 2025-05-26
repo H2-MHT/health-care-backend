@@ -27,6 +27,7 @@ from users.models import User
 from payments.models import Transaction, AccountDetail, Payment
 from rest_framework import status
 from doctors.models import LicenceCertificate
+from sendgrid.helpers.mail import Mail, From, To
 from consultations.models import ConsultationReport
 from reviews.models import (
     Review, 
@@ -826,6 +827,7 @@ class ApproveSpecialization(APIView):
                 {
                     "id": spec.id,
                     "name": spec.name,
+                    "created_at": spec.created_date.strftime("%Y-%m-%d") if spec.created_date else None,
                 }
                 for spec in specialization
             ]     
@@ -846,7 +848,13 @@ class MergeSpecialization(APIView):
                     "message": "Specializations list retrieved successfully",
                     "number_of_specializations": len(specializations),
                     "specializations": [
-                        {"id": specialization.id, "name": specialization.name}
+                        {
+                            "id": specialization.id,
+                            "name": specialization.name,
+                            "description": specialization.description if specialization.description else "No description available",
+                            "is_approved": specialization.is_approved,
+                            "created_at": specialization.created_date.strftime("%Y-%m-%d") if specialization.created_date else None,
+                            }
                         for specialization in specializations
                     ]
                 }
@@ -1251,38 +1259,36 @@ class ImportDataView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-    def get(self, request):
-        csv_url = f"http://h2.doctor{reverse('csv-format')}"
-
-        return Response({'csv_url': csv_url})
 
     def generate_password(self, length=10):
         alphabet = string.ascii_letters + string.digits
         return ''.join(secrets.choice(alphabet) for _ in range(length))
     
-    def send_temp_password_email(self, email, password):
-        message = Mail(
-            from_email=settings.SENDGRID_FROM_EMAIL,
-            to_emails=email,
-            subject='Your Password',
-            plain_text_content=f'Your login password is:"{password}"'
-            )
-    
+    def send_temp_password_email(self, email, temp_password, name="User"):
         try:
+            message = Mail(
+                from_email=From(settings.SENDGRID_FROM_EMAIL, "Health Help"),
+                to_emails=To(email)
+            )
+            message.template_id = 'd-f7b46f3ac1dc4d1e964ac7054a71f9e1'
+            
+            # dynamic template
+            message.dynamic_template_data = {
+                "name": name,
+                "temp_password": temp_password
+        }
+
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
         except Exception as e:
-            logger.error(f"Error sending email: {e}")
+            logger.error(f"Error sending temporary password email to {email}: {str(e)}")
 
 class UserCSVTemplateAPIView(APIView):
     permission_classes = [IsSuperAdminOrAdmin]
 
     def get(self, request, *args, **kwargs):
-        response = HttpResponse(
-            content_type='text/csv',
-        )
-        response['Content-Disposition'] = 'attachment; filename="format.csv"'
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="user_import_template.csv"'
 
         writer = csv.writer(response)
         writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])

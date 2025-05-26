@@ -281,14 +281,14 @@ class AppLanguage(models.Model):
         return f"{self.user.email} - {self.language_name}"
     
 # help and support 
-STATUS_CHOICES = (
-    ("open", "Open"),
-    ("in_progress", "In Progress"),
-    ("resolved", "Resolved"),
-    ("closed", "Closed"),
-)
 
 class Ticket(models.Model):
+    STATUS_CHOICES = (
+        ("open", "Open"),
+        ("in_progress", "In Progress"),
+        ("resolved", "Resolved"),
+        ("closed", "Closed"),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     ticket_id = models.CharField(max_length=20, unique=True, editable=False)
     title = models.CharField(max_length=255)
@@ -300,7 +300,6 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-
     def save(self, *args, **kwargs):
         if not self.ticket_id:
             role = getattr(self.user, 'role', '').lower()

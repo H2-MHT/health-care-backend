@@ -163,17 +163,20 @@ class AppLanguageSerializer(serializers.ModelSerializer):
         )
         
 
-class SupportTickeSerializer(serializers.ModelSerializer):
+class SupportTicketSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
     class Meta:
         model = Ticket
         fields = ['ticket_id','title', 'description', 'attachment', 'status','admin_comment', "resolved_at", "created_at", "updated_at"]
         
+    def get_status(self, obj):
+        return obj.get_status_display()
         
 class AdminSupportTicketSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     admin_comment = serializers.CharField(allow_blank=True, required=False)
     role = serializers.CharField(source='user.role', read_only=True, default="")
-    status = serializers.SerializerMethodField()
+    status = serializers.ChoiceField(choices=Ticket.STATUS_CHOICES)
     class Meta:
         model = Ticket
         fields = [
@@ -181,8 +184,12 @@ class AdminSupportTicketSerializer(serializers.ModelSerializer):
             'status', 'admin_comment', 'resolved_at', 'created_at', 'updated_at'
         ]
         
-    def get_status(self, obj):
-        return obj.get_status_display()
+    def to_representation(self, instance):
+        # original key
+        representation = super().to_representation(instance)
+        # value of status key
+        representation['status'] = instance.get_status_display()
+        return representation
     
     def get_user_name(self, obj):
         first_name = obj.user.first_name or ""
