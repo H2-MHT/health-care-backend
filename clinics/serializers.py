@@ -70,7 +70,25 @@ class ClinicListSerializer(serializers.ModelSerializer):
         if obj.user:
             return f"{obj.user.first_name} {obj.user.last_name}".strip()
         return ""
-    
+
+class ClinicDetailSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source='user.first_name', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    country = serializers.CharField(source='user.country', read_only=True)
+    city = serializers.CharField(source='user.city', read_only=True)
+    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
+    bio = serializers.CharField(source='user.bio', read_only=True)
+    profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
+    currency = serializers.CharField(source='user.currency', read_only=True)
+
+    class Meta:
+        model = Clinic
+        fields = [
+            # user fields
+            'name', 'email', 'country', 'city', 'phone_number', 'bio', 'profile_picture', 'currency',
+            # clinic fields
+            'address', 'organisation_name', 'license_number', 'clinic_type', 'public_name',
+        ]
 class LanguageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Language

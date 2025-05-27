@@ -25,6 +25,7 @@ from .serializers import(
     PatientDetailSerializer,
     DoctorDetailSerializer,
 )
+from clinics.serializers import ClinicDetailSerializer
 from payments.serializers import AccountDetailSerializer, TransactionSerializer
 from doctors.serializers import LicenceCertificateSerializer
 from django.db.models import Q
@@ -93,6 +94,8 @@ from django.contrib.auth import get_user_model
 import secrets
 import string
 from django.urls import reverse
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
 
 User = get_user_model()
 
@@ -267,7 +270,9 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         patient.delete()
         return Response({"message": "Patient deleted successfully"}, status=status.HTTP_200_OK)
 
-
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    
 class PatientBlockUnblockAPIView(APIView):
 
     def post(self, request, pk):
@@ -456,7 +461,7 @@ class UserListAPIView(APIView):
                         "uid": clinic.user.uid,  # Pass user uid
                         "name": clinic.public_name if clinic.public_name else clinic.user.get_full_name(),
                         "email": clinic.user.email,
-                        "profile_picture": clinic.clinic_logo.url if clinic.clinic_logo else None,
+                        "profile_picture": clinic.user.profile_picture.url if clinic.user.profile_picture else None,
                         "country": clinic.user.country,
                         "city": clinic.user.city,
                         "bio": clinic.user.bio,
@@ -485,6 +490,8 @@ class DetailOfUser(APIView):
         user = get_object_or_404(User, id=pk, role=role, is_deleted=False)
         if role == 'Patient':
             serializer = PatientDetailSerializer(user)
+        elif role == 'Clinic':
+            serializer = ClinicDetailSerializer(user.clinic_user)
         elif role == 'Doctor':
             if not hasattr(user, 'doctor'):
                 return Response({"detail": "Doctor profile not found for this user."}, status=status.HTTP_404_NOT_FOUND)
@@ -1200,11 +1207,10 @@ class ImportDataView(APIView):
         'first_name',
         'last_name',
         'email',
-        'gender',
         'city',
         'country',
-        'currency',
         'role',
+        'phone_number'
     ]
 
     def post(self, request):
@@ -1245,11 +1251,10 @@ class ImportDataView(APIView):
                     first_name=row['first_name'],
                     last_name=row['last_name'],
                     email=row['email'],
-                    gender=row['gender'],
                     city=row['city'],
                     country=row['country'],
-                    currency=row['currency'],
                     role=row['role'],
+                    phone_number=row['phone_number'],
                     password=random_password,
                     is_verified=True
                 )
@@ -1304,7 +1309,7 @@ class UserCSVTemplateAPIView(APIView):
         response['Content-Disposition'] = 'attachment; filename="user_import_template.csv"'
 
         writer = csv.writer(response)
-        writer.writerow(['first_name', 'last_name', 'email', 'role', 'gender', 'city', 'country', 'currency'])
+        writer.writerow(['first_name', 'last_name', 'email', 'role', 'city', 'country', 'phone_number'])
         return response
 
 class DepartmentAPIView(APIView):
@@ -1542,10 +1547,12 @@ class CreateAdminAPIView(APIView):
         message = Mail(
             from_email=settings.SENDGRID_FROM_EMAIL,
             to_emails=email,
-            subject='Temporary Password',
-            plain_text_content=f'Your temporary password is {temp_password}'
-            )
-    
+        )
+        message.template_id = 'd-f7b46f3ac1dc4d1e964ac7054a71f9e1'
+        message.dynamic_template_data = {
+            "temp_password": temp_password,
+        }
+
         try:
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
