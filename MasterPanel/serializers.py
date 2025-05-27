@@ -4,6 +4,8 @@ from doctors.models import Specialization
 from patients.models import Patient
 from users.models import User
 from doctors.models import Doctor
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.exceptions import AuthenticationFailed
 
 class PatientListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -15,7 +17,7 @@ class PatientDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'profile_picture','email','first_name', 'last_name', 'phone_number', 'country','dob','gender','bio','city','residence',
-                  'languages','work_place','expertise','professional_stat','is_active']
+                    'languages','work_place','expertise','professional_stat','is_active']
 
 class DoctorDetailSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source='user.id')
@@ -67,3 +69,13 @@ class SpecializationSerializer(serializers.ModelSerializer):
         if Specialization.objects.filter(name__iexact=value).exists():
             raise serializers.ValidationError("A specialization with this name already exists.")
         return value
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        if not self.user.is_active:
+            raise AuthenticationFailed("User is blocked or inactive.")
+
+        return data

@@ -156,26 +156,20 @@ class SignInSerializer(serializers.Serializer):
         # Retrieve the user by email
         user = User.objects.filter(email=email).first()
 
-        if not user:
-            raise serializers.ValidationError("Invalid email or password.")
-
-        # Check the user's password
-        if not user.check_password(password):
+        if not user or not user.check_password(password):
             raise serializers.ValidationError("Invalid email or password.")
         
-        # Check the user's role
-        if role!= user.role:
+        if role != user.role:
             raise serializers.ValidationError(f"Invalid role. User's role is {user.role}")
-        
-        if user.role in ["Patient", "Doctor"] and not user.is_verified:
-            raise serializers.ValidationError("You are not verified. Request new OTP to verify your account.")
 
-        # Reactivate the account if it's inactive
+        # Prevent login if user is inactive (blocked)
         if not user.is_active:
-            user.is_active = True
-            user.save()
+            raise serializers.ValidationError("Your account has been blocked. Contact support.")
 
-        # Add the user object to the validated data
+        # Prevent login if user is not verified
+        if user.role in ["Patient", "Doctor"] and not user.is_verified:
+            raise serializers.ValidationError("You are not verified. Request a new OTP to verify your account.")
+
         data["user"] = user
         return data
 

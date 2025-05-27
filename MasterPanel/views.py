@@ -94,6 +94,8 @@ from django.contrib.auth import get_user_model
 import secrets
 import string
 from django.urls import reverse
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import CustomTokenObtainPairSerializer
 
 User = get_user_model()
 
@@ -268,7 +270,9 @@ class PatientRetrieveUpdateDeleteAPIView(APIView):
         patient.delete()
         return Response({"message": "Patient deleted successfully"}, status=status.HTTP_200_OK)
 
-
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    
 class PatientBlockUnblockAPIView(APIView):
 
     def post(self, request, pk):
