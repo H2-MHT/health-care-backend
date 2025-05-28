@@ -327,12 +327,14 @@ class PrescriptionListView(APIView):
                     "doctor": {
                         "name": f"{doctor_user.first_name} {doctor_user.last_name}" if doctor_user else "Unknown",
                         "email": doctor_user.email if doctor_user else "Unknown",
+                        "profile_picture" : doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
                     },
                     'patient': {
                         'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
                         "email": patient_user.email if patient_user else "Unknown",
                     },
-                    'pdf_url': prescription.pdf_file.url
+                    'pdf_url': prescription.pdf_file.url,
+                    'slot' : appointment.slot
                     # 'pdf_url': request.build_absolute_uri(
                     #     reverse('prescription_template') + f"?appointment_id={appointment.id}"
                     # )
@@ -548,6 +550,26 @@ def consultation_report(consultation_id, request):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)        
    
+def prescription_to_data(prescription, appointment):
+    doctor_user = User.objects.filter(id=appointment.doctor).first()
+    patient_user = User.objects.filter(id=appointment.patient).first()
+
+    return {
+        'appointment_id': appointment.id,
+        'created_date': prescription.created_at.strftime('%d %b, %Y'),
+        'doctor': {
+            'name': f"{doctor_user.first_name} {doctor_user.last_name}" if doctor_user else "Unknown",
+            'email': doctor_user.email if doctor_user else "Unknown",
+            'profile_picture': doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
+        },
+        'patient': {
+            'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
+            'email': patient_user.email if patient_user else "Unknown"
+        },
+        'pdf_url': prescription.pdf_file.url if prescription.pdf_file else None,
+        'slot': appointment.slot
+    }
+
 
 class ConsultationReportAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -566,6 +588,9 @@ class ConsultationReportAPIView(APIView):
             appointment = BookedAppointment.objects.get(pk=appointment)
         except BookedAppointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if ConsultationReport.objects.filter(appointment=appointment).exists():
+            return Response({"error": "Consultation Report already exists for this appointment."}, status=status.HTTP_400_BAD_REQUEST)
 
         
         doctor = Doctor.objects.filter(user_id=appointment.doctor).first()
@@ -573,6 +598,11 @@ class ConsultationReportAPIView(APIView):
 
         if not doctor or not patient:
             return Response({"error": "Doctor or patient not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if not prescription:
+            prescription_obj = Prescription.objects.filter(appointment=appointment).first()
+        else:
+            prescription_obj = Prescription.objects.filter(pk=prescription).first()
         
         if request.user.role == "Patient":
             user = "patient_id"
@@ -587,11 +617,13 @@ class ConsultationReportAPIView(APIView):
             appointment=appointment,
             short_description=short_description,
             translated_text=translated_text,
-            prescription = prescription,
+            prescription = prescription_obj,
             recommendation=recommendation
         )
         
         consultation_report(Consultation.id, request)
+
+        prescription_data = prescription_to_data(prescription_obj, appointment) if prescription_obj else None
         return Response(
             { 
               "message": "Consultation created successfully",
@@ -599,6 +631,7 @@ class ConsultationReportAPIView(APIView):
                   "id": Consultation.id,
                    user: user_id,
                   "appointment_id": Consultation.appointment.id,
+                  "prescription": prescription_data,
                   "translated_text": Consultation.translated_text,
                   "created_at": Consultation.created_at
               }
@@ -618,10 +651,11 @@ class ConsultationReportAPIView(APIView):
                 return Response({"error": "Invalid appointment id"}, status=status.HTTP_404_NOT_FOUND)
             
             prescription = Prescription.objects.filter(appointment=appointment).first()
-            prescription_data = PrescriptionSerializer(prescription).data if prescription else None
+            prescription_data = prescription_to_data(prescription, appointment)if prescription else None
             
             patient = ""
             doctor = ""
+            consultations = ConsultationReport.objects.none()
             if request.user.role == "Patient":
                 patient = request.user.patient_profile
                 consultations = ConsultationReport.objects.filter(patient=patient, appointment=appointment)
@@ -652,9 +686,9 @@ class ConsultationReportAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):
-        consultation_id = request.data.get('consultation_id')
+        consultation_id = request.query_params.get('consultation_id')
         if not consultation_id:
-            return Response({"error": "Consultation ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Consultation Id is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             consultation = ConsultationReport.objects.get(pk=consultation_id)
         except ConsultationReport.DoesNotExist:
