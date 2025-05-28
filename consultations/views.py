@@ -654,9 +654,9 @@ class ConsultationReportAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request):
-        consultation_id = request.data.get('consultation_id')
+        consultation_id = request.query_params.get('consultation_id')
         if not consultation_id:
-            return Response({"error": "Consultation ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Consultation Id is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             consultation = ConsultationReport.objects.get(pk=consultation_id)
         except ConsultationReport.DoesNotExist:
