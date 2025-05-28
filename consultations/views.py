@@ -327,12 +327,14 @@ class PrescriptionListView(APIView):
                     "doctor": {
                         "name": f"{doctor_user.first_name} {doctor_user.last_name}" if doctor_user else "Unknown",
                         "email": doctor_user.email if doctor_user else "Unknown",
+                        "profile_picture" : doctor_user.profile_picture.url if doctor_user and doctor_user.profile_picture else None
                     },
                     'patient': {
                         'name': f"{patient_user.first_name} {patient_user.last_name}" if patient_user else "Unknown",
                         "email": patient_user.email if patient_user else "Unknown",
                     },
-                    'pdf_url': prescription.pdf_file.url
+                    'pdf_url': prescription.pdf_file.url,
+                    'slot' : appointment.slot
                     # 'pdf_url': request.build_absolute_uri(
                     #     reverse('prescription_template') + f"?appointment_id={appointment.id}"
                     # )
