@@ -588,6 +588,9 @@ class ConsultationReportAPIView(APIView):
             appointment = BookedAppointment.objects.get(pk=appointment)
         except BookedAppointment.DoesNotExist:
             return Response({"error": "Appointment not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        if ConsultationReport.objects.filter(appointment=appointment).exists():
+            return Response({"error": "Consultation Report already exists for this appointment."}, status=status.HTTP_400_BAD_REQUEST)
 
         
         doctor = Doctor.objects.filter(user_id=appointment.doctor).first()
