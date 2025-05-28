@@ -628,7 +628,7 @@ class ConsultationReportAPIView(APIView):
                   "id": Consultation.id,
                    user: user_id,
                   "appointment_id": Consultation.appointment.id,
-                  "prescriprtion": prescription_data,
+                  "prescription": prescription_data,
                   "translated_text": Consultation.translated_text,
                   "created_at": Consultation.created_at
               }
