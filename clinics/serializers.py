@@ -72,6 +72,7 @@ class ClinicListSerializer(serializers.ModelSerializer):
         return ""
 
 class ClinicDetailSerializer(serializers.ModelSerializer):
+    clinic_id = serializers.IntegerField(source='user.id', read_only=True)
     name = serializers.CharField(source='user.first_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     country = serializers.CharField(source='user.country', read_only=True)
@@ -85,7 +86,7 @@ class ClinicDetailSerializer(serializers.ModelSerializer):
         model = Clinic
         fields = [
             # user fields
-            'name', 'email', 'country', 'city', 'phone_number', 'bio', 'profile_picture', 'currency',
+            'clinic_id', 'name', 'email', 'country', 'city', 'phone_number', 'bio', 'profile_picture', 'currency',
             # clinic fields
             'address', 'organisation_name', 'license_number', 'clinic_type', 'public_name',
         ]
