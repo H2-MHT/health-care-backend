@@ -1925,4 +1925,4 @@ class AppointmentCountAPIView(APIView):
             elif status_lower == 'confirmed':
                 data['confirmed_appointments'] += 1
 
-        return Response({'message': "Retrieved successfully.", 'data': data}, status=status.HTTP_200_OK)
+        return Response({'message': " Appointment count retrieved successfully.", 'data': data}, status=status.HTTP_200_OK)
