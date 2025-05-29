@@ -1889,3 +1889,40 @@ class DoctorCountWithSpecialization(APIView):
             return Response({'message': "Retrieved successfully.", 'data': doctor_count}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class AppointmentCountAPIView(APIView):
+    permission_classes = [IsSuperAdminOrAdmin]
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if not start_date or not end_date:
+            return Response({'message':'Start and end date is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            start__date = datetime.strptime(start_date, "%d-%m-%Y").date()
+            end__date = datetime.strptime(end_date, "%d-%m-%Y").date()
+        except ValueError:
+            return Response({'message':'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        appointments = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date)
+
+        data = {
+            'total_apointments': 0,
+            'completed_appointments': 0,
+            'pending_appointments': 0,
+            'cancelled_appointments': 0,
+            'confirmed_appointments': 0
+        }
+
+        for appointment in appointments:
+            data['total_apointments'] += 1
+            status_lower = appointment.status.lower()
+            if status_lower == 'completed':
+                data['completed_appointments'] += 1
+            elif status_lower == 'pending':
+                data['pending_appointments'] += 1
+            elif status_lower == 'cancelled':
+                data['cancelled_appointments'] += 1
+            elif status_lower == 'confirmed':
+                data['confirmed_appointments'] += 1
+
+        return Response({'message': " Appointment count retrieved successfully.", 'data': data}, status=status.HTTP_200_OK)
