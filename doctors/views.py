@@ -1843,18 +1843,23 @@ class ConsultationSettingsAPIView(APIView):
     def send_doctor_consultation_update_email(self, doctor, consultation):
         try:
             subject = f"Doctor {doctor.user.get_full_name()} updated consultation fees"
-            content = f"""
-                Doctor Name: {doctor.user.get_full_name()}
-                Planned Fee: ₹{consultation.planned_fees} or 0
-                Planned Session Length: {consultation.planned_session_length} minutes
-            """
 
             message = Mail(
                 from_email=settings.SENDGRID_FROM_EMAIL,
                 to_emails='it@my-health.today',
                 subject=subject,
-                plain_text_content=content,
             )
+
+            message.template_id = "d-88727132203a40a0ad990ab843e31fdd"
+
+            currency = doctor.user.currency or ''
+
+            message.dynamic_template_data = {
+                "doctor_name": doctor.user.get_full_name(),
+                "planned_fee": f"{currency}{consultation.planned_fees}",
+                "planned_session_length": f"{consultation.planned_session_length} minutes"
+            }
+
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
 
