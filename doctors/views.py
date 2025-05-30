@@ -1851,7 +1851,7 @@ class ConsultationSettingsAPIView(APIView):
         try:
             is_updated_by_admin = updated_by_user.is_staff
 
-            to_email = 'it@my-health.today' if not is_updated_by_admin else doctor.user.email
+            to_email = 'dpf@my-health.today' if not is_updated_by_admin else doctor.user.email
 
             message = Mail(
                 from_email=settings.SENDGRID_FROM_EMAIL,
