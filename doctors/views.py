@@ -1842,12 +1842,9 @@ class ConsultationSettingsAPIView(APIView):
     
     def send_doctor_consultation_update_email(self, doctor, consultation):
         try:
-            subject = f"Doctor {doctor.user.get_full_name()} updated consultation fees"
-
             message = Mail(
                 from_email=settings.SENDGRID_FROM_EMAIL,
                 to_emails='it@my-health.today',
-                subject=subject,
             )
 
             message.template_id = "d-88727132203a40a0ad990ab843e31fdd"
