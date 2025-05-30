@@ -1744,9 +1744,16 @@ class ConsultationSettingsAPIView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            if user.is_staff and "doctor_id" in request.query_params:
-                doctor_id = request.query_params["doctor_id"]
-                consultation_settings = ConsultationSessionAndFee.objects.filter(doctor__id=doctor_id)
+            if user.is_staff and "doctor_user_id" in request.query_params:
+                doctor_user_id = request.query_params["doctor_user_id"]
+                try:
+                    doctor = Doctor.objects.get(user__id=doctor_user_id)
+                except Doctor.DoesNotExist:
+                    return Response(
+                        {"error": "Doctor with given user ID does not exist."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+                consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor)
             else:
                 consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=user.doctor)
 
@@ -1767,12 +1774,12 @@ class ConsultationSettingsAPIView(APIView):
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        if user.is_staff and "doctor_id" in request.data:
+        if user.is_staff and "doctor_user_id" in request.data:
             try:
-                doctor = Doctor.objects.get(id=request.data["doctor_id"])
+                doctor = Doctor.objects.get(user__id=request.data["doctor_user_id"])
             except Doctor.DoesNotExist:
                 return Response(
-                    {"error": "Doctor with given ID does not exist."},
+                    {"error": "Doctor with given user ID does not exist."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
