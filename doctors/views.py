@@ -1822,7 +1822,7 @@ class ConsultationSettingsAPIView(APIView):
                         doctor.urgent_hourly_rate = round(urgent_hourly, 2)
                         doctor.save()
 
-                        self.send_doctor_consultation_update_email(doctor, consultation)
+                        self.send_consultation_update_email(doctor, consultation, request.user)
 
                     return Response(
                         {"message": message, "data": serializer.data},
@@ -1840,11 +1840,15 @@ class ConsultationSettingsAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
     
-    def send_doctor_consultation_update_email(self, doctor, consultation):
+    def send_consultation_update_email(self, doctor, consultation, updated_by_user):
         try:
+            is_updated_by_admin = updated_by_user.is_staff
+
+            to_email = 'it@my-health.today' if not is_updated_by_admin else doctor.user.email
+
             message = Mail(
                 from_email=settings.SENDGRID_FROM_EMAIL,
-                to_emails='it@my-health.today',
+                to_emails=to_email,
             )
 
             message.template_id = "d-88727132203a40a0ad990ab843e31fdd"
@@ -1854,14 +1858,15 @@ class ConsultationSettingsAPIView(APIView):
             message.dynamic_template_data = {
                 "doctor_name": doctor.user.get_full_name(),
                 "planned_fee": f"{currency}{consultation.planned_fees}",
-                "planned_session_length": f"{consultation.planned_session_length} minutes"
+                "planned_session_length": f"{consultation.planned_session_length} minutes",
+                "updated_by": "Admin" if is_updated_by_admin else "Doctor"
             }
 
             sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             sg.send(message)
 
         except Exception as e:
-            logger.error(f"Failed to send email to admin: {str(e)}")
+            logger.error(f"Failed to send consultation update email: {str(e)}")
 
 class UserPreferenceView(APIView):
     permission_classes = [IsAuthenticated]
