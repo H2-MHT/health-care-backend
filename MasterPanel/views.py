@@ -190,13 +190,15 @@ class TotalPatientAndDoctorsView(APIView):
                     'total_doctors': total_doctors,
                     'total_patients': total_patients,
                     'total_clinics': total_clinics,
-                    'total_appointments': total_appointmetns
+                    'total_appointments': total_appointmetns,
+                    'total_completed_appointments': BookedAppointment.objects.filter(status="Completed").count()
                 },
                 'current':{
                         'filtered_doctors': doctors,
                         'filtered_patients': patients,
                         'filtered_clinics': clinics,
-                        'filtered_appointments': current_month_appointments
+                        'filtered_appointments': current_month_appointments,
+                        'completed_appointments': BookedAppointment.objects.filter(status="Completed", date__range=(start_datetime, end_datetime)).count()
                 },
                 f"monthly_data": monthly_data
             }
