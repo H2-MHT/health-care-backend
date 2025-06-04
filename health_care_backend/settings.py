@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'django_celery_results',
     'NHS',
+    'fitbit',
 ]
 
 REST_FRAMEWORK = {
@@ -455,4 +456,8 @@ NHS_SYMPTOM_BASE_URL = os.getenv("NHS_SYMPTOM_BASE_URL")
 NHS_CONDITION_BASE_URL = os.getenv("NHS_CONDITION_BASE_URL")
 ADMIN_EMAIL = "dpf@my-health.today"
 
-
+FITBIT_CLIENT_ID = '23QBF6'
+FITBIT_CLIENT_SECRET = 'f40360361c6ec8548807ff4e6fac5de0'
+FITBIT_REDIRECT_URI = "https://h2.doctor/callback"
+FITBIT_AUTHORIZATION_URL = "https://www.fitbit.com/oauth2/authorize"
+FITBIT_TOKEN_URL = "https://api.fitbit.com/oauth2/token"

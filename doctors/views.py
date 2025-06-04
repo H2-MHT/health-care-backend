@@ -1737,12 +1737,26 @@ class ConsultationSettingsAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             user = request.user
-            if not hasattr(user, "doctor"):
+
+            if not hasattr(user, "doctor") and not user.is_staff:
                 return Response(
-                    {"error": "You are not a registered doctor."},
+                    {"error": "You are not authorized to view consultation settings."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=user.doctor)
+
+            if user.is_staff and "doctor_user_id" in request.query_params:
+                doctor_user_id = request.query_params["doctor_user_id"]
+                try:
+                    doctor = Doctor.objects.get(user__id=doctor_user_id)
+                except Doctor.DoesNotExist:
+                    return Response(
+                        {"error": "Doctor with given user ID does not exist."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+                consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=doctor)
+            else:
+                consultation_settings = ConsultationSessionAndFee.objects.filter(doctor=user.doctor)
+
             serializer = ConsultationSettingsSerializer(consultation_settings, many=True)
             return Response(
                 {
@@ -1760,14 +1774,22 @@ class ConsultationSettingsAPIView(APIView):
 
     def post(self, request, *args, **kwargs):
         user = request.user
-        try:
-            doctor = Doctor.objects.get(user=user)
-        except Doctor.DoesNotExist:
-            return Response(
-                {"error": "You are not a registered doctor."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        if user.is_staff and "doctor_user_id" in request.data:
+            try:
+                doctor = Doctor.objects.get(user__id=request.data["doctor_user_id"])
+            except Doctor.DoesNotExist:
+                return Response(
+                    {"error": "Doctor with given user ID does not exist."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            try:
+                doctor = Doctor.objects.get(user=user)
+            except Doctor.DoesNotExist:
+                return Response(
+                    {"error": "You are not a registered doctor."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         try:
             with transaction.atomic():
                 # Check if a similar setting already exists
@@ -1807,6 +1829,8 @@ class ConsultationSettingsAPIView(APIView):
                         doctor.urgent_hourly_rate = round(urgent_hourly, 2)
                         doctor.save()
 
+                        self.send_consultation_update_email(doctor, consultation, request.user)
+
                     return Response(
                         {"message": message, "data": serializer.data},
                         status=status.HTTP_200_OK if existing_setting else status.HTTP_201_CREATED,
@@ -1822,7 +1846,34 @@ class ConsultationSettingsAPIView(APIView):
                 {"error": "Something went wrong", "details": str(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    
+    def send_consultation_update_email(self, doctor, consultation, updated_by_user):
+        try:
+            is_updated_by_admin = updated_by_user.is_staff
 
+            to_email = 'dpf@my-health.today' if not is_updated_by_admin else doctor.user.email
+
+            message = Mail(
+                from_email=settings.SENDGRID_FROM_EMAIL,
+                to_emails=to_email,
+            )
+
+            message.template_id = "d-88727132203a40a0ad990ab843e31fdd"
+
+            currency = doctor.user.currency or ''
+
+            message.dynamic_template_data = {
+                "doctor_name": doctor.user.get_full_name(),
+                "planned_fee": f"{currency}{consultation.planned_fees}",
+                "planned_session_length": f"{consultation.planned_session_length} minutes",
+                "updated_by": "Admin" if is_updated_by_admin else "Doctor"
+            }
+
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            sg.send(message)
+
+        except Exception as e:
+            logger.error(f"Failed to send consultation update email: {str(e)}")
 
 class UserPreferenceView(APIView):
     permission_classes = [IsAuthenticated]

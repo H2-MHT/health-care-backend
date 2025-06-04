@@ -177,6 +177,7 @@ class AdminSupportTicketSerializer(serializers.ModelSerializer):
     admin_comment = serializers.CharField(allow_blank=True, required=False)
     role = serializers.CharField(source='user.role', read_only=True, default="")
     status = serializers.ChoiceField(choices=Ticket.STATUS_CHOICES)
+    attachment = serializers.FileField(required=False, allow_null=True)
     class Meta:
         model = Ticket
         fields = [
