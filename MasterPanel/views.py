@@ -1734,7 +1734,13 @@ class AdminSupportTicketAPIView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        tickets = Ticket.objects.all().order_by('-created_at')
+        search_key = request.query_params.get("search_key", "").strip()
+        tickets = Ticket.objects.all()
+    
+        if search_key:
+            tickets = tickets.filter(title__istartswith=search_key)
+
+        tickets = tickets.order_by('-created_at')
         paginated_tickets, headers = pagination_view(tickets, request)
         serializer = AdminSupportTicketSerializer(paginated_tickets, many=True)
         return create_paginated_response(
