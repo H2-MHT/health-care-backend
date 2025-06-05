@@ -778,6 +778,7 @@ class BookAppointmentAPIView(APIView):
             
             doctor = User.objects.get(id=appointment.doctor)  # get doctor as a User object
             doctor_name = f"{doctor.first_name} {doctor.last_name}"  # access first_name
+            doctor_profile = Doctor.objects.filter(user=doctor).first()
             # print(doctor_name, "----------DOCTOR NAME----------")
 
             patient = User.objects.get(id=appointment.patient)  # get patient as a User object
@@ -832,6 +833,7 @@ class BookAppointmentAPIView(APIView):
                     "appointment_type": appointment.appointment_type,
                     "date": date,
                     "payment_status": appointment.payment_status,
+                    "stripe_link": doctor_profile.stripe_link,
                 }
             }, status=201)
 
