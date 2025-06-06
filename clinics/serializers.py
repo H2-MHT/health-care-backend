@@ -110,7 +110,7 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
     country = serializers.CharField(source='user.country', required=False)
     city = serializers.CharField(source='user.city', required=False)
     phone_number = serializers.CharField(source='user.phone_number', required=False)
-    email = serializers.EmailField(source='user.email', required=True)
+    email =  serializers.SerializerMethodField()
     working_time = serializers.CharField(source='user.working_time', required=False)
     expertise = serializers.CharField(source='user.expertise', required=False)
     languages = serializers.CharField(max_length=255, required=False)
@@ -126,6 +126,9 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
             'clinic_logo', 'website'
         ]
 
+    def get_email(self, obj):
+        return obj.user.email if obj.user else None
+    
     def to_representation(self, instance):
         """Customize GET response for languages"""
         data = super().to_representation(instance)
