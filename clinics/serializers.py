@@ -113,7 +113,7 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
     email =  serializers.SerializerMethodField()
     working_time = serializers.CharField(source='user.working_time', required=False)
     expertise = serializers.CharField(source='user.expertise', required=False)
-    languages = serializers.CharField(max_length=255, required=False)
+    languages = serializers.SerializerMethodField()
     profile_picture = serializers.ImageField(source='user.profile_picture', required=False)
     class Meta:
         model = Clinic
@@ -129,11 +129,19 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
     def get_email(self, obj):
         return obj.user.email if obj.user else None
     
+    def get_languages(self, obj):
+        try:
+            return list(obj.user.languages.values_list("id", flat=True)) if obj.user else []
+        except Exception as e:
+            return []
+
     def to_representation(self, instance):
-        """Customize GET response for languages"""
         data = super().to_representation(instance)
-        data['languages'] = list(instance.user.languages.values_list("id", flat=True))
-        return data    
+        try:
+            data['languages'] = list(instance.user.languages.values_list("id", flat=True)) if instance.user else []
+        except Exception as e:
+            data['languages'] = []
+        return data
 
     def update(self, instance, validated_data):
         # Extract user data if present
