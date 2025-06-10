@@ -43,6 +43,8 @@ from .views import (
     DoctorInfoAPIView,
     AddSpecializationAPIView,
     UpdateRescheduleStatusAPIView,
+    AppointmentView,
+    SlotFilterAPIView
     )
 
 
@@ -111,6 +113,8 @@ urlpatterns = [
     path("clinics-associated-to-doctors/", ClinicsAssociatedToDoctorsAPIView.as_view(), name="all-clinic-on-doctor"),
     path("patient-associated-to-doctors/", PatientsAssociatedToDoctorAPIView.as_view(), name="all-patient-on-doctor"),
     path('get-wallet/', DoctorWalletAPIView.as_view(), name='get-wallet'),
+    path('generate-slots/', AppointmentView.as_view(), name='appointment-view'),
+    path('filter-slots/', SlotFilterAPIView.as_view(), name='filter-slots')
     
 
 ]
