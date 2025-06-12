@@ -852,7 +852,7 @@ class BookAppointmentAPIView(APIView):
                     from_email=settings.SENDGRID_FROM_EMAIL,
                     to_emails=patient.email,
                 )
-                patient_email.template_id = "d-20159cf43e714e4b86bf4af62d3b40ba"  # <-- Replace this
+                patient_email.template_id = "d-20159cf43e714e4b86bf4af62d3b40ba" 
                 patient_email.dynamic_template_data = {
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
@@ -866,7 +866,7 @@ class BookAppointmentAPIView(APIView):
                     from_email=settings.SENDGRID_FROM_EMAIL,
                     to_emails=doctor.email,
                 )
-                doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"  # <-- Replace this
+                doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
                 doctor_email.dynamic_template_data = {
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
@@ -1025,6 +1025,91 @@ class BookAppointmentAPIView(APIView):
 
             appointment.status = appointment_status
             appointment.save()
+
+            if appointment_status == "Confirmed":
+                doctor = User.objects.get(id=appointment.doctor)
+                doctor_name = f"{doctor.first_name} {doctor.last_name}"
+                doctor_profile = Doctor.objects.filter(user=doctor).first()
+
+                patient = User.objects.get(id=appointment.patient)
+                patient_name = f"{patient.first_name} {patient.last_name}"
+
+                # WhatsApp Notification Message (confirmation)
+                message = (
+                    f"Hello {patient.first_name},\n"
+                    f"Your appointment has been confirmed successfully.\n"
+                    f"Date: {appointment.date.strftime('%d-%m-%Y')}\n"
+                    f"Time: {appointment.slot}\n"
+                    f"Doctor: {doctor_name}\n"
+                    f"Location: Online/Clinic\n"
+                    f"Thank you for choosing our service!"
+                )
+
+                # Send WhatsApp Notification to patient
+                send_whatsapp_message_patient(
+                    to=patient.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=appointment.slot,
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+
+                # Send WhatsApp Notification to doctor
+                send_whatsapp_message_doctor(
+                    to=doctor.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=appointment.slot,
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+
+                # Send In-App Notifications
+                send_notification(
+                    user_id=doctor.id,
+                    message=f"You have confirmed the appointment with {patient_name} on {appointment.date.strftime('%d-%m-%Y')} at {appointment.slot}."
+                )
+
+                send_notification(
+                    user_id=patient.id,
+                    message=f"Your appointment with Dr. {doctor_name} has been confirmed for {appointment.date.strftime('%d-%m-%Y')} at {appointment.slot}."
+                )
+
+                try:
+                    sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                    # Email to Patient
+                    patient_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=patient.email,
+                    )
+                    patient_email.template_id = "d-da6cfe012ae54e7f9fa07054044d8b03"
+                    patient_email.dynamic_template_data = {
+                        "patient_name": patient_name,
+                        "doctor_name": doctor_name,
+                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
+                        "slot": appointment.slot,
+                        "appointment_type": appointment.appointment_type
+                    }
+                    sendgrid_client.send(patient_email)
+
+                    # Email to Doctor
+                    doctor_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=doctor.email,
+                    )
+                    doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
+                    doctor_email.dynamic_template_data = {
+                        "doctor_name": doctor_name,
+                        "patient_name": patient_name,
+                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
+                        "slot": appointment.slot,
+                        "appointment_type": appointment.appointment_type
+                    }
+                    sendgrid_client.send(doctor_email)
+                except Exception as e:
+                    return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = BookedAppointmentSerializer(appointment)
             return Response({'message': 'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
@@ -1225,6 +1310,7 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.status = "Rescheduled"
             appointment.rescheduled_by = request.user
             appointment.save()
+            appointment_type_display = str(appointment.get_appointment_type_display())
 
 
             app_language = AppLanguage.objects.filter(user=patient).first()
@@ -1261,6 +1347,57 @@ class RescheduleAppointmentAPIView(APIView):
                 doctor_name=doctor_name,
                 patient_name=patient_name
             )
+
+             # In-App Notifications
+            send_notification(
+                user_id=doctor.id,
+                message=f"Your appointment with {patient_name} has been rescheduled to {new_date} at {new_slot}."
+            )
+            send_notification(
+                user_id=patient.id,
+                message=f"Your appointment with Dr. {doctor_name} has been rescheduled to {new_date} at {new_slot}."
+            )
+
+            # Email Notifications using SendGrid
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                # Patient Email for Reschedule
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-93565aace48f4e0bb4486a5a6fa72214"
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "old_date": old_date,
+                    "new_date": new_date,
+                    "old_slot": old_slot,
+                    "new_slot": new_slot,
+                    "appointment_type": appointment_type_display,
+                }
+                sendgrid_client.send(patient_email)
+
+                # Doctor Email for Reschedule
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-34faf9cf920b45efb2be08d587526ffc"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "old_date": old_date,
+                    "new_date": new_date,
+                    "old_slot": old_slot,
+                    "new_slot": new_slot,
+                    "appointment_type": appointment_type_display,
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({
                 "message": "Appointment rescheduled successfully",
@@ -1414,6 +1551,42 @@ class CancelAppointmentAPIView(APIView):
                 doctor_name=doctor_name
             )
 
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                # Email to Patient
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-bb6c32ca2bd046e6ad0529032bfed8cc"
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "appointment_date": appointment_date,
+                    "slot": slot,
+                    "appointment_type": appointment.appointment_type
+                }
+                sendgrid_client.send(patient_email)
+
+                # Email to Doctor
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-ed8d742c7daf40609f2672a8dfb4dfc4"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "appointment_date": appointment_date,
+                    "slot": slot,
+                    "appointment_type": appointment.appointment_type
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
             return Response({
                 "message": "Appointment cancelled successfully.",
             }, status=status.HTTP_200_OK)
@@ -1433,10 +1606,86 @@ class AppointmentReminderAPIView(APIView):
         today = datetime.now()
         reminder_time = today + timedelta(days=1)
 
-        reminders = BookedAppointment.objects.filter(patient=request.user, created_at__lte=reminder_time).exclude(status="Cancelled")
-        serializer = BookedAppointmentSerializer(reminders, many=True)
+        reminders = BookedAppointment.objects.filter(
+            patient=request.user.id,
+            date__range=[today.date(), reminder_time.date()]
+        ).exclude(status="Cancelled")
 
-        return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
+        for appointment in reminders:
+            doctor = User.objects.get(id=appointment.doctor)
+            doctor_name = f"{doctor.first_name} {doctor.last_name}"
+
+            patient = User.objects.get(id=appointment.patient)
+            patient_name = f"{patient.first_name} {patient.last_name}"
+
+            date = appointment.date.strftime("%Y-%m-%d")
+            slot = appointment.slot
+            appointment_type = appointment.get_appointment_type_display()
+
+            send_whatsapp_message_patient(
+                to=patient.phone_number,
+                patient_name=patient_name,
+                date=date,
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment_type
+            )
+
+            send_whatsapp_message_doctor(
+                to=doctor.phone_number,
+                patient_name=patient_name,
+                date=date,
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment_type
+            )
+
+            # In-App Notifications
+            send_notification(
+                user_id=doctor.id,
+                message=f"Reminder: You have an appointment with {patient_name} on {date} at {slot}."
+            )
+            send_notification(
+                user_id=patient.id,
+                message=f"Reminder: Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
+            )
+
+            # Email Notifications
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-5ba9791108c4439abd5bfd635a1284d3" 
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": appointment_type
+                }
+                sendgrid_client.send(patient_email)
+
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-02ea502df2d342a0af119a6a2db13952"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": appointment_type,
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                print("SendGrid Error:", str(e))
+
+        return Response({"message": "Reminders sent successfully."}, status=status.HTTP_200_OK)
 
 
 class AppointmentSummaryAPIView(APIView):
