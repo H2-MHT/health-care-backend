@@ -32,7 +32,7 @@ def fitbit_login(request):
 
 @api_view(['GET'])
 def fitbit_callback(request):
-    code = request.GET.get("code")
+    code = request.query_params.get("code")
     if not code:
         return Response({"error": "Authorization code not received"}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -60,13 +60,20 @@ def fitbit_callback(request):
 def fitbit_data(request):
     """Fetches Fitbit data for the authenticated user"""
     access_token = request.headers.get("Authorization")
-    FITBIT_API_URL = request.query_params.get('fitbit_url')
-    
+    endpoint = request.query_params.get("endpoint")
+
     if not access_token:
         return Response({"error": "Authorization token missing"}, status=status.HTTP_401_UNAUTHORIZED)
     
+    if not endpoint:
+        return Response({"error": "Endpoint missing"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    base_url = "https://api.fitbit.com/1/user/-/"
+    final_url = base_url + endpoint
+
     headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(FITBIT_API_URL, headers=headers)
+    response = requests.get(final_url, headers=headers)
+
     if response.status_code == 200:
         return Response(response.json(), status=status.HTTP_200_OK)
     
