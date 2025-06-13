@@ -52,10 +52,11 @@ class ClinicRegisterSerializer(serializers.ModelSerializer):
 
 class ClinicSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='user.first_name', read_only=True)
+    profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
     class Meta:
         model = Clinic
         fields = '__all__'
-        extra_fields = ('name',)
+        extra_fields = ('name', 'profile_picture')
 
 class ClinicListSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
