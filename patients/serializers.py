@@ -75,9 +75,10 @@ class FavouriteDoctorSerializer(serializers.ModelSerializer):
 
 class FavouriteClinicSerializer(serializers.ModelSerializer):
     fav_clinic = ClinicSerializer()
+    profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
     class Meta:
         model = Favourite
-        fields = ["id", "patient", "clinic_status", "fav_clinic"]
+        fields = ["id", "patient", "clinic_status", "fav_clinic", "profile_picture"]
         read_only_fields = ["patient"]
 
 class FamilyMemberSerializer(serializers.ModelSerializer):
