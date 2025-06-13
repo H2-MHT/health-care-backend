@@ -44,6 +44,9 @@ from .models import (
     MediaDigest,
     DoctorWallet,
     Specialization,
+    Slot,
+    WeekDays,
+    SlotsWeekDays
 )
 from reviews.models import Review
 from notifications.models import Notification
@@ -76,11 +79,16 @@ from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from django.utils import timezone
+from django.utils.timezone import utc
+from datetime import datetime, timedelta, time 
 from django.db.models import F
 from decimal import Decimal
 from users.models import AppLanguage
 import uuid
 import re
+import pytz
+from pytz import timezone as pytz_timezone
+
 from utils.prescription_translation import translate_reschedule_message
 from deep_translator import GoogleTranslator
 # Initialize logger
@@ -694,6 +702,17 @@ class GetSlotsAPIView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+def get_user_timezone(user):
+    try:
+        pref = UserPreference.objects.filter(user=user).first()
+        if pref and not pref.use_system_timezone:
+            return pytz_timezone(pref.timezone)
+    except:
+        pass
+    tz_str = str(getattr(user, 'timezone', 'UTC'))
+    return pytz_timezone(tz_str)
+
+
 
 class BookAppointmentAPIView(APIView):
     """
@@ -713,16 +732,6 @@ class BookAppointmentAPIView(APIView):
             date_obj = datetime.strptime(date, "%d-%m-%Y").date()
             appointment_day = date_obj.strftime("%a")
             
-    
-            slot_start_str = slot.split("-")[0].strip()
-            slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()
-            
-    
-            appointment_datetime = datetime.combine(date_obj, slot_start_time)
-            appointment_datetime = timezone.make_aware(appointment_datetime)
-            now = timezone.now()
-            within_24_hours = appointment_datetime - now <= timedelta(hours=24)
-
             doctor = User.objects.filter(pk=doctor_user_id).first()
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
@@ -730,6 +739,21 @@ class BookAppointmentAPIView(APIView):
             patient = User.objects.filter(pk=patient_user_id).first()
             if not patient:
                 return Response({'error':'Invalid patient ID'}, status=404)
+            
+            doctor_tz = get_user_timezone(doctor)
+            patient_tz = get_user_timezone(patient)
+
+    
+            slot_start_str = slot.split("-")[0].strip()
+            slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()            
+            appointment_datetime = datetime.combine(date_obj, slot_start_time)
+            
+            aware_appointment_datetime = doctor_tz.localize(appointment_datetime)
+            utc_appointment_datetime = aware_appointment_datetime.astimezone(pytz.UTC)
+            
+            patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
+            doctor_appointment_datetime = utc_appointment_datetime.astimezone(doctor_tz)
+            
              # doctor_user_obj = User.objects.get(id=doctor.user_id)
             # Ensure doctor has set availability for this day
             # availability = AppointmentManagement.objects.filter(
@@ -762,7 +786,12 @@ class BookAppointmentAPIView(APIView):
                 status="Pending",
                 date=date_obj,
                 payment_status="Pending", 
+                start_datetime_utc=utc_appointment_datetime 
             )
+            
+            # patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
+            slot_patient_start = patient_appointment_datetime.strftime("%H:%M")
+            slot_patient_end = (patient_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
             
             # WhatsApp Notification Message
             message = (
@@ -815,9 +844,47 @@ class BookAppointmentAPIView(APIView):
                 user_id=patient.id,
                 message=f"Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
             )
+            
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-20159cf43e714e4b86bf4af62d3b40ba" 
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": str(appointment.get_appointment_type_display()),
+                }
+                sendgrid_client.send(patient_email)
+
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": str(appointment.get_appointment_type_display()),
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                logger.error(f"SendGrid email sending failed: {str(e)}")
+                
             # Update appointment status to "Pending"
             appointment.status = "Pending"
             appointment.save()
+            
+            now = timezone.now()
+            within_24_hours = utc_appointment_datetime - now <= timedelta(hours=24)
             
             message_text = "Appointment booked successfully"
             if within_24_hours:
@@ -910,11 +977,21 @@ class BookAppointmentAPIView(APIView):
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
             bookedAppiontment = []
-            for appintment in appiontments:
+            for appt in appiontments:
+                utc_start_dt = appt.start_datetime_utc  # UTC datetime
+            
+            # Format start time in UTC as HH:MM
+                slot_start_utc = utc_start_dt.strftime("%H:%M")
+                
+                # Assuming slot duration is 30 minutes (adjust if different)
+                utc_end_dt = utc_start_dt + timedelta(minutes=30)
+                slot_end_utc = utc_end_dt.strftime("%H:%M")
+                
+                slot_utc = f"{slot_start_utc} - {slot_end_utc}"
                 bookedAppiontment.append(
                     {
-                        'slot': appintment.slot,
-                        'status': appintment.status
+                        'slot': slot_utc,
+                        'status': appt.status
                     }
                 )
             return Response({'message':'Retrieved successfully','data':bookedAppiontment}, status=status.HTTP_200_OK)
@@ -948,6 +1025,91 @@ class BookAppointmentAPIView(APIView):
 
             appointment.status = appointment_status
             appointment.save()
+
+            if appointment_status == "Confirmed":
+                doctor = User.objects.get(id=appointment.doctor)
+                doctor_name = f"{doctor.first_name} {doctor.last_name}"
+                doctor_profile = Doctor.objects.filter(user=doctor).first()
+
+                patient = User.objects.get(id=appointment.patient)
+                patient_name = f"{patient.first_name} {patient.last_name}"
+
+                # WhatsApp Notification Message (confirmation)
+                message = (
+                    f"Hello {patient.first_name},\n"
+                    f"Your appointment has been confirmed successfully.\n"
+                    f"Date: {appointment.date.strftime('%d-%m-%Y')}\n"
+                    f"Time: {appointment.slot}\n"
+                    f"Doctor: {doctor_name}\n"
+                    f"Location: Online/Clinic\n"
+                    f"Thank you for choosing our service!"
+                )
+
+                # Send WhatsApp Notification to patient
+                send_whatsapp_message_patient(
+                    to=patient.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=appointment.slot,
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+
+                # Send WhatsApp Notification to doctor
+                send_whatsapp_message_doctor(
+                    to=doctor.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=appointment.slot,
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+
+                # Send In-App Notifications
+                send_notification(
+                    user_id=doctor.id,
+                    message=f"You have confirmed the appointment with {patient_name} on {appointment.date.strftime('%d-%m-%Y')} at {appointment.slot}."
+                )
+
+                send_notification(
+                    user_id=patient.id,
+                    message=f"Your appointment with Dr. {doctor_name} has been confirmed for {appointment.date.strftime('%d-%m-%Y')} at {appointment.slot}."
+                )
+
+                try:
+                    sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                    # Email to Patient
+                    patient_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=patient.email,
+                    )
+                    patient_email.template_id = "d-da6cfe012ae54e7f9fa07054044d8b03"
+                    patient_email.dynamic_template_data = {
+                        "patient_name": patient_name,
+                        "doctor_name": doctor_name,
+                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
+                        "slot": appointment.slot,
+                        "appointment_type": appointment.appointment_type
+                    }
+                    sendgrid_client.send(patient_email)
+
+                    # Email to Doctor
+                    doctor_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=doctor.email,
+                    )
+                    doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
+                    doctor_email.dynamic_template_data = {
+                        "doctor_name": doctor_name,
+                        "patient_name": patient_name,
+                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
+                        "slot": appointment.slot,
+                        "appointment_type": appointment.appointment_type
+                    }
+                    sendgrid_client.send(doctor_email)
+                except Exception as e:
+                    return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = BookedAppointmentSerializer(appointment)
             return Response({'message': 'Appointment updated successfully', 'data': serializer.data}, status=status.HTTP_200_OK)
@@ -1148,6 +1310,7 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.status = "Rescheduled"
             appointment.rescheduled_by = request.user
             appointment.save()
+            appointment_type_display = str(appointment.get_appointment_type_display())
 
 
             app_language = AppLanguage.objects.filter(user=patient).first()
@@ -1184,6 +1347,57 @@ class RescheduleAppointmentAPIView(APIView):
                 doctor_name=doctor_name,
                 patient_name=patient_name
             )
+
+             # In-App Notifications
+            send_notification(
+                user_id=doctor.id,
+                message=f"Your appointment with {patient_name} has been rescheduled to {new_date} at {new_slot}."
+            )
+            send_notification(
+                user_id=patient.id,
+                message=f"Your appointment with Dr. {doctor_name} has been rescheduled to {new_date} at {new_slot}."
+            )
+
+            # Email Notifications using SendGrid
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                # Patient Email for Reschedule
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-93565aace48f4e0bb4486a5a6fa72214"
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "old_date": old_date,
+                    "new_date": new_date,
+                    "old_slot": old_slot,
+                    "new_slot": new_slot,
+                    "appointment_type": appointment_type_display,
+                }
+                sendgrid_client.send(patient_email)
+
+                # Doctor Email for Reschedule
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-34faf9cf920b45efb2be08d587526ffc"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "old_date": old_date,
+                    "new_date": new_date,
+                    "old_slot": old_slot,
+                    "new_slot": new_slot,
+                    "appointment_type": appointment_type_display,
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({
                 "message": "Appointment rescheduled successfully",
@@ -1337,6 +1551,42 @@ class CancelAppointmentAPIView(APIView):
                 doctor_name=doctor_name
             )
 
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                # Email to Patient
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-bb6c32ca2bd046e6ad0529032bfed8cc"
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "appointment_date": appointment_date,
+                    "slot": slot,
+                    "appointment_type": appointment.appointment_type
+                }
+                sendgrid_client.send(patient_email)
+
+                # Email to Doctor
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-ed8d742c7daf40609f2672a8dfb4dfc4"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "appointment_date": appointment_date,
+                    "slot": slot,
+                    "appointment_type": appointment.appointment_type
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
             return Response({
                 "message": "Appointment cancelled successfully.",
             }, status=status.HTTP_200_OK)
@@ -1356,10 +1606,86 @@ class AppointmentReminderAPIView(APIView):
         today = datetime.now()
         reminder_time = today + timedelta(days=1)
 
-        reminders = BookedAppointment.objects.filter(patient=request.user, created_at__lte=reminder_time).exclude(status="Cancelled")
-        serializer = BookedAppointmentSerializer(reminders, many=True)
+        reminders = BookedAppointment.objects.filter(
+            patient=request.user.id,
+            date__range=[today.date(), reminder_time.date()]
+        ).exclude(status="Cancelled")
 
-        return Response({"reminders": serializer.data}, status=status.HTTP_200_OK)
+        for appointment in reminders:
+            doctor = User.objects.get(id=appointment.doctor)
+            doctor_name = f"{doctor.first_name} {doctor.last_name}"
+
+            patient = User.objects.get(id=appointment.patient)
+            patient_name = f"{patient.first_name} {patient.last_name}"
+
+            date = appointment.date.strftime("%Y-%m-%d")
+            slot = appointment.slot
+            appointment_type = appointment.get_appointment_type_display()
+
+            send_whatsapp_message_patient(
+                to=patient.phone_number,
+                patient_name=patient_name,
+                date=date,
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment_type
+            )
+
+            send_whatsapp_message_doctor(
+                to=doctor.phone_number,
+                patient_name=patient_name,
+                date=date,
+                slot=slot,
+                doctor_name=doctor_name,
+                appointment_type=appointment_type
+            )
+
+            # In-App Notifications
+            send_notification(
+                user_id=doctor.id,
+                message=f"Reminder: You have an appointment with {patient_name} on {date} at {slot}."
+            )
+            send_notification(
+                user_id=patient.id,
+                message=f"Reminder: Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
+            )
+
+            # Email Notifications
+            try:
+                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                patient_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=patient.email,
+                )
+                patient_email.template_id = "d-5ba9791108c4439abd5bfd635a1284d3" 
+                patient_email.dynamic_template_data = {
+                    "patient_name": patient_name,
+                    "doctor_name": doctor_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": appointment_type
+                }
+                sendgrid_client.send(patient_email)
+
+                doctor_email = Mail(
+                    from_email=settings.SENDGRID_FROM_EMAIL,
+                    to_emails=doctor.email,
+                )
+                doctor_email.template_id = "d-02ea502df2d342a0af119a6a2db13952"
+                doctor_email.dynamic_template_data = {
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
+                    "appointment_date": date,
+                    "slot": slot,
+                    "appointment_type": appointment_type,
+                }
+                sendgrid_client.send(doctor_email)
+
+            except Exception as e:
+                print("SendGrid Error:", str(e))
+
+        return Response({"message": "Reminders sent successfully."}, status=status.HTTP_200_OK)
 
 
 class AppointmentSummaryAPIView(APIView):
@@ -2828,3 +3154,155 @@ class DoctorInfoAPIView(APIView):
          
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class AppointmentView(APIView):
+    def post(self, request):
+        serializer = AppointmentManagementSerializer(data=request.data)
+        if serializer.is_valid():
+            doctor_id = request.data.get("doctor")
+            if not doctor_id:
+                return Response({"message": "Doctor ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            doctor = Doctor.objects.get(id=doctor_id)
+            appointment = serializer.save(doctor=doctor)
+            try:
+                created_slots = self.generate_slots(appointment)
+                return Response({
+                    "message": "Appointment created and slots generated.",
+                    "data": serializer.data,
+                    "slots_created": created_slots
+                }, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({"error": f"Slot generation failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def generate_slots(self, appointment):
+        settings = ConsultationSessionAndFee.objects.filter(doctor=appointment.doctor).first()
+        if not settings:
+            raise Exception("Consultation settings not found for this doctor.")
+
+        if appointment.appointment_type == "Planned":
+            session_length = settings.planned_session_length
+        elif appointment.appointment_type == "Urgent":
+            session_length = settings.urgent_session_length
+        else:
+            raise Exception("Invalid appointment type.")
+
+        if not session_length:
+            raise Exception("Session length not defined for this type.")
+
+        buffer_time = settings.buffer_time or timedelta(minutes=0)
+        session_length = timedelta(minutes=session_length)
+
+        weekdays = [day.strip() for day in appointment.days.split(',')]
+        slots_created = []
+
+        for day_name in weekdays:
+            try:
+                weekday = WeekDays.objects.get(name=day_name)
+            except WeekDays.DoesNotExist:
+                raise Exception(f"Weekday '{day_name}' not found.")
+
+            current_time = appointment.start_time
+            end_time = appointment.end_time
+
+            while True:
+                utc_date = datetime.utcnow().date()
+                slot_start_dt = datetime.combine(utc_date, current_time).replace(tzinfo=pytz.UTC)
+                slot_end_dt = slot_start_dt + session_length
+                slot_end_time = slot_end_dt.time()
+                
+
+                if slot_end_time > end_time:
+                    break
+
+                # Get or reuse existing slot (shared across all doctors)
+                slot_obj, created = Slot.objects.get_or_create(
+                    start_time=slot_start_dt.time(),
+                    end_time=slot_end_time
+
+                )
+
+                # Link to doctor + weekday
+                _, link_created = SlotsWeekDays.objects.get_or_create(
+                    doctor=appointment.doctor,
+                    week_day=weekday,
+                    slot=slot_obj
+                )
+
+                if created or link_created:
+                    slots_created.append({
+                        "day": day_name,
+                        "start_time": current_time.strftime("%H:%M"),
+                        "end_time": slot_end_time.strftime("%H:%M")
+                    })
+
+                current_time = (slot_end_dt + buffer_time).time()
+
+        return slots_created
+class SlotFilterAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+            doctor_id = request.query_params.get('doctor_id')
+            weekday = request.query_params.get('weekday')
+            date_str = request.query_params.get('date')
+
+            if not weekday:
+                return Response({
+                    "error": "weekday are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            try:
+                requester = request.user
+
+                if doctor_id:
+                    doctor = Doctor.objects.get(id=doctor_id)
+                elif hasattr(requester, 'doctor'):
+                    doctor = requester.doctor
+                    doctor_id = doctor.id
+                else:
+                    return Response({"error": "Doctor ID required"}, status=status.HTTP_400_BAD_REQUEST)
+
+                doctor_pref = UserPreference.objects.filter(user=doctor.user).first()
+                doctor_timezone = pytz_timezone(doctor_pref.timezone if doctor_pref and not doctor_pref.use_system_timezone else "UTC")
+
+                if hasattr(requester, 'doctor') and requester.doctor.id == doctor.id:
+                    display_timezone = doctor_timezone
+                else:
+                    user_pref = UserPreference.objects.filter(user=requester).first()
+                    display_timezone = pytz_timezone(user_pref.timezone if user_pref and not user_pref.use_system_timezone else "UTC")
+
+                if date_str:
+                    base_date = datetime.strptime(date_str, "%d-%m-%Y").date()
+                else:
+                    base_date = timezone.now().astimezone(doctor_timezone).date()
+                    
+                slots = Slot.objects.filter(
+                    slotsweekdays__doctor_id=doctor_id,
+                    slotsweekdays__week_day__name=weekday
+                ).distinct()
+
+                data = []
+                today_date = timezone.now().date()
+                
+                for slot in slots:
+                    utc_start_dt = datetime.combine(today_date, slot.start_time).replace(tzinfo=pytz.UTC)
+                    utc_end_dt = datetime.combine(today_date, slot.end_time).replace(tzinfo=pytz.UTC)
+
+                    local_start_dt = utc_start_dt.astimezone(display_timezone)
+                    local_end_dt = utc_end_dt.astimezone(display_timezone)
+
+                    data.append({
+                        "start_time": local_start_dt.strftime("%H:%M"),
+                        "end_time": local_end_dt.strftime("%H:%M")
+                    })
+
+                return Response({
+                    "message": "Slots Retrieved successfully",
+                    "slots": data,
+                }, status=status.HTTP_200_OK)
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

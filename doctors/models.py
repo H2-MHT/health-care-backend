@@ -182,6 +182,7 @@ class BookedAppointment(models.Model):
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
     rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
     created_at = models.DateTimeField(auto_now_add=True)
+    start_datetime_utc = models.DateTimeField(null=True, blank=True, help_text="Appointment start time in UTC")
 
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
@@ -370,3 +371,22 @@ class Specialization(models.Model):
 
     def __str__(self):
         return self.name
+
+class WeekDays(models.Model):
+    name = models.CharField(max_length=100)
+    created_date=models.DateField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class Slot(models.Model):
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+
+    class Meta:
+        unique_together = ('start_time', 'end_time')
+
+class SlotsWeekDays(models.Model):
+    week_day = models.ForeignKey(WeekDays, on_delete=models.CASCADE)
+    slot = models.ForeignKey(Slot, on_delete=models.CASCADE)
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)

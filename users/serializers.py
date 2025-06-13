@@ -97,7 +97,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
-            "bio", "country", "country_code", "city", "residence", "role", "speciality", "rating",
+            "bio", "country", "country_code", "city", "residence", "languages", "role", "speciality", "rating",
             "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years"
         ]
 

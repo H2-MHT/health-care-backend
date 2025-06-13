@@ -16,7 +16,10 @@ from .models import(
     DoctorSchedule,
     LicenceCertificate,
     DoctorWallet,
-    Specialization
+    Specialization,
+    WeekDays,
+    Slot,
+    SlotsWeekDays
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -46,3 +49,6 @@ admin.site.register(DoctorSchedule)
 admin.site.register(LicenceCertificate)
 admin.site.register(DoctorWallet)
 admin.site.register(Specialization)
+admin.site.register(WeekDays)
+admin.site.register(SlotsWeekDays)
+admin.site.register(Slot)
