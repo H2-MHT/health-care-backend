@@ -175,6 +175,7 @@ class BookedAppointment(models.Model):
     patient = models.IntegerField(help_text="Consider patient as User id")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
+    slot_start_utc = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     date = models.DateField()
     amount = models.DecimalField(max_digits=10, decimal_places=2,null=True, default=Decimal('0.00'))
@@ -182,8 +183,6 @@ class BookedAppointment(models.Model):
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
     rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
     created_at = models.DateTimeField(auto_now_add=True)
-    start_datetime_utc = models.DateTimeField(null=True, blank=True, help_text="Appointment start time in UTC")
-
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
