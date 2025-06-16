@@ -813,7 +813,6 @@ class BookAppointmentAPIView(APIView):
                 status="Pending",
                 date=date_obj,
                 payment_status="Pending", 
-                start_datetime_utc=utc_appointment_datetime 
             )
             
             # patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
