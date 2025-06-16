@@ -811,3 +811,9 @@ class DoctorAssociatedToClinicListAPIView(APIView):
                 "message": "An unexpected error occurred.",
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+class ClinicAddressAPIView(APIView):
+    def get(self, request):
+        clinics = Clinic.objects.exclude(address="")
+        serializer = ClinicAddressSerializer(clinics, many=True)
+        return Response(serializer.data)
