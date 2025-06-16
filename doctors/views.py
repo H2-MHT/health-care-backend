@@ -123,11 +123,36 @@ class PublicDoctorListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             search_key = request.query_params.get("search_key", "").strip()
+            speciality = request.query_params.get("speciality", "").strip()
+            country = request.query_params.get("country", "").strip()
+            gender = request.query_params.get("gender", "").strip()
+            planned_hourly_rate = request.query_params.get("planned_hourly_rate", "").strip()
+
+            doctors = User.objects.filter(role="Doctor")
+
             if search_key:
-                doctors = User.objects.filter(role="Doctor",first_name__istartswith=search_key) | \
-                        User.objects.filter(role="Doctor",last_name__istartswith=search_key)
-            else:
-                doctors = User.objects.filter(role="Doctor")
+                doctors = doctors.filter(
+                    Q(first_name__istartswith=search_key) |
+                    Q(last_name__istartswith=search_key)
+                )
+            if country:
+                doctors = doctors.filter(country__istartswith=country)
+
+            if gender:
+                doctors = doctors.filter(gender__istartswith=gender)
+
+            if speciality:
+                doctor_ids = Doctor.objects.filter(
+                    specialty__istartswith=speciality
+                ).values_list("user_id", flat=True)
+                doctors = doctors.filter(id__in=doctor_ids)
+
+            if planned_hourly_rate:
+                doctor_ids = Doctor.objects.filter(
+                    planned_hourly_rate__istartswith=planned_hourly_rate
+                ).values_list("user_id", flat=True)
+                doctors = doctors.filter(id__in=doctor_ids)
+
             paginated_data, headers = pagination_view(doctors, request)
             serializer = UserSerializer(paginated_data, many=True)      
             return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)
