@@ -46,7 +46,8 @@ from .models import (
     Specialization,
     Slot,
     WeekDays,
-    SlotsWeekDays
+    SlotsWeekDays,
+    UserPreference,
 )
 from reviews.models import Review
 from notifications.models import Notification
@@ -808,6 +809,7 @@ class BookAppointmentAPIView(APIView):
                 patient=patient_user_id,
                 appointment_type=appointment_type,
                 slot=slot,
+                slot_start_utc=utc_appointment_datetime,
                 status="Pending",
                 date=date_obj,
                 payment_status="Pending", 
@@ -983,6 +985,13 @@ class BookAppointmentAPIView(APIView):
         except Exception as e:
             return {"success": False, "message": str(e)}
         
+    def get_user_timezone(user):
+        try:
+            user_preference = UserPreference.objects.get(user=user)
+            timezone_str = user_preference.timezone
+            return pytz.timezone(timezone_str)
+        except Exception as e:
+            return pytz.UTC
     def get(self, request):
         try:
             doctor_user_id = request.query_params.get('doctor_user_id')
@@ -996,6 +1005,9 @@ class BookAppointmentAPIView(APIView):
             if not doctor:
                 return Response({'message':'doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
+            patient = request.user
+            patient_tz = get_user_timezone(patient)
+            
             appiontments = BookedAppointment.objects.filter(doctor=doctor_user_id, date=date_obj)
             
             if not appiontments.exists():
@@ -1003,19 +1015,23 @@ class BookAppointmentAPIView(APIView):
             
             bookedAppiontment = []
             for appt in appiontments:
-                utc_start_dt = appt.start_datetime_utc  # UTC datetime
+                utc_start_dt = appt.slot_start_utc  # UTC datetime
             
-            # Format start time in UTC as HH:MM
-                slot_start_utc = utc_start_dt.strftime("%H:%M")
+                if not utc_start_dt:
+                    continue
                 
-                # Assuming slot duration is 30 minutes (adjust if different)
-                utc_end_dt = utc_start_dt + timedelta(minutes=30)
-                slot_end_utc = utc_end_dt.strftime("%H:%M")
                 
-                slot_utc = f"{slot_start_utc} - {slot_end_utc}"
+                if timezone.is_naive(utc_start_dt):
+                    utc_start_dt = pytz.UTC.localize(utc_start_dt)
+
+                local_start_dt = utc_start_dt.astimezone(patient_tz)
+                local_end_dt = local_start_dt + timedelta(minutes=30)
+
+                slot_local = f"{local_start_dt.strftime('%H:%M')} - {local_end_dt.strftime('%H:%M')}"
+
                 bookedAppiontment.append(
                     {
-                        'slot': slot_utc,
+                        'slot': slot_local,
                         'status': appt.status
                     }
                 )
