@@ -93,7 +93,6 @@ class PublicClinicDetailAPIView(APIView):
     
 
 class LanguageAPIView(APIView):
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         try:
