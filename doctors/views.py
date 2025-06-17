@@ -921,6 +921,13 @@ class BookAppointmentAPIView(APIView):
                     " (Note: You are booking the appointment within 24 hours. "
                     "If you cancel, 10% amount will be deducted.)"
                 )
+                
+            payment_link = stripe.PaymentLink.update(doctor_profile.stripe_link,
+                                {         
+                                  'metadata': {
+                                               'appointment_id': appointment.id
+                                             } 
+                                })
             
             return Response({
                 "message_text": message_text,
@@ -929,7 +936,7 @@ class BookAppointmentAPIView(APIView):
                     "appointment_type": appointment.appointment_type,
                     "date": date,
                     "payment_status": appointment.payment_status,
-                    "stripe_link": doctor_profile.stripe_link,
+                    "stripe_link": payment_link,
                 }
             }, status=201)
 

@@ -28,6 +28,7 @@ from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileCont
 import base64
 from utils.prescription_translation import translate_invoice
 from users.models import AppLanguage
+from doctors.models import BookedAppointment
 
 # Stripe secret key
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -649,4 +650,90 @@ class StripeWebhookView(APIView):
                 return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
         
         return Response(status=status.HTTP_200_OK)
-          
+
+class WebhookAPI(APIView):
+    def post(self, request):
+        payload = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
+        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, endpoint_secret
+            )
+        except ValueError:
+            return Response({"error": "Invalid payload"}, status=status.HTTP_400_BAD_REQUEST)
+        except stripe.error.SignatureVerificationError:
+            return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            metadata = session.get('metadata', {})
+            appointment_id = metadata.get('appointment_id')
+            payment_intent_id = session.get('payment_intent')
+            
+            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+            try:
+                appointment = BookedAppointment.objects.get(id=appointment_id)
+                appointment.payment_status = 'Completed'
+                appointment.status = 'Confirmed'
+                appointment.stripe_session_id = payment_intent.id
+                appointment.amount = payment_intent.amount_received / 100
+                appointment.save()
+                
+                Payment.objects.create(
+                    appointment=appointment,
+                    amount=payment_intent.amount_received / 100,
+                    method=payment_intent.payment_method_types[0],
+                    status='Completed',
+                    payment_notes=payment_intent.get('description')              
+                )
+                
+                return Response({
+                    "success": True,
+                    "message": "Payment successful",
+                    "data": {
+                        "appointment_id": appointment.id,
+                        "amount": f"{appointment.amount:.2f}",
+                        "currency": payment_intent.currency.upper(),
+                        "stripe_payment_id": payment_intent.id,
+                        "payment_method": payment_intent.payment_method_types[0],
+                        "payment_status": payment_intent.status
+                    }
+                }, status=200)
+            
+            except BookedAppointment.DoesNotExist:
+                return Response({"success": False, "message": "Appointment not found"}, status=404)
+        
+        elif event['type'] == 'payment_intent.payment_failed':
+            intent = event['data']['object']
+            metadata = intent.get('metadata',{})
+            appointment_id = metadata.get('appointment_id')
+            
+            try:
+                appointment = BookedAppointment.objects.get(id=appointment_id)
+                appointment.payment_status = "Falied"
+                appointment.save()
+                
+                return Response({
+                    "success": False,
+                    "message": "Payment failed",
+                    "data": {
+                        "appointment_id": appointment.id,
+                        "stripe_payment_id": intent.id,
+                        "failure_reason": intent.last_payment_error.get('message')
+                    }
+                }, status=200)
+                
+            except BookedAppointment.DoesNotExist:
+                return Response({"success": False, "message": "Appointment not found"}, status=404)
+        
+        elif event['type'] == "Checkout.session.expired":
+            appointment = event['data']['object']
+            appointment.status = "Failed"
+            appointment.save()
+            return Response({"success": False, "message": "Session expired"}, status=400)
+        
+        return Response(status=status.HTTP_200_OK)
+        
