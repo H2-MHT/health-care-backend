@@ -818,6 +818,9 @@ class BookAppointmentAPIView(APIView):
             # patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
             slot_patient_start = patient_appointment_datetime.strftime("%H:%M")
             slot_patient_end = (patient_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
+            slot_doctor_start = doctor_appointment_datetime.strftime("%H:%M")
+            slot_doctor_end = (doctor_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
+            
             
             # WhatsApp Notification Message
             message = (
@@ -845,7 +848,7 @@ class BookAppointmentAPIView(APIView):
                 to=patient.phone_number,
                 patient_name=patient_name,
                 date=appointment.date.strftime("%Y-%m-%d"),
-                slot=slot,
+                slot=f"{slot_patient_start} - {slot_patient_end}",
                 doctor_name=doctor_name,
                 appointment_type=appointment.appointment_type
             )
@@ -855,7 +858,7 @@ class BookAppointmentAPIView(APIView):
                 to=doctor.phone_number,
                 patient_name=patient_name,
                 date=appointment.date.strftime("%Y-%m-%d"),
-                slot=slot,
+                slot=f"{slot_doctor_start} - {slot_doctor_end}",
                 doctor_name=doctor_name,
                 appointment_type=appointment.appointment_type
             )
@@ -883,7 +886,7 @@ class BookAppointmentAPIView(APIView):
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
                     "appointment_date": date,
-                    "slot": slot,
+                    "slot": f"{slot_patient_start} - {slot_patient_end}",
                     "appointment_type": str(appointment.get_appointment_type_display()),
                 }
                 sendgrid_client.send(patient_email)
@@ -897,7 +900,7 @@ class BookAppointmentAPIView(APIView):
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
                     "appointment_date": date,
-                    "slot": slot,
+                    "slot": f"{slot_doctor_start} - {slot_doctor_end}",
                     "appointment_type": str(appointment.get_appointment_type_display()),
                 }
                 sendgrid_client.send(doctor_email)
@@ -1069,10 +1072,25 @@ class BookAppointmentAPIView(APIView):
             if appointment_status == "Confirmed":
                 doctor = User.objects.get(id=appointment.doctor)
                 doctor_name = f"{doctor.first_name} {doctor.last_name}"
-                doctor_profile = Doctor.objects.filter(user=doctor).first()
+                doctor_profile = UserPreference.objects.filter(user=doctor).first()
+                doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
 
                 patient = User.objects.get(id=appointment.patient)
                 patient_name = f"{patient.first_name} {patient.last_name}"
+                patient_profile = UserPreference.objects.filter(user=patient).first()
+                patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
+                slot_start_str = appointment.slot.split('-')[0].strip()
+                appointment_datetime_naive = datetime.strptime(f"{appointment.date} {slot_start_str}", "%Y-%m-%d %H:%M")
+                appointment_datetime_utc = pytz.utc.localize(appointment_datetime_naive)
+
+                doctor_local_dt = appointment_datetime_utc.astimezone(pytz.timezone(doctor_timezone))
+                patient_local_dt = appointment_datetime_utc.astimezone(pytz.timezone(patient_timezone))
+                
+                formatted_doctor_date = doctor_local_dt.strftime('%d-%m-%Y')
+                formatted_patient_date = patient_local_dt.strftime('%d-%m-%Y')
+                formatted_doctor_time = doctor_local_dt.strftime('%I:%M %p')
+                formatted_patient_time = patient_local_dt.strftime('%I:%M %p')
 
                 # WhatsApp Notification Message (confirmation)
                 message = (
@@ -1089,8 +1107,8 @@ class BookAppointmentAPIView(APIView):
                 send_whatsapp_message_patient(
                     to=patient.phone_number,
                     patient_name=patient_name,
-                    date=appointment.date.strftime("%Y-%m-%d"),
-                    slot=appointment.slot,
+                    date=formatted_patient_date,
+                    slot=formatted_patient_time,
                     doctor_name=doctor_name,
                     appointment_type=appointment.appointment_type
                 )
@@ -1099,8 +1117,8 @@ class BookAppointmentAPIView(APIView):
                 send_whatsapp_message_doctor(
                     to=doctor.phone_number,
                     patient_name=patient_name,
-                    date=appointment.date.strftime("%Y-%m-%d"),
-                    slot=appointment.slot,
+                    date=formatted_doctor_date,
+                    slot=formatted_doctor_time,
                     doctor_name=doctor_name,
                     appointment_type=appointment.appointment_type
                 )
@@ -1128,8 +1146,8 @@ class BookAppointmentAPIView(APIView):
                     patient_email.dynamic_template_data = {
                         "patient_name": patient_name,
                         "doctor_name": doctor_name,
-                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
-                        "slot": appointment.slot,
+                        "appointment_date": formatted_patient_date,
+                        "slot": formatted_patient_time,
                         "appointment_type": appointment.appointment_type
                     }
                     sendgrid_client.send(patient_email)
@@ -1143,8 +1161,8 @@ class BookAppointmentAPIView(APIView):
                     doctor_email.dynamic_template_data = {
                         "doctor_name": doctor_name,
                         "patient_name": patient_name,
-                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
-                        "slot": appointment.slot,
+                        "appointment_date": formatted_doctor_date,
+                        "slot": formatted_doctor_time,
                         "appointment_type": appointment.appointment_type
                     }
                     sendgrid_client.send(doctor_email)
@@ -1342,6 +1360,12 @@ class RescheduleAppointmentAPIView(APIView):
             patient_name = patient.get_full_name()
             doctor = User.objects.get(id=appointment.doctor)
             doctor_name = doctor.get_full_name()
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
             old_slot = appointment.slot
             old_date = appointment.date.strftime("%d-%m-%Y")
 
@@ -1352,6 +1376,18 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.save()
             appointment_type_display = str(appointment.get_appointment_type_display())
 
+            slot_start_time_str = new_slot.split("-")[0].strip()
+            naive_utc_dt = datetime.strptime(f"{date_obj} {slot_start_time_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_utc_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+            
+            formatted_doctor_date = doctor_local_dt.strftime('%d-%m-%Y')
+            formatted_patient_date = patient_local_dt.strftime('%d-%m-%Y')
+            formatted_doctor_time = doctor_local_dt.strftime('%I:%M %p')
+            formatted_patient_time = patient_local_dt.strftime('%I:%M %p')
+            
 
             app_language = AppLanguage.objects.filter(user=patient).first()
             patient_language = app_language.code if app_language and app_language.code else "en"
@@ -1362,7 +1398,7 @@ class RescheduleAppointmentAPIView(APIView):
                 old_date,
                 old_slot,
                 new_date,
-                new_slot,
+                formatted_patient_time,
                 doctor_name,
                 patient_name,
                 patient_language
@@ -1372,7 +1408,7 @@ class RescheduleAppointmentAPIView(APIView):
             old_date,
             old_slot,
             new_date,
-            new_slot,
+            formatted_patient_time,
             doctor_name,
             patient_name,
             translated_message
@@ -1383,7 +1419,7 @@ class RescheduleAppointmentAPIView(APIView):
                 old_date=old_date,
                 old_slot=old_slot,
                 new_date=new_date,
-                new_slot=new_slot,
+                new_slot=formatted_doctor_time,
                 doctor_name=doctor_name,
                 patient_name=patient_name
             )
@@ -1412,9 +1448,9 @@ class RescheduleAppointmentAPIView(APIView):
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
                     "old_date": old_date,
-                    "new_date": new_date,
+                    "new_date": formatted_patient_date,
                     "old_slot": old_slot,
-                    "new_slot": new_slot,
+                    "new_slot": formatted_patient_time,
                     "appointment_type": appointment_type_display,
                 }
                 sendgrid_client.send(patient_email)
@@ -1429,9 +1465,9 @@ class RescheduleAppointmentAPIView(APIView):
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
                     "old_date": old_date,
-                    "new_date": new_date,
+                    "new_date": formatted_doctor_date,
                     "old_slot": old_slot,
-                    "new_slot": new_slot,
+                    "new_slot": formatted_doctor_time,
                     "appointment_type": appointment_type_display,
                 }
                 sendgrid_client.send(doctor_email)
@@ -1566,8 +1602,28 @@ class CancelAppointmentAPIView(APIView):
             patient_name = f"{patient.first_name} {patient.last_name}"
             # print(patient_name, "----------PATIENT NAME----------")
             # Format date and slot
-            appointment_date = appointment.date.strftime("%Y-%m-%d")
+
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+            
+            date_obj = appointment.date
             slot = appointment.slot
+
+            slot_start_time_str = slot.split("-")[0].strip()
+            naive_utc_dt = datetime.strptime(f"{date_obj} {slot_start_time_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_utc_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+
+            formatted_doctor_date = doctor_local_dt.strftime("%d-%m-%Y")
+            formatted_patient_date = patient_local_dt.strftime("%d-%m-%Y")
+
+            formatted_doctor_time = doctor_local_dt.strftime("%I:%M %p")
+            formatted_patient_time = patient_local_dt.strftime("%I:%M %p")
+
 
             # Cancel the appointment
             appointment.status = "Cancelled"
@@ -1576,8 +1632,8 @@ class CancelAppointmentAPIView(APIView):
             # Send WhatsApp Notification to Patient
             appointment_cancel_notification_patient(
                 to=patient.phone_number,
-                date=appointment_date,
-                slot=slot,
+                date=formatted_patient_date,
+                slot=formatted_patient_time,
                 patient_name=patient_name,
                 doctor_name=doctor_name
             )
@@ -1585,8 +1641,8 @@ class CancelAppointmentAPIView(APIView):
             # Send WhatsApp Notification to Doctor
             appointment_cancel_notification_doctor(
                 to=doctor.phone_number,
-                date=appointment_date,
-                slot=slot,
+                date=formatted_doctor_date,
+                slot=formatted_doctor_time,
                 patient_name=patient_name,
                 doctor_name=doctor_name
             )
@@ -1603,8 +1659,8 @@ class CancelAppointmentAPIView(APIView):
                 patient_email.dynamic_template_data = {
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
-                    "appointment_date": appointment_date,
-                    "slot": slot,
+                    "appointment_date": formatted_patient_date,
+                    "slot": formatted_patient_time,
                     "appointment_type": appointment.appointment_type
                 }
                 sendgrid_client.send(patient_email)
@@ -1618,8 +1674,8 @@ class CancelAppointmentAPIView(APIView):
                 doctor_email.dynamic_template_data = {
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
-                    "appointment_date": appointment_date,
-                    "slot": slot,
+                    "appointment_date": formatted_doctor_date,
+                    "slot": formatted_doctor_time,
                     "appointment_type": appointment.appointment_type
                 }
                 sendgrid_client.send(doctor_email)
@@ -1658,15 +1714,33 @@ class AppointmentReminderAPIView(APIView):
             patient = User.objects.get(id=appointment.patient)
             patient_name = f"{patient.first_name} {patient.last_name}"
 
-            date = appointment.date.strftime("%Y-%m-%d")
-            slot = appointment.slot
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
+            date_str = appointment.date.strftime("%Y-%m-%d")
+            slot_start_str = appointment.slot.split("-")[0].strip()
+
+            naive_dt = datetime.strptime(f"{date_str} {slot_start_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+
+            formatted_doctor_date = doctor_local_dt.strftime("%d-%m-%Y")
+            formatted_patient_date = patient_local_dt.strftime("%d-%m-%Y")
+
+            formatted_doctor_time = doctor_local_dt.strftime("%I:%M %p")
+            formatted_patient_time = patient_local_dt.strftime("%I:%M %p")
+
             appointment_type = appointment.get_appointment_type_display()
 
             send_whatsapp_message_patient(
                 to=patient.phone_number,
                 patient_name=patient_name,
-                date=date,
-                slot=slot,
+                date=formatted_patient_date,
+                slot=formatted_patient_time,
                 doctor_name=doctor_name,
                 appointment_type=appointment_type
             )
@@ -1674,8 +1748,8 @@ class AppointmentReminderAPIView(APIView):
             send_whatsapp_message_doctor(
                 to=doctor.phone_number,
                 patient_name=patient_name,
-                date=date,
-                slot=slot,
+                date=formatted_doctor_date,
+                slot=formatted_doctor_time,
                 doctor_name=doctor_name,
                 appointment_type=appointment_type
             )
@@ -1702,8 +1776,8 @@ class AppointmentReminderAPIView(APIView):
                 patient_email.dynamic_template_data = {
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
-                    "appointment_date": date,
-                    "slot": slot,
+                    "appointment_date": formatted_patient_date,
+                    "slot": formatted_patient_time,
                     "appointment_type": appointment_type
                 }
                 sendgrid_client.send(patient_email)
@@ -1716,8 +1790,8 @@ class AppointmentReminderAPIView(APIView):
                 doctor_email.dynamic_template_data = {
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
-                    "appointment_date": date,
-                    "slot": slot,
+                    "appointment_date": formatted_doctor_date,
+                    "slot": formatted_doctor_time,
                     "appointment_type": appointment_type,
                 }
                 sendgrid_client.send(doctor_email)
@@ -3346,3 +3420,26 @@ class SlotFilterAPIView(APIView):
 
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+class PublicSpecializationListAPIView(APIView):
+    def get(self, request):
+        try:
+            specializations = Specialization.objects.filter(is_approved=True)  
+            data = {
+                    "message": "Specializations list retrieved successfully",
+                    "number_of_specializations": len(specializations),
+                    "specializations": [
+                        {
+                            "id": specialization.id,
+                            "name": specialization.name,
+                            "description": specialization.description if specialization.description else "No description available",
+                            "is_approved": specialization.is_approved,
+                            "created_at": specialization.created_date.strftime("%Y-%m-%d") if specialization.created_date else None,
+                            }
+                        for specialization in specializations
+                    ]
+                }
+            
+            return Response(data, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
