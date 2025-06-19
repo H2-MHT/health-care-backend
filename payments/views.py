@@ -635,7 +635,7 @@ class TransactionHistory(APIView):
                     data = {
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
-                        "appointment_date": transaction.appointment.date,
+                        "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,
@@ -665,7 +665,7 @@ class TransactionHistory(APIView):
                     data = {
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
-                        "appointment_date": transaction.appointment.date,
+                        "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,
