@@ -22,6 +22,8 @@ class Doctor(models.Model):
     planned_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     urgent_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stripe_link = models.URLField(max_length=500, null=True, blank=True)
+    stripe_link_id = models.CharField(max_length=100, null=True, blank=True)
+
 
     def update_hourly_rates(self):
         """hourly rates based on consultation settings"""
