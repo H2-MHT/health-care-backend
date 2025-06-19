@@ -411,6 +411,7 @@ class UserListAPIView(APIView):
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
                         "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
                         "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                        "stripe_link_id": doctor.stripe_link_id if doctor.stripe_link_id else None
                     }
                     for doctor in doctors
                 ]
