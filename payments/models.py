@@ -4,7 +4,7 @@ from users.models import User
 
 class Payment(models.Model):
     appointment = models.OneToOneField(
-        "appointments.Appointment", on_delete=models.CASCADE
+        "doctors.BookedAppointment", on_delete=models.CASCADE
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     total_amount = models.DecimalField(
