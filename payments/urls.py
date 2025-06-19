@@ -5,8 +5,8 @@ from .views import (
     AddAccountDetailAPIView,
     WithdrawalAPIView,
     StripeConnectAPIView,
-    StripeWebhookView,
-    WebhookAPI
+    WebhookAPI,
+    TransactionHistory
 )
 
 urlpatterns = [
@@ -21,4 +21,6 @@ urlpatterns = [
     path('stripe-connect/', StripeConnectAPIView.as_view(), name='stripe-connect'),
     # webhook-stripe
     path('stripe-webhook/', WebhookAPI.as_view(), name='stripe-webhook'),
+    # transaction history
+    path('transaction-history/', TransactionHistory.as_view(), name='transaction-history'),
 ]

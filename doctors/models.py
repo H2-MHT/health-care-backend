@@ -157,6 +157,7 @@ class PatientBookAppointment(models.Model):
 class BookedAppointment(models.Model):
     STATUS_CHOICES = [
         ("Pending", "Pending"),
+        ("In Progress", "In Progress"),
         ("Confirmed", "Confirmed"),
         ("Rescheduled", "Rescheduled"),
         ("Cancelled", "Cancelled"),
@@ -169,6 +170,7 @@ class BookedAppointment(models.Model):
         ("Refunded", "Refunded"),
         ("Failed", "Failed"),
         ("Cancelled", "Cancelled"),
+        ("Transect", "Transect"),
         ]
 
     # doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
