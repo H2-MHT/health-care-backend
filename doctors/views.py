@@ -2825,14 +2825,11 @@ class RefundAppointmentPaymentAPIView(APIView):
         
         if time_until_appointment < timedelta(hours=12):
             return Response({"error": "Cancellation not allowed within 12 hours of appointment."}, status=400)
-        
-        session = stripe.checkout.Session.retrieve(appointment.stripe_session_id)
-        payment_intent = session.payment_intent
 
         if cancelled_by == "doctor":
             try:
                 stripe.Refund.create(
-                    payment_intent=payment_intent,
+                    charge=appointment.charge_id,
                 )
             except Exception as e:
                 return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
@@ -2862,8 +2859,8 @@ class RefundAppointmentPaymentAPIView(APIView):
                 
                 try:
                     stripe.Refund.create(
-                        payment_intent=payment_intent, 
-                        amount=int(appointment.amount_paid * 0.9 * 100), 
+                        charge=appointment.charge_id,
+                        amount=refund_amount, 
                     ) 
                 except Exception as e:
                     return Response({"error": f"Stripe partial refund failed: {str(e)}"}, status=500) 
@@ -2882,7 +2879,7 @@ class RefundAppointmentPaymentAPIView(APIView):
                 
                 try:
                     stripe.Refund.create(
-                        payment_intent=payment_intent, 
+                        charge=appointment.charge_id, 
                     )
                 except Exception as e:
                     return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)

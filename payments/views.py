@@ -723,7 +723,8 @@ class WebhookAPI(APIView):
                 appointment = BookedAppointment.objects.get(id=appointment_id)
                 appointment.payment_status = "Completed"
                 appointment.status = 'Pending'
-                appointment.stripe_session_id = payment_intent.id
+                appointment.payment_intent = payment_intent.id
+                appointment.charge_id = payment_intent.latest_charge
                 appointment.amount = payment_intent.amount_received / 100
                 appointment.save()
                 
