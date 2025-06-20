@@ -650,7 +650,8 @@ class TransactionHistory(APIView):
                         "amount": transaction.amount,
                         "currency": patient.currency if patient.currency else "USD",
                         "payment_status": transaction.appointment.payment_status,
-                        "payment_method": transaction.method
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
             
                     }
                     payment.append(data)
@@ -680,7 +681,8 @@ class TransactionHistory(APIView):
                         "amount": transaction.amount,
                         "currency": patient.currency if patient.currency else "USD",
                         "payment_status": transaction.appointment.payment_status,
-                        "payment_method": transaction.method
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
             
                     }
                     payment.append(data)
