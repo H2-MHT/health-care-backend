@@ -697,10 +697,10 @@ class TransactionHistory(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class WebhookAPI(APIView):
     def post(self, request):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
         payload = request.body
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        endpoint_secret = os.getenv('WEBHOOK_KEY_TEST') 
         
         try:
             event = stripe.Webhook.construct_event(
