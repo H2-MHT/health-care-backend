@@ -3014,7 +3014,8 @@ class DoctorWalletAPIView(APIView):
             doctor = request.user
             completed_appointments = BookedAppointment.objects.filter(
                 doctor=doctor.id,
-                payment_status='Completed'
+                payment_status='Completed',
+                status = "Completed"
             )
 
             total_earned = sum(app.amount for app in completed_appointments)
