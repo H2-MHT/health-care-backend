@@ -650,7 +650,8 @@ class TransactionHistory(APIView):
                         "amount": transaction.amount,
                         "currency": patient.currency if patient.currency else "USD",
                         "payment_status": transaction.appointment.payment_status,
-                        "payment_method": transaction.method
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
             
                     }
                     payment.append(data)
@@ -680,7 +681,8 @@ class TransactionHistory(APIView):
                         "amount": transaction.amount,
                         "currency": patient.currency if patient.currency else "USD",
                         "payment_status": transaction.appointment.payment_status,
-                        "payment_method": transaction.method
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
             
                     }
                     payment.append(data)
@@ -695,10 +697,10 @@ class TransactionHistory(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class WebhookAPI(APIView):
     def post(self, request):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
         payload = request.body
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        endpoint_secret = os.getenv('WEBHOOK_KEY_TEST') 
         
         try:
             event = stripe.Webhook.construct_event(
@@ -721,7 +723,8 @@ class WebhookAPI(APIView):
                 appointment = BookedAppointment.objects.get(id=appointment_id)
                 appointment.payment_status = "Completed"
                 appointment.status = 'Pending'
-                appointment.stripe_session_id = payment_intent.id
+                appointment.payment_intent = payment_intent.id
+                appointment.charge_id = payment_intent.latest_charge
                 appointment.amount = payment_intent.amount_received / 100
                 appointment.save()
                 
