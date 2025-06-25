@@ -697,10 +697,10 @@ class TransactionHistory(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class WebhookAPI(APIView):
     def post(self, request):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_LIVE')
         payload = request.body
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-        endpoint_secret = os.getenv('WEBHOOK_KEY_TEST') 
+        endpoint_secret = os.getenv('STRIPE_WEBHOOK_LIVE') 
         
         try:
             event = stripe.Webhook.construct_event(
@@ -922,4 +922,3 @@ class WebhookAPI(APIView):
             pass
         tz_str = str(getattr(user, 'timezone', 'UTC'))
         return pytz_timezone(tz_str)
-        

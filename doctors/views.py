@@ -96,7 +96,7 @@ from celery import shared_task
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY_LIVE')
 
 class DoctorListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -758,7 +758,7 @@ class BookAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_LIVE')
 
         try:
             doctor_user_id = request.data.get("doctor_user_id")
@@ -3014,7 +3014,8 @@ class DoctorWalletAPIView(APIView):
             doctor = request.user
             completed_appointments = BookedAppointment.objects.filter(
                 doctor=doctor.id,
-                payment_status='Completed'
+                payment_status='Completed',
+                status = "Completed"
             )
 
             total_earned = sum(app.amount for app in completed_appointments)
