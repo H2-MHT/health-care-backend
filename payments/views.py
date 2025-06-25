@@ -15,7 +15,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, date
+from django.utils import timezone
 import random 
 import string
 from weasyprint import HTML
@@ -28,8 +29,17 @@ from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileCont
 import base64
 from utils.prescription_translation import translate_invoice
 from users.models import AppLanguage
+from doctors.models import BookedAppointment, UserPreference
+from utils.whatsapp import (
+    send_whatsapp_message_patient,
+    send_whatsapp_message_doctor,
+)
+from utils.notifications import send_notification
+from pytz import timezone as pytz_timezone
+import pytz
+import logging
 
-# Stripe secret key
+logger = logging.getLogger(__name__)
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 class StripePaymentAPIView(APIView):
@@ -608,15 +618,90 @@ class StripeConnectAPIView(APIView):
             return Response({"error": "Account details not found."}, status=404)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-
-        
-@method_decorator(csrf_exempt, name='dispatch')
-class StripeWebhookView(APIView):
-    def post(self, request, *args, **kwargs):
+ 
+class TransactionHistory(APIView):
+    permission_classes = [IsAuthenticated]
     
+    def get(self, request):
+        try:
+            user = request.user  
+            if user.role == "Patient":
+                transactions = Payment.objects.filter(appointment__patient=user.id)
+                payment = []
+                for transaction in transactions:
+                    doctor = User.objects.get(pk=transaction.appointment.doctor)
+                    patient = User.objects.get(pk=transaction.appointment.patient)
+                    
+                    data = {
+                        "id": transaction.id,
+                        "appointment_id": transaction.appointment.id,
+                        "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_status": transaction.appointment.status,
+                        "doctor":{
+                            "id":doctor.id,
+                            "name": doctor.get_full_name(),
+                            "email": doctor.email
+                            },
+                        "patient": {
+                            "id":patient.id,
+                            "name": patient.get_full_name(),
+                            "email": patient.email
+                            },
+                        "amount": transaction.amount,
+                        "currency": patient.currency if patient.currency else "USD",
+                        "payment_status": transaction.appointment.payment_status,
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
+            
+                    }
+                    payment.append(data)
+                
+            elif request.user.role == "Doctor":
+                transactions = Payment.objects.filter(appointment__doctor=user.id)
+                payment = []
+                for transaction in transactions:
+                    doctor = User.objects.get(pk=transaction.appointment.doctor)
+                    patient = User.objects.get(pk=transaction.appointment.patient)
+                    
+                    data = {
+                        "id": transaction.id,
+                        "appointment_id": transaction.appointment.id,
+                        "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_status": transaction.appointment.status,
+                        "doctor":{
+                            "id":doctor.id,
+                            "name": doctor.get_full_name(),
+                            "email": doctor.email
+                            },
+                        "patient": {
+                            "id":patient.id,
+                            "name": patient.get_full_name(),
+                            "email": patient.email
+                            },
+                        "amount": transaction.amount,
+                        "currency": patient.currency if patient.currency else "USD",
+                        "payment_status": transaction.appointment.payment_status,
+                        "payment_method": transaction.method,
+                        "payment_date": datetime.strftime(transaction.timestamp, "%d/%m/%Y")
+            
+                    }
+                    payment.append(data)
+            
+            else:
+                return Response({"error": "You are not authorized to access this"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            return Response({"message": "Transaction history retrieved successfully", "data":payment})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class WebhookAPI(APIView):
+    def post(self, request):
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
         payload = request.body
         sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-        endpoint_secret = os.getenv('WEBHOOK_KEY') 
+        endpoint_secret = os.getenv('WEBHOOK_KEY_TEST') 
+        
         try:
             event = stripe.Webhook.construct_event(
                 payload, sig_header, endpoint_secret
@@ -625,28 +710,216 @@ class StripeWebhookView(APIView):
             return Response({"error": "Invalid payload"}, status=status.HTTP_400_BAD_REQUEST)
         except stripe.error.SignatureVerificationError:
             return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
-     
-        if event["type"] == "payment_intent.succeeded":
-            payment_intent = event["data"]["object"]
-            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
+        
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            metadata = session.get('metadata', {})
+            appointment_id = metadata.get('appointment_id')
+            payment_intent_id = session.get('payment_intent')
+            
+            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+            try:
+                appointment = BookedAppointment.objects.get(id=appointment_id)
+                appointment.payment_status = "Completed"
+                appointment.status = 'Pending'
+                appointment.payment_intent = payment_intent.id
+                appointment.charge_id = payment_intent.latest_charge
+                appointment.amount = payment_intent.amount_received / 100
+                appointment.save()
+                
+                Payment.objects.create(
+                    appointment=appointment,
+                    amount=appointment.amount,
+                    method=payment_intent.payment_method_types[0],
+                    status='Success',
+                    payment_notes=payment_intent.get('description')              
+                )
+                
+                slot = appointment.slot
+                date_obj = appointment.date
+                date = str(date_obj)
+                
+                doctor = User.objects.filter(pk=appointment.doctor).first()
+                if not doctor:
+                    return Response({"error": "Invalid doctor ID"}, status=404)
+                
+                patient = User.objects.filter(pk=appointment.patient).first()
+                if not patient:
+                    return Response({'error':'Invalid patient ID'}, status=404)
+                
+                doctor_tz = self.get_user_timezone(doctor)
+                patient_tz = self.get_user_timezone(patient)
+
+        
+                slot_start_str = slot.split("-")[0].strip()
+                slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()            
+                appointment_datetime = datetime.combine(date_obj, slot_start_time)
+                
+                aware_appointment_datetime = doctor_tz.localize(appointment_datetime)
+                utc_appointment_datetime = aware_appointment_datetime.astimezone(pytz.UTC)
+                
+                patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
+                doctor_appointment_datetime = utc_appointment_datetime.astimezone(doctor_tz)
+                
+                slot_patient_start = patient_appointment_datetime.strftime("%H:%M")
+                slot_patient_end = (patient_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
+                slot_doctor_start = doctor_appointment_datetime.strftime("%H:%M")
+                slot_doctor_end = (doctor_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
+                
+                # WhatsApp Notification Message
+                message = (
+                    f"Hello {patient.first_name},\n"
+                    f"Your appointment has been successfully booked.\n"
+                    f"Date: {date}\n"
+                    f"Time: {slot}\n"
+                    f"Doctor: {doctor.first_name} {doctor.last_name}\n"
+                    f"Location: Online/Clinic\n"
+                    f"Thank you for choosing our service!"
+                )
+                  
+                doctor = User.objects.get(id=appointment.doctor)  # get doctor as a User object
+                doctor_name = f"{doctor.first_name} {doctor.last_name}"  # access first_name
+                doctor_profile = Doctor.objects.filter(user=doctor).first()
+
+                patient = User.objects.get(id=appointment.patient)  # get patient as a User object
+                patient_name = f"{patient.first_name} {patient.last_name}"
+                
+                # Send WhatsApp Notification to patient
+                send_whatsapp_message_patient(
+                    to=patient.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=f"{slot_patient_start} - {slot_patient_end}",
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+                
+                # Send WhatsApp Notification to doctor
+                send_whatsapp_message_doctor(
+                    to=doctor.phone_number,
+                    patient_name=patient_name,
+                    date=appointment.date.strftime("%Y-%m-%d"),
+                    slot=f"{slot_doctor_start} - {slot_doctor_end}",
+                    doctor_name=doctor_name,
+                    appointment_type=appointment.appointment_type
+                )
+                
+                # Send **In-App Notifications**
+                send_notification(
+                    user_id=doctor.id,
+                    message=f"You have a new appointment with {patient_name} on {date} at {slot}."
+                )
+
+                send_notification(
+                    user_id=patient.id,
+                    message=f"Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
+                )
+                
+                try:
+                    sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+
+                    patient_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=patient.email,
+                    )
+                    patient_email.template_id = "d-20159cf43e714e4b86bf4af62d3b40ba" 
+                    patient_email.dynamic_template_data = {
+                        "patient_name": patient_name,
+                        "doctor_name": doctor_name,
+                        "appointment_date": date,
+                        "slot": f"{slot_patient_start} - {slot_patient_end}",
+                        "appointment_type": str(appointment.get_appointment_type_display()),
+                    }
+                    sendgrid_client.send(patient_email)
+
+                    doctor_email = Mail(
+                        from_email=settings.SENDGRID_FROM_EMAIL,
+                        to_emails=doctor.email,
+                    )
+                    doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
+                    doctor_email.dynamic_template_data = {
+                        "doctor_name": doctor_name,
+                        "patient_name": patient_name,
+                        "appointment_date": date,
+                        "slot": f"{slot_doctor_start} - {slot_doctor_end}",
+                        "appointment_type": str(appointment.get_appointment_type_display()),
+                    }
+                    sendgrid_client.send(doctor_email)
+
+                except Exception as e:
+                    logger.error(f"SendGrid email sending failed: {str(e)}")
+
+                return Response({
+                    "success": True,
+                    "message": "Payment successful",
+                    "data": {
+                        "appointment_id": appointment.id,
+                        "amount": f"{appointment.amount:.2f}",
+                        "currency": payment_intent.currency.upper(),
+                        "stripe_payment_id": payment_intent.id,
+                        "payment_method": payment_intent.payment_method_types[0],
+                        "payment_status": payment_intent.status
+                    }
+                }, status=200)
+            
+            except BookedAppointment.DoesNotExist:
+                return Response({"success": False, "message": "Appointment not found"}, status=404)
+        
+        elif event['type'] == 'payment_intent.payment_failed':
+            intent = event['data']['object']
+            metadata = intent.get('metadata',{})
+            appointment_id = metadata.get('appointment_id')
             
             try:
-                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
-                transaction.status = "success"  
-                transaction.save()
-            except Transaction.DoesNotExist:
-                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
-
-        elif event["type"] == "payment_intent.payment_failed":
-            payment_intent = event["data"]["object"]
-            payment_link_id = payment_intent.get("metadata", {}).get("payment_link_id")
-
-            try:
-                transaction = Transaction.objects.get(stripe_payment_link_id=payment_link_id)
-                transaction.status = "failed" 
-                transaction.save()
-            except Transaction.DoesNotExist:
-                return Response({'message': 'Transaction record does not exist'}, status=status.HTTP_404_NOT_FOUND)
+                appointment = BookedAppointment.objects.get(id=appointment_id)
+                appointment.payment_status = "Falied"
+                appointment.save()
+                
+                Payment.objects.create(
+                    appointment=appointment,
+                    amount=appointment.amount,
+                    method=payment_intent.payment_method_types[0],
+                    status='Failed',
+                    payment_notes=payment_intent.get('description')              
+                )
+                
+                return Response({
+                    "success": False,
+                    "message": "Payment failed",
+                    "data": {
+                        "appointment_id": appointment.id,
+                        "stripe_payment_id": intent.id,
+                        "failure_reason": intent.last_payment_error.get('message')
+                    }
+                }, status=200)
+                
+            except BookedAppointment.DoesNotExist:
+                return Response({"success": False, "message": "Appointment not found"}, status=404)
+        
+        elif event['type'] == "Checkout.session.expired":
+            appointment = event['data']['object']
+            appointment.status = "Failed"
+            appointment.save()
+            
+            Payment.objects.create(
+                    appointment=appointment,
+                    amount=appointment.amount,
+                    method=payment_intent.payment_method_types[0],
+                    status='Failed',
+                    payment_notes=payment_intent.get('description')              
+                )
+            return Response({"success": False, "message": "Session expired"}, status=400)
         
         return Response(status=status.HTTP_200_OK)
-          
+    
+    def get_user_timezone(self, user):
+        try:
+            pref = UserPreference.objects.filter(user=user).first()
+            if pref and not pref.use_system_timezone:
+                return pytz_timezone(pref.timezone)
+        except:
+            pass
+        tz_str = str(getattr(user, 'timezone', 'UTC'))
+        return pytz_timezone(tz_str)
+        

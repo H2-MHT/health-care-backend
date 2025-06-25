@@ -46,7 +46,8 @@ from .models import (
     Specialization,
     Slot,
     WeekDays,
-    SlotsWeekDays
+    SlotsWeekDays,
+    UserPreference,
 )
 from reviews.models import Review
 from notifications.models import Notification
@@ -88,12 +89,14 @@ import uuid
 import re
 import pytz
 from pytz import timezone as pytz_timezone
-
+import os
 from utils.prescription_translation import translate_reschedule_message
 from deep_translator import GoogleTranslator
+from celery import shared_task
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
 
 class DoctorListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -123,11 +126,36 @@ class PublicDoctorListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             search_key = request.query_params.get("search_key", "").strip()
+            speciality = request.query_params.get("speciality", "").strip()
+            country = request.query_params.get("country", "").strip()
+            gender = request.query_params.get("gender", "").strip()
+            planned_hourly_rate = request.query_params.get("planned_hourly_rate", "").strip()
+
+            doctors = User.objects.filter(role="Doctor")
+
             if search_key:
-                doctors = User.objects.filter(role="Doctor",first_name__istartswith=search_key) | \
-                        User.objects.filter(role="Doctor",last_name__istartswith=search_key)
-            else:
-                doctors = User.objects.filter(role="Doctor")
+                doctors = doctors.filter(
+                    Q(first_name__istartswith=search_key) |
+                    Q(last_name__istartswith=search_key)
+                )
+            if country:
+                doctors = doctors.filter(country__istartswith=country)
+
+            if gender:
+                doctors = doctors.filter(gender__istartswith=gender)
+
+            if speciality:
+                doctor_ids = Doctor.objects.filter(
+                    specialty__istartswith=speciality
+                ).values_list("user_id", flat=True)
+                doctors = doctors.filter(id__in=doctor_ids)
+
+            if planned_hourly_rate:
+                doctor_ids = Doctor.objects.filter(
+                    planned_hourly_rate__istartswith=planned_hourly_rate
+                ).values_list("user_id", flat=True)
+                doctors = doctors.filter(id__in=doctor_ids)
+
             paginated_data, headers = pagination_view(doctors, request)
             serializer = UserSerializer(paginated_data, many=True)      
             return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)
@@ -712,7 +740,16 @@ def get_user_timezone(user):
     tz_str = str(getattr(user, 'timezone', 'UTC'))
     return pytz_timezone(tz_str)
 
-
+@shared_task
+def update_appointment_status_post_timeout(appointment_id):
+    try:
+        appointment = BookedAppointment.objects.get(id=appointment_id)
+        if appointment.payment_status == 'Pending':
+            appointment.status = 'In Progress'
+            appointment.payment_status = 'Transect'
+            appointment.save()
+    except BookedAppointment.DoesNotExist:
+        return Response({'message':'appointment not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class BookAppointmentAPIView(APIView):
     """
@@ -721,6 +758,8 @@ class BookAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+
         try:
             doctor_user_id = request.data.get("doctor_user_id")
             patient_user_id = request.data.get("patient_user_id")
@@ -733,6 +772,7 @@ class BookAppointmentAPIView(APIView):
             appointment_day = date_obj.strftime("%a")
             
             doctor = User.objects.filter(pk=doctor_user_id).first()
+            doctor_obj = getattr(doctor, 'doctor', None) 
             if not doctor:
                 return Response({"error": "Invalid doctor ID"}, status=404)
             
@@ -742,8 +782,6 @@ class BookAppointmentAPIView(APIView):
             
             doctor_tz = get_user_timezone(doctor)
             patient_tz = get_user_timezone(patient)
-
-    
             slot_start_str = slot.split("-")[0].strip()
             slot_start_time = datetime.strptime(slot_start_str, "%H:%M").time()            
             appointment_datetime = datetime.combine(date_obj, slot_start_time)
@@ -751,28 +789,9 @@ class BookAppointmentAPIView(APIView):
             aware_appointment_datetime = doctor_tz.localize(appointment_datetime)
             utc_appointment_datetime = aware_appointment_datetime.astimezone(pytz.UTC)
             
-            patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
-            doctor_appointment_datetime = utc_appointment_datetime.astimezone(doctor_tz)
-            
-             # doctor_user_obj = User.objects.get(id=doctor.user_id)
-            # Ensure doctor has set availability for this day
-            # availability = AppointmentManagement.objects.filter(
-            #     user=doctor_user_obj,
-            #     appointment_type=appointment_type,
-            #     days__icontains=appointment_day
-            # ).first()
-            # Convert slot start and end time
-            # slot_start, slot_end = slot.split(" - ")
-            # slot_start = datetime.strptime(slot_start, "%H:%M").time()
-            # slot_end = datetime.strptime(slot_end, "%H:%M").time()
-
-            # # Ensure slot falls within the doctor's available hours
-            # if not (availability.start_time <= slot_start and availability.end_time >= slot_end):
-            #     return Response({"error": "Selected slot is outside doctor's available hours"}, status=400)
-
             # Ensure slot is not already booked
             is_booked = BookedAppointment.objects.filter(
-                doctor=doctor_user_id, slot=slot, date=date_obj, status__in = ['Pending', 'Confirmed']
+                doctor=doctor_user_id, slot=slot, date=date_obj, status__in = ['Pending', 'Confirmed'], payment_status=["Completed"]
             ).exists()
 
             if is_booked:
@@ -783,105 +802,13 @@ class BookAppointmentAPIView(APIView):
                 patient=patient_user_id,
                 appointment_type=appointment_type,
                 slot=slot,
+                slot_start_utc=utc_appointment_datetime,
                 status="Pending",
                 date=date_obj,
                 payment_status="Pending", 
-                start_datetime_utc=utc_appointment_datetime 
             )
             
-            # patient_appointment_datetime = utc_appointment_datetime.astimezone(patient_tz)
-            slot_patient_start = patient_appointment_datetime.strftime("%H:%M")
-            slot_patient_end = (patient_appointment_datetime + timedelta(minutes=30)).strftime("%H:%M")
-            
-            # WhatsApp Notification Message
-            message = (
-                f"Hello {patient.first_name},\n"
-                f"Your appointment has been successfully booked.\n"
-                f"Date: {date}\n"
-                f"Time: {slot}\n"
-                f"Doctor: {doctor.first_name} {doctor.last_name}\n"
-                f"Location: Online/Clinic\n"
-                f"Thank you for choosing our service!"
-            )
-            
-            
-            doctor = User.objects.get(id=appointment.doctor)  # get doctor as a User object
-            doctor_name = f"{doctor.first_name} {doctor.last_name}"  # access first_name
-            doctor_profile = Doctor.objects.filter(user=doctor).first()
-            # print(doctor_name, "----------DOCTOR NAME----------")
-
-            patient = User.objects.get(id=appointment.patient)  # get patient as a User object
-            patient_name = f"{patient.first_name} {patient.last_name}"
-            # print(patient_name, "----------PATIENT NAME----------")
-            
-            # Send WhatsApp Notification to patient
-            send_whatsapp_message_patient(
-                to=patient.phone_number,
-                patient_name=patient_name,
-                date=appointment.date.strftime("%Y-%m-%d"),
-                slot=slot,
-                doctor_name=doctor_name,
-                appointment_type=appointment.appointment_type
-            )
-            
-            # Send WhatsApp Notification to doctor
-            send_whatsapp_message_doctor(
-                to=doctor.phone_number,
-                patient_name=patient_name,
-                date=appointment.date.strftime("%Y-%m-%d"),
-                slot=slot,
-                doctor_name=doctor_name,
-                appointment_type=appointment.appointment_type
-            )
-            
-             # Send **In-App Notifications**
-            send_notification(
-                user_id=doctor.id,
-                message=f"You have a new appointment with {patient_name} on {date} at {slot}."
-            )
-
-            send_notification(
-                user_id=patient.id,
-                message=f"Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
-            )
-            
-            try:
-                sendgrid_client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-
-                patient_email = Mail(
-                    from_email=settings.SENDGRID_FROM_EMAIL,
-                    to_emails=patient.email,
-                )
-                patient_email.template_id = "d-20159cf43e714e4b86bf4af62d3b40ba" 
-                patient_email.dynamic_template_data = {
-                    "patient_name": patient_name,
-                    "doctor_name": doctor_name,
-                    "appointment_date": date,
-                    "slot": slot,
-                    "appointment_type": str(appointment.get_appointment_type_display()),
-                }
-                sendgrid_client.send(patient_email)
-
-                doctor_email = Mail(
-                    from_email=settings.SENDGRID_FROM_EMAIL,
-                    to_emails=doctor.email,
-                )
-                doctor_email.template_id = "d-74121fda9fe9417697f59c2541dfa69d"
-                doctor_email.dynamic_template_data = {
-                    "doctor_name": doctor_name,
-                    "patient_name": patient_name,
-                    "appointment_date": date,
-                    "slot": slot,
-                    "appointment_type": str(appointment.get_appointment_type_display()),
-                }
-                sendgrid_client.send(doctor_email)
-
-            except Exception as e:
-                logger.error(f"SendGrid email sending failed: {str(e)}")
-                
-            # Update appointment status to "Pending"
-            appointment.status = "Pending"
-            appointment.save()
+            update_appointment_status_post_timeout.apply_async(args=[appointment.id], countdown=60)
             
             now = timezone.now()
             within_24_hours = utc_appointment_datetime - now <= timedelta(hours=24)
@@ -892,6 +819,11 @@ class BookAppointmentAPIView(APIView):
                     " (Note: You are booking the appointment within 24 hours. "
                     "If you cancel, 10% amount will be deducted.)"
                 )
+
+            payment_link = stripe.PaymentLink.modify(
+                                doctor_obj.stripe_link_id ,
+                                metadata={"appointment_id": appointment.id}
+                        )
             
             return Response({
                 "message_text": message_text,
@@ -900,7 +832,7 @@ class BookAppointmentAPIView(APIView):
                     "appointment_type": appointment.appointment_type,
                     "date": date,
                     "payment_status": appointment.payment_status,
-                    "stripe_link": doctor_profile.stripe_link,
+                    "stripe_link": payment_link.url,
                 }
             }, status=201)
 
@@ -958,6 +890,13 @@ class BookAppointmentAPIView(APIView):
         except Exception as e:
             return {"success": False, "message": str(e)}
         
+    def get_user_timezone(user):
+        try:
+            user_preference = UserPreference.objects.get(user=user)
+            timezone_str = user_preference.timezone
+            return pytz.timezone(timezone_str)
+        except Exception as e:
+            return pytz.UTC
     def get(self, request):
         try:
             doctor_user_id = request.query_params.get('doctor_user_id')
@@ -971,26 +910,33 @@ class BookAppointmentAPIView(APIView):
             if not doctor:
                 return Response({'message':'doctor not found'}, status=status.HTTP_404_NOT_FOUND)
             
-            appiontments = BookedAppointment.objects.filter(doctor=doctor_user_id, date=date_obj)
+            patient = request.user
+            patient_tz = get_user_timezone(patient)
+            
+            appiontments = BookedAppointment.objects.filter(doctor=doctor_user_id, date=date_obj).exclude(status__in=['In Progress'])
             
             if not appiontments.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
             bookedAppiontment = []
             for appt in appiontments:
-                utc_start_dt = appt.start_datetime_utc  # UTC datetime
+                utc_start_dt = appt.slot_start_utc  # UTC datetime
             
-            # Format start time in UTC as HH:MM
-                slot_start_utc = utc_start_dt.strftime("%H:%M")
+                if not utc_start_dt:
+                    continue
                 
-                # Assuming slot duration is 30 minutes (adjust if different)
-                utc_end_dt = utc_start_dt + timedelta(minutes=30)
-                slot_end_utc = utc_end_dt.strftime("%H:%M")
                 
-                slot_utc = f"{slot_start_utc} - {slot_end_utc}"
+                if timezone.is_naive(utc_start_dt):
+                    utc_start_dt = pytz.UTC.localize(utc_start_dt)
+
+                local_start_dt = utc_start_dt.astimezone(patient_tz)
+                local_end_dt = local_start_dt + timedelta(minutes=30)
+
+                slot_local = f"{local_start_dt.strftime('%H:%M')} - {local_end_dt.strftime('%H:%M')}"
+
                 bookedAppiontment.append(
                     {
-                        'slot': slot_utc,
+                        'slot': slot_local,
                         'status': appt.status
                     }
                 )
@@ -1029,10 +975,25 @@ class BookAppointmentAPIView(APIView):
             if appointment_status == "Confirmed":
                 doctor = User.objects.get(id=appointment.doctor)
                 doctor_name = f"{doctor.first_name} {doctor.last_name}"
-                doctor_profile = Doctor.objects.filter(user=doctor).first()
+                doctor_profile = UserPreference.objects.filter(user=doctor).first()
+                doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
 
                 patient = User.objects.get(id=appointment.patient)
                 patient_name = f"{patient.first_name} {patient.last_name}"
+                patient_profile = UserPreference.objects.filter(user=patient).first()
+                patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
+                slot_start_str = appointment.slot.split('-')[0].strip()
+                appointment_datetime_naive = datetime.strptime(f"{appointment.date} {slot_start_str}", "%Y-%m-%d %H:%M")
+                appointment_datetime_utc = pytz.utc.localize(appointment_datetime_naive)
+
+                doctor_local_dt = appointment_datetime_utc.astimezone(pytz.timezone(doctor_timezone))
+                patient_local_dt = appointment_datetime_utc.astimezone(pytz.timezone(patient_timezone))
+                
+                formatted_doctor_date = doctor_local_dt.strftime('%d-%m-%Y')
+                formatted_patient_date = patient_local_dt.strftime('%d-%m-%Y')
+                formatted_doctor_time = doctor_local_dt.strftime('%I:%M %p')
+                formatted_patient_time = patient_local_dt.strftime('%I:%M %p')
 
                 # WhatsApp Notification Message (confirmation)
                 message = (
@@ -1049,8 +1010,8 @@ class BookAppointmentAPIView(APIView):
                 send_whatsapp_message_patient(
                     to=patient.phone_number,
                     patient_name=patient_name,
-                    date=appointment.date.strftime("%Y-%m-%d"),
-                    slot=appointment.slot,
+                    date=formatted_patient_date,
+                    slot=formatted_patient_time,
                     doctor_name=doctor_name,
                     appointment_type=appointment.appointment_type
                 )
@@ -1059,8 +1020,8 @@ class BookAppointmentAPIView(APIView):
                 send_whatsapp_message_doctor(
                     to=doctor.phone_number,
                     patient_name=patient_name,
-                    date=appointment.date.strftime("%Y-%m-%d"),
-                    slot=appointment.slot,
+                    date=formatted_doctor_date,
+                    slot=formatted_doctor_time,
                     doctor_name=doctor_name,
                     appointment_type=appointment.appointment_type
                 )
@@ -1088,8 +1049,8 @@ class BookAppointmentAPIView(APIView):
                     patient_email.dynamic_template_data = {
                         "patient_name": patient_name,
                         "doctor_name": doctor_name,
-                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
-                        "slot": appointment.slot,
+                        "appointment_date": formatted_patient_date,
+                        "slot": formatted_patient_time,
                         "appointment_type": appointment.appointment_type
                     }
                     sendgrid_client.send(patient_email)
@@ -1103,8 +1064,8 @@ class BookAppointmentAPIView(APIView):
                     doctor_email.dynamic_template_data = {
                         "doctor_name": doctor_name,
                         "patient_name": patient_name,
-                        "appointment_date": appointment.date.strftime('%d-%m-%Y'),
-                        "slot": appointment.slot,
+                        "appointment_date": formatted_doctor_date,
+                        "slot": formatted_doctor_time,
                         "appointment_type": appointment.appointment_type
                     }
                     sendgrid_client.send(doctor_email)
@@ -1302,6 +1263,12 @@ class RescheduleAppointmentAPIView(APIView):
             patient_name = patient.get_full_name()
             doctor = User.objects.get(id=appointment.doctor)
             doctor_name = doctor.get_full_name()
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
             old_slot = appointment.slot
             old_date = appointment.date.strftime("%d-%m-%Y")
 
@@ -1312,6 +1279,18 @@ class RescheduleAppointmentAPIView(APIView):
             appointment.save()
             appointment_type_display = str(appointment.get_appointment_type_display())
 
+            slot_start_time_str = new_slot.split("-")[0].strip()
+            naive_utc_dt = datetime.strptime(f"{date_obj} {slot_start_time_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_utc_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+            
+            formatted_doctor_date = doctor_local_dt.strftime('%d-%m-%Y')
+            formatted_patient_date = patient_local_dt.strftime('%d-%m-%Y')
+            formatted_doctor_time = doctor_local_dt.strftime('%I:%M %p')
+            formatted_patient_time = patient_local_dt.strftime('%I:%M %p')
+            
 
             app_language = AppLanguage.objects.filter(user=patient).first()
             patient_language = app_language.code if app_language and app_language.code else "en"
@@ -1322,7 +1301,7 @@ class RescheduleAppointmentAPIView(APIView):
                 old_date,
                 old_slot,
                 new_date,
-                new_slot,
+                formatted_patient_time,
                 doctor_name,
                 patient_name,
                 patient_language
@@ -1332,7 +1311,7 @@ class RescheduleAppointmentAPIView(APIView):
             old_date,
             old_slot,
             new_date,
-            new_slot,
+            formatted_patient_time,
             doctor_name,
             patient_name,
             translated_message
@@ -1343,7 +1322,7 @@ class RescheduleAppointmentAPIView(APIView):
                 old_date=old_date,
                 old_slot=old_slot,
                 new_date=new_date,
-                new_slot=new_slot,
+                new_slot=formatted_doctor_time,
                 doctor_name=doctor_name,
                 patient_name=patient_name
             )
@@ -1372,9 +1351,9 @@ class RescheduleAppointmentAPIView(APIView):
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
                     "old_date": old_date,
-                    "new_date": new_date,
+                    "new_date": formatted_patient_date,
                     "old_slot": old_slot,
-                    "new_slot": new_slot,
+                    "new_slot": formatted_patient_time,
                     "appointment_type": appointment_type_display,
                 }
                 sendgrid_client.send(patient_email)
@@ -1389,9 +1368,9 @@ class RescheduleAppointmentAPIView(APIView):
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
                     "old_date": old_date,
-                    "new_date": new_date,
+                    "new_date": formatted_doctor_date,
                     "old_slot": old_slot,
-                    "new_slot": new_slot,
+                    "new_slot": formatted_doctor_time,
                     "appointment_type": appointment_type_display,
                 }
                 sendgrid_client.send(doctor_email)
@@ -1526,8 +1505,28 @@ class CancelAppointmentAPIView(APIView):
             patient_name = f"{patient.first_name} {patient.last_name}"
             # print(patient_name, "----------PATIENT NAME----------")
             # Format date and slot
-            appointment_date = appointment.date.strftime("%Y-%m-%d")
+
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+            
+            date_obj = appointment.date
             slot = appointment.slot
+
+            slot_start_time_str = slot.split("-")[0].strip()
+            naive_utc_dt = datetime.strptime(f"{date_obj} {slot_start_time_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_utc_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+
+            formatted_doctor_date = doctor_local_dt.strftime("%d-%m-%Y")
+            formatted_patient_date = patient_local_dt.strftime("%d-%m-%Y")
+
+            formatted_doctor_time = doctor_local_dt.strftime("%I:%M %p")
+            formatted_patient_time = patient_local_dt.strftime("%I:%M %p")
+
 
             # Cancel the appointment
             appointment.status = "Cancelled"
@@ -1536,8 +1535,8 @@ class CancelAppointmentAPIView(APIView):
             # Send WhatsApp Notification to Patient
             appointment_cancel_notification_patient(
                 to=patient.phone_number,
-                date=appointment_date,
-                slot=slot,
+                date=formatted_patient_date,
+                slot=formatted_patient_time,
                 patient_name=patient_name,
                 doctor_name=doctor_name
             )
@@ -1545,8 +1544,8 @@ class CancelAppointmentAPIView(APIView):
             # Send WhatsApp Notification to Doctor
             appointment_cancel_notification_doctor(
                 to=doctor.phone_number,
-                date=appointment_date,
-                slot=slot,
+                date=formatted_doctor_date,
+                slot=formatted_doctor_time,
                 patient_name=patient_name,
                 doctor_name=doctor_name
             )
@@ -1563,8 +1562,8 @@ class CancelAppointmentAPIView(APIView):
                 patient_email.dynamic_template_data = {
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
-                    "appointment_date": appointment_date,
-                    "slot": slot,
+                    "appointment_date": formatted_patient_date,
+                    "slot": formatted_patient_time,
                     "appointment_type": appointment.appointment_type
                 }
                 sendgrid_client.send(patient_email)
@@ -1578,8 +1577,8 @@ class CancelAppointmentAPIView(APIView):
                 doctor_email.dynamic_template_data = {
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
-                    "appointment_date": appointment_date,
-                    "slot": slot,
+                    "appointment_date": formatted_doctor_date,
+                    "slot": formatted_doctor_time,
                     "appointment_type": appointment.appointment_type
                 }
                 sendgrid_client.send(doctor_email)
@@ -1618,15 +1617,33 @@ class AppointmentReminderAPIView(APIView):
             patient = User.objects.get(id=appointment.patient)
             patient_name = f"{patient.first_name} {patient.last_name}"
 
-            date = appointment.date.strftime("%Y-%m-%d")
-            slot = appointment.slot
+            doctor_profile = UserPreference.objects.filter(user=doctor).first()
+            patient_profile = UserPreference.objects.filter(user=patient).first()
+            doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+            patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+
+            date_str = appointment.date.strftime("%Y-%m-%d")
+            slot_start_str = appointment.slot.split("-")[0].strip()
+
+            naive_dt = datetime.strptime(f"{date_str} {slot_start_str}", "%Y-%m-%d %H:%M")
+            utc_dt = pytz.utc.localize(naive_dt)
+
+            doctor_local_dt = utc_dt.astimezone(pytz.timezone(doctor_timezone))
+            patient_local_dt = utc_dt.astimezone(pytz.timezone(patient_timezone))
+
+            formatted_doctor_date = doctor_local_dt.strftime("%d-%m-%Y")
+            formatted_patient_date = patient_local_dt.strftime("%d-%m-%Y")
+
+            formatted_doctor_time = doctor_local_dt.strftime("%I:%M %p")
+            formatted_patient_time = patient_local_dt.strftime("%I:%M %p")
+
             appointment_type = appointment.get_appointment_type_display()
 
             send_whatsapp_message_patient(
                 to=patient.phone_number,
                 patient_name=patient_name,
-                date=date,
-                slot=slot,
+                date=formatted_patient_date,
+                slot=formatted_patient_time,
                 doctor_name=doctor_name,
                 appointment_type=appointment_type
             )
@@ -1634,8 +1651,8 @@ class AppointmentReminderAPIView(APIView):
             send_whatsapp_message_doctor(
                 to=doctor.phone_number,
                 patient_name=patient_name,
-                date=date,
-                slot=slot,
+                date=formatted_doctor_date,
+                slot=formatted_doctor_time,
                 doctor_name=doctor_name,
                 appointment_type=appointment_type
             )
@@ -1643,11 +1660,11 @@ class AppointmentReminderAPIView(APIView):
             # In-App Notifications
             send_notification(
                 user_id=doctor.id,
-                message=f"Reminder: You have an appointment with {patient_name} on {date} at {slot}."
+                message=f"Reminder: You have an appointment with {patient_name} on {date} at {formatted_doctor_time}."
             )
             send_notification(
                 user_id=patient.id,
-                message=f"Reminder: Your appointment with Dr. {doctor_name} is scheduled on {date} at {slot}."
+                message=f"Reminder: Your appointment with Dr. {doctor_name} is scheduled on {date} at {formatted_patient_time}."
             )
 
             # Email Notifications
@@ -1662,8 +1679,8 @@ class AppointmentReminderAPIView(APIView):
                 patient_email.dynamic_template_data = {
                     "patient_name": patient_name,
                     "doctor_name": doctor_name,
-                    "appointment_date": date,
-                    "slot": slot,
+                    "appointment_date": formatted_patient_date,
+                    "slot": formatted_patient_time,
                     "appointment_type": appointment_type
                 }
                 sendgrid_client.send(patient_email)
@@ -1676,8 +1693,8 @@ class AppointmentReminderAPIView(APIView):
                 doctor_email.dynamic_template_data = {
                     "doctor_name": doctor_name,
                     "patient_name": patient_name,
-                    "appointment_date": date,
-                    "slot": slot,
+                    "appointment_date": formatted_doctor_date,
+                    "slot": formatted_doctor_time,
                     "appointment_type": appointment_type,
                 }
                 sendgrid_client.send(doctor_email)
@@ -2808,14 +2825,11 @@ class RefundAppointmentPaymentAPIView(APIView):
         
         if time_until_appointment < timedelta(hours=12):
             return Response({"error": "Cancellation not allowed within 12 hours of appointment."}, status=400)
-        
-        session = stripe.checkout.Session.retrieve(appointment.stripe_session_id)
-        payment_intent = session.payment_intent
 
         if cancelled_by == "doctor":
             try:
                 stripe.Refund.create(
-                    payment_intent=payment_intent,
+                    charge=appointment.charge_id,
                 )
             except Exception as e:
                 return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
@@ -2845,8 +2859,8 @@ class RefundAppointmentPaymentAPIView(APIView):
                 
                 try:
                     stripe.Refund.create(
-                        payment_intent=payment_intent, 
-                        amount=int(appointment.amount_paid * 0.9 * 100), 
+                        charge=appointment.charge_id,
+                        amount=refund_amount, 
                     ) 
                 except Exception as e:
                     return Response({"error": f"Stripe partial refund failed: {str(e)}"}, status=500) 
@@ -2865,7 +2879,7 @@ class RefundAppointmentPaymentAPIView(APIView):
                 
                 try:
                     stripe.Refund.create(
-                        payment_intent=payment_intent, 
+                        charge=appointment.charge_id, 
                     )
                 except Exception as e:
                     return Response({"error": f"Stripe refund failed: {str(e)}"}, status=500)
@@ -3306,3 +3320,26 @@ class SlotFilterAPIView(APIView):
 
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+class PublicSpecializationListAPIView(APIView):
+    def get(self, request):
+        try:
+            specializations = Specialization.objects.filter(is_approved=True)  
+            data = {
+                    "message": "Specializations list retrieved successfully",
+                    "number_of_specializations": len(specializations),
+                    "specializations": [
+                        {
+                            "id": specialization.id,
+                            "name": specialization.name,
+                            "description": specialization.description if specialization.description else "No description available",
+                            "is_approved": specialization.is_approved,
+                            "created_at": specialization.created_date.strftime("%Y-%m-%d") if specialization.created_date else None,
+                            }
+                        for specialization in specializations
+                    ]
+                }
+            
+            return Response(data, status=200)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

@@ -92,11 +92,12 @@ class UserSerializer(serializers.ModelSerializer):
     planned_hourly_rate = serializers.CharField(source="doctor.planned_hourly_rate", read_only=True)
     urgent_hourly_rate = serializers.CharField(source="doctor.urgent_hourly_rate", read_only=True)
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
+    doctor_id = serializers.IntegerField(source="doctor.id", read_only=True)
     country_code = serializers.SerializerMethodField()
     class Meta:
         model = User
         fields = [
-            "id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
+            "id", "doctor_id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
             "bio", "country", "country_code", "city", "residence", "languages", "role", "speciality", "rating",
             "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years"
         ]

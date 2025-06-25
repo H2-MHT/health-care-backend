@@ -50,12 +50,21 @@ class PublicClinicListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             search_key = request.query_params.get("search_key", "").strip()
+            address = request.query_params.get("address", "").strip()
+            clinic_type = request.query_params.get("clinic_type", "").strip()
+
+            clinics = Clinic.objects.all()
+
             if search_key:
-                clinic = Clinic.objects.filter(user__first_name__istartswith=search_key) | \
-                         Clinic.objects.filter(user__last_name__istartswith=search_key)
-            else:
-                clinic = Clinic.objects.all()
-            paginated_data, headers = pagination_view(clinic, request)
+                clinics = clinics.filter(user__first_name__istartswith=search_key)
+
+            if address:
+                clinics = clinics.filter(address__istartswith=address)
+
+            if clinic_type:
+                clinics = clinics.filter(clinic_type__istartswith=clinic_type)
+
+            paginated_data, headers = pagination_view(clinics, request)
             serializer = ClinicSerializer(paginated_data, many=True)
             return create_paginated_response("Clinic list retrieved successfully.",serializer.data,headers)
         
@@ -84,7 +93,6 @@ class PublicClinicDetailAPIView(APIView):
     
 
 class LanguageAPIView(APIView):
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         try:
@@ -811,3 +819,9 @@ class DoctorAssociatedToClinicListAPIView(APIView):
                 "message": "An unexpected error occurred.",
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+class ClinicAddressAPIView(APIView):
+    def get(self, request):
+        clinics = Clinic.objects.exclude(address="")
+        serializer = ClinicAddressSerializer(clinics, many=True)
+        return Response(serializer.data)

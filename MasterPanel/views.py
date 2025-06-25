@@ -411,6 +411,7 @@ class UserListAPIView(APIView):
                         "total_patients": BookedAppointment.objects.filter(doctor=doctor.user.id, status="Completed").values('patient').distinct().count(),
                         "today's_appointments": BookedAppointment.objects.filter(date=date.today(), doctor=doctor.user.id).count(),
                         "stripe_link": doctor.stripe_link if doctor.stripe_link else None,
+                        "stripe_link_id": doctor.stripe_link_id if doctor.stripe_link_id else None
                     }
                     for doctor in doctors
                 ]
@@ -1350,9 +1351,10 @@ class DoctorStripeLinkAddView(APIView):
     def post(self, request, *args, **kwargs):
         doctor_id = request.data.get("doctor_id")
         stripe_link = request.data.get("stripe_link")
+        stripe_link_id = request.data.get("stripe_link_id")
 
-        if not doctor_id or not stripe_link:
-            return Response({"error": "Doctor ID and Stripe link are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not doctor_id or not stripe_link or not stripe_link_id:
+            return Response({"error": "Doctor ID, Stripe link and Stripe link ID are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             doctor = Doctor.objects.get(id=doctor_id)
@@ -1360,12 +1362,14 @@ class DoctorStripeLinkAddView(APIView):
             return Response({"error": "Doctor not found."}, status=status.HTTP_404_NOT_FOUND)
 
         doctor.stripe_link = stripe_link
-        doctor.save()
+        doctor.stripe_link_id = stripe_link_id
+        doctor.save() 
 
         return Response(
             {
                 "message": "Stripe link saved successfully",
-                "stripe_link": doctor.stripe_link
+                "stripe_link": doctor.stripe_link,
+                "stripe_link_id": doctor.stripe_link_id
                 },
             status=status.HTTP_200_OK
             )

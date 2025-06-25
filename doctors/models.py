@@ -22,6 +22,8 @@ class Doctor(models.Model):
     planned_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     urgent_hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     stripe_link = models.URLField(max_length=500, null=True, blank=True)
+    stripe_link_id = models.CharField(max_length=100, null=True, blank=True)
+
 
     def update_hourly_rates(self):
         """hourly rates based on consultation settings"""
@@ -155,6 +157,7 @@ class PatientBookAppointment(models.Model):
 class BookedAppointment(models.Model):
     STATUS_CHOICES = [
         ("Pending", "Pending"),
+        ("In Progress", "In Progress"),
         ("Confirmed", "Confirmed"),
         ("Rescheduled", "Rescheduled"),
         ("Cancelled", "Cancelled"),
@@ -167,6 +170,7 @@ class BookedAppointment(models.Model):
         ("Refunded", "Refunded"),
         ("Failed", "Failed"),
         ("Cancelled", "Cancelled"),
+        ("Transect", "Transect"),
         ]
 
     # doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name="doctor_appointments")
@@ -175,15 +179,16 @@ class BookedAppointment(models.Model):
     patient = models.IntegerField(help_text="Consider patient as User id")
     appointment_type = models.CharField(max_length=50, choices=[('Planned', 'Planned consultation'), ('Urgent', 'Urgent call')])
     slot = models.CharField(max_length=100)
+    slot_start_utc = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     date = models.DateField()
     amount = models.DecimalField(max_digits=10, decimal_places=2,null=True, default=Decimal('0.00'))
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default="Pending")
     stripe_session_id = models.CharField(max_length=255, blank=True, null=True)
+    payment_intent = models.CharField(max_length=255, blank=True, null=True)
+    charge_id = models.CharField(max_length=255, blank=True, null=True)
     rescheduled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="rescheduled_appointments")
     created_at = models.DateTimeField(auto_now_add=True)
-    start_datetime_utc = models.DateTimeField(null=True, blank=True, help_text="Appointment start time in UTC")
-
     # appointment_status = models.ForeignKey(Slot, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):

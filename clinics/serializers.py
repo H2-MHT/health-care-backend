@@ -287,3 +287,8 @@ class OtherClinicSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+    
+class ClinicAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Clinic
+        fields = ["id","address"]
