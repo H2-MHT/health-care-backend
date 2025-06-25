@@ -96,7 +96,7 @@ from celery import shared_task
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY_LIVE')
 
 class DoctorListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -758,7 +758,7 @@ class BookAppointmentAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_TEST')
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY_LIVE')
 
         try:
             doctor_user_id = request.data.get("doctor_user_id")
