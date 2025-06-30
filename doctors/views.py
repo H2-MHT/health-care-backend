@@ -2158,23 +2158,27 @@ class ConsultationSettingsAPIView(APIView):
                     consultation = serializer.save()
 
                     # Manually update Doctor model with hourly rates
-                    if consultation:
-                        planned_hourly = (
-                            (consultation.planned_fees / consultation.planned_session_length) * 60
-                            if consultation.planned_fees and consultation.planned_session_length
-                            else 0
-                        )
-                        urgent_hourly = (
-                            (consultation.urgent_fees / consultation.urgent_session_length) * 60
-                            if consultation.urgent_fees and consultation.urgent_session_length
-                            else 0
-                        )
+                    # if consultation:
+                    #     planned_hourly = (
+                    #         (consultation.planned_fees / consultation.planned_session_length) * 60
+                    #         if consultation.planned_fees and consultation.planned_session_length
+                    #         else 0
+                    #     )
+                    #     urgent_hourly = (
+                    #         (consultation.urgent_fees / consultation.urgent_session_length) * 60
+                    #         if consultation.urgent_fees and consultation.urgent_session_length
+                    #         else 0
+                    #     )
 
-                        doctor.planned_hourly_rate = round(planned_hourly, 2)
-                        doctor.urgent_hourly_rate = round(urgent_hourly, 2)
-                        doctor.save()
+                    #     doctor.planned_hourly_rate = round(planned_hourly, 2)
+                    #     doctor.urgent_hourly_rate = round(urgent_hourly, 2)
+                    #     doctor.save()
 
-                        self.send_consultation_update_email(doctor, consultation, request.user)
+                    doctor.planned_hourly_rate = consultation.planned_fees if consultation.planned_fees else Decimal(0)
+                    doctor.urgent_hourly_rate = consultation.urgent_fees if consultation.urgent_fees else Decimal(0)
+                    doctor.save()
+
+                    self.send_consultation_update_email(doctor, consultation, request.user)
 
                     return Response(
                         {"message": message, "data": serializer.data},

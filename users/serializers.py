@@ -94,12 +94,13 @@ class UserSerializer(serializers.ModelSerializer):
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
     doctor_id = serializers.IntegerField(source="doctor.id", read_only=True)
     country_code = serializers.SerializerMethodField()
+    stripe_link = serializers.CharField(source="doctor.stripe_link", read_only=True)
     class Meta:
         model = User
         fields = [
             "id", "doctor_id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
             "bio", "country", "country_code", "city", "residence", "languages", "role", "speciality", "rating",
-            "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years"
+            "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years","stripe_link"
         ]
 
     def get_planned_hourly_rate(self, obj):
@@ -123,7 +124,17 @@ class UserSerializer(serializers.ModelSerializer):
             for country in pycountry.countries:
                 if country.name.lower() == obj.country.lower():
                     return country.alpha_2
-            return None 
+            return None
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if data['stripe_link'] != None:
+            data['stripe_link'] = True
+        else:
+            data['stripe_link'] = False
+
+        return data
 
 
 class NotesSerializer(serializers.ModelSerializer):
