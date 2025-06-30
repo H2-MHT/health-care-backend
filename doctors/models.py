@@ -219,22 +219,22 @@ class ConsultationSessionAndFee(models.Model):
     planned_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     urgent_fees = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
-    def save(self, *args, **kwargs):
-        """Automatically update doctor's hourly rates when saving consultation fees"""
-        super().save(*args, **kwargs)
-        if self.doctor:
-            planned_hourly = 0
-            urgent_hourly = 0
+    # def save(self, *args, **kwargs):
+    #     """Automatically update doctor's hourly rates when saving consultation fees"""
+    #     super().save(*args, **kwargs)
+    #     if self.doctor:
+    #         planned_hourly = 0
+    #         urgent_hourly = 0
 
-            if self.planned_fees and self.planned_session_length:
-                planned_hourly = (self.planned_fees / self.planned_session_length) * 60
+    #         if self.planned_fees and self.planned_session_length:
+    #             planned_hourly = (self.planned_fees / self.planned_session_length) * 60
 
-            if self.urgent_fees and self.urgent_session_length:
-                urgent_hourly = (self.urgent_fees / self.urgent_session_length) * 60
+    #         if self.urgent_fees and self.urgent_session_length:
+    #             urgent_hourly = (self.urgent_fees / self.urgent_session_length) * 60
 
-            self.doctor.planned_hourly_rate = round(planned_hourly, 2)
-            self.doctor.urgent_hourly_rate = round(urgent_hourly, 2)
-            self.doctor.save()
+    #         self.doctor.planned_hourly_rate = round(planned_hourly, 2)
+    #         self.doctor.urgent_hourly_rate = round(urgent_hourly, 2)
+    #         self.doctor.save()
 
     def __str__(self):
         return f"Consultation settings for {self.doctor}"
