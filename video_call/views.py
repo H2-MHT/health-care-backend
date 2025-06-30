@@ -716,8 +716,7 @@ class UserInfoAPIView(APIView):
 
 def appointment_in_timezone(slot_str, user_id, appointment_date=None):
 
-    start_time_str, end_time_str = slot_str.split("-")
-    print(slot_str, start_time_str)
+    start_time_str, end_time_str = slot_str.split(" - ")
 
     if appointment_date is None:
         appointment_date = datetime.now().date()
@@ -730,8 +729,13 @@ def appointment_in_timezone(slot_str, user_id, appointment_date=None):
     end_utc = utc.localize(end_datetime)
 
     user = User.objects.get(id=user_id)
-    preference = UserPreference.objects.get(user=user)
-    user_timezone = pytz.timezone(preference.timezone)
+    preference = UserPreference.objects.filter(user=user).first()
+
+    userTimezone = preference.timezone
+    if not  preference:
+         user_timezone = pytz.timezone("UTC")
+    else:
+        user_timezone = pytz.timezone(userTimezone)
 
     start_user_time = start_utc.astimezone(user_timezone)
     end_user_time = end_utc.astimezone(user_timezone)
