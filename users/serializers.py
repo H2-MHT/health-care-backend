@@ -28,8 +28,8 @@ class MediaSerializer(serializers.ModelSerializer):
 
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.PrimaryKeyRelatedField(
-        queryset=Skill.objects.all(), many=True, required=False, write_only=True
+    skills = serializers.ListField(
+        child=serializers.CharField(), required=False, write_only=True
     )
 
     media = MediaSerializer(many=True, required=False)
@@ -56,7 +56,11 @@ class EducationSerializer(serializers.ModelSerializer):
 
         # Assign selected skills
         if skills:
-            education.skills.set(skills)
+           skill_objs = []
+           for name in skills:
+                skill_obj, _ = Skill.objects.get_or_create(name=name)
+                skill_objs.append(skill_obj)
+           education.skills.set(skill_objs)
 
         # If media exists, store it
         if media_files:
@@ -76,7 +80,11 @@ class EducationSerializer(serializers.ModelSerializer):
 
         # Update skills only if provided
         if skills is not None:
-            instance.skills.set(skills)
+            skill_objs = []
+            for name in skills:
+                skill_obj, _ = Skill.objects.get_or_create(name=name)
+                skill_objs.append(skill_obj)
+            instance.skills.set(skill_objs)
 
         # If media exists, update it
         if media_files:
