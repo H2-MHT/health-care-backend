@@ -28,8 +28,8 @@ class MediaSerializer(serializers.ModelSerializer):
 
 
 class EducationSerializer(serializers.ModelSerializer):
-    skills = serializers.PrimaryKeyRelatedField(
-        queryset=Skill.objects.all(), many=True, required=False, write_only=True
+    skills = serializers.ListField(
+        child=serializers.CharField(), required=False, write_only=True
     )
 
     media = MediaSerializer(many=True, required=False)
@@ -44,7 +44,7 @@ class EducationSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['skills'] = [{"id": skill.id, "name": skill.name} for skill in instance.skills.all()]  # Return skill objects
+        data['skills'] = [skill.name for skill in instance.skills.all()]  # Return skill objects
         return data
 
     def create(self, validated_data):
@@ -56,7 +56,11 @@ class EducationSerializer(serializers.ModelSerializer):
 
         # Assign selected skills
         if skills:
-            education.skills.set(skills)
+           skill_objs = []
+           for name in skills:
+                skill_obj, _ = Skill.objects.get_or_create(name=name)
+                skill_objs.append(skill_obj)
+           education.skills.set(skill_objs)
 
         # If media exists, store it
         if media_files:
@@ -76,7 +80,11 @@ class EducationSerializer(serializers.ModelSerializer):
 
         # Update skills only if provided
         if skills is not None:
-            instance.skills.set(skills)
+            skill_objs = []
+            for name in skills:
+                skill_obj, _ = Skill.objects.get_or_create(name=name)
+                skill_objs.append(skill_obj)
+            instance.skills.set(skill_objs)
 
         # If media exists, update it
         if media_files:
@@ -94,12 +102,13 @@ class UserSerializer(serializers.ModelSerializer):
     experience_years = serializers.IntegerField(source="doctor.experience_years", read_only=True)
     doctor_id = serializers.IntegerField(source="doctor.id", read_only=True)
     country_code = serializers.SerializerMethodField()
+    stripe_link = serializers.CharField(source="doctor.stripe_link", read_only=True)
     class Meta:
         model = User
         fields = [
             "id", "doctor_id", "first_name", "last_name", "email", "phone_number", "gender", "dob", "profile_picture",
             "bio", "country", "country_code", "city", "residence", "languages", "role", "speciality", "rating",
-            "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years"
+            "planned_hourly_rate", "urgent_hourly_rate", "professional_stat", "experience_years","stripe_link"
         ]
 
     def get_planned_hourly_rate(self, obj):
@@ -123,7 +132,17 @@ class UserSerializer(serializers.ModelSerializer):
             for country in pycountry.countries:
                 if country.name.lower() == obj.country.lower():
                     return country.alpha_2
-            return None 
+            return None
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if data['stripe_link'] != None:
+            data['stripe_link'] = True
+        else:
+            data['stripe_link'] = False
+
+        return data
 
 
 class NotesSerializer(serializers.ModelSerializer):

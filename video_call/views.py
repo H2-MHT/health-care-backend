@@ -26,6 +26,9 @@ from .models import (
 from django.core.files.base import ContentFile
 from django.db.models import Q
 import uuid
+from doctors.models import UserPreference
+import pytz
+from datetime import datetime
 
 # Agora credentials
 APP_ID = settings.APP_ID
@@ -690,7 +693,7 @@ class UserInfoAPIView(APIView):
                     "status": meeting.appointment.status,
                     "meeting_link": meeting.link,
                     "date": meeting.appointment.date,
-                    "slot": meeting.appointment.slot,
+                    "slot": appointment_in_timezone(meeting.appointment.slot, request.user.id, meeting.appointment.date),
                     "created_at": meeting.appointment.created_at,
                     "patient": {
                         "id": meeting.patient.user.id,
@@ -710,4 +713,31 @@ class UserInfoAPIView(APIView):
         
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
-            
+
+def appointment_in_timezone(slot_str, user_id, appointment_date=None):
+
+    start_time_str, end_time_str = slot_str.split(" - ")
+
+    if appointment_date is None:
+        appointment_date = datetime.now().date()
+
+    start_datetime = datetime.strptime(f"{appointment_date} {start_time_str}", "%Y-%m-%d %H:%M")
+    end_datetime = datetime.strptime(f"{appointment_date} {end_time_str}", "%Y-%m-%d %H:%M")
+
+    utc = pytz.UTC
+    start_utc = utc.localize(start_datetime)
+    end_utc = utc.localize(end_datetime)
+
+    user = User.objects.get(id=user_id)
+    preference = UserPreference.objects.filter(user=user).first()
+
+    userTimezone = preference.timezone
+    if not  preference:
+         user_timezone = pytz.timezone("UTC")
+    else:
+        user_timezone = pytz.timezone(userTimezone)
+
+    start_user_time = start_utc.astimezone(user_timezone)
+    end_user_time = end_utc.astimezone(user_timezone)
+
+    return f"{start_user_time.strftime('%I:%M')} - {end_user_time.strftime('%I:%M')}"
