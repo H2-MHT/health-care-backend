@@ -44,7 +44,7 @@ class EducationSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data['skills'] = [{"id": skill.id, "name": skill.name} for skill in instance.skills.all()]  # Return skill objects
+        data['skills'] = [skill.name for skill in instance.skills.all()]  # Return skill objects
         return data
 
     def create(self, validated_data):
