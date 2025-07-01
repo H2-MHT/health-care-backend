@@ -873,7 +873,7 @@ class WebhookAPI(APIView):
             
             try:
                 appointment = BookedAppointment.objects.get(id=appointment_id)
-                appointment.payment_status = "Falied"
+                appointment.payment_status = "Failed"
                 appointment.save()
                 
                 Payment.objects.create(
