@@ -748,9 +748,9 @@ def update_appointment_status_post_timeout(appointment_id):
             appointment.status = 'In Progress'
             appointment.payment_status = 'Transect'
             appointment.save()
-            return "success"
+        return {"message": "Appointment updated successfully"}
     except BookedAppointment.DoesNotExist:
-        return Response({'message':'appointment not found'}, status=status.HTTP_404_NOT_FOUND)
+        return {"message": "Appointment not found", "status_code": 404}
 
 class BookAppointmentAPIView(APIView):
     """
