@@ -72,9 +72,10 @@ class Referral(models.Model):
 
     def get_registration_link(self, request):
         """Generate a dynamic registration link with the personal referral code."""
-        base_url = request.build_absolute_uri('/')
-        registration_path = reverse('signup')
-        return f"{base_url.rstrip('/')}{registration_path}?referral_code={self.personal_code}"
+        base_url = "https://h2.doctor/auth/signup/"
+        # registration_path = reverse('signup')
+        # return f"{base_url.rstrip('/')}{registration_path}?referral_code={self.personal_code}"
+        return f"{base_url}?referral_code={self.personal_code}"
 
 
 

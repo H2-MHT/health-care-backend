@@ -114,7 +114,7 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
     email =  serializers.SerializerMethodField()
     working_time = serializers.CharField(source='user.working_time', required=False)
     expertise = serializers.CharField(source='user.expertise', required=False)
-    languages = serializers.SerializerMethodField()
+    languages = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
     profile_picture = serializers.ImageField(source='user.profile_picture', required=False)
     class Meta:
         model = Clinic
