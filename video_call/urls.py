@@ -10,7 +10,8 @@ from .views import (
     RecordingListAPIView,
     CreateMeetingLink,
     GenerateMeetingToken,
-    UserInfoAPIView
+    UserInfoAPIView,
+    VideoCallTimeTrackerAPIView
     
 )
 
@@ -35,6 +36,7 @@ urlpatterns = [
     # generate meeting token
     path('generate-meeting-token/', GenerateMeetingToken.as_view(), name="generate-meeting-token"),
     # user-info
-    path('user-info/', UserInfoAPIView.as_view(), name='user-info')
+    path('user-info/', UserInfoAPIView.as_view(), name='user-info'),
+    path("time_tracker/", VideoCallTimeTrackerAPIView.as_view(), name="time_tracker")
         
 ]
