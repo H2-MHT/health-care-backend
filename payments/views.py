@@ -636,6 +636,7 @@ class TransactionHistory(APIView):
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
                         "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_time": BookedAppointment.objects.get(pk=transaction.appointment.id).slot,
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,
@@ -667,6 +668,7 @@ class TransactionHistory(APIView):
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
                         "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_time": BookedAppointment.objects.get(pk=transaction.appointment.id).slot,
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,
