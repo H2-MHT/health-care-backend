@@ -114,7 +114,7 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
     email =  serializers.SerializerMethodField()
     working_time = serializers.CharField(source='user.working_time', required=False)
     expertise = serializers.CharField(source='user.expertise', required=False)
-    languages = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
+    languages = serializers.SerializerMethodField()
     profile_picture = serializers.ImageField(source='user.profile_picture', required=False)
     class Meta:
         model = Clinic
@@ -136,37 +136,43 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
         except Exception as e:
             return []
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        try:
-            data['languages'] = list(instance.user.languages.values_list("id", flat=True)) if instance.user else []
-        except Exception as e:
-            data['languages'] = []
-        return data
+    # def to_representation(self, instance):
+    #     data = super().to_representation(instance)
+    #     try:
+    #         data['languages'] = list(instance.user.languages.values_list("id", flat=True)) if instance.user else []
+    #     except Exception as e:
+    #         data['languages'] = []
+    #     return data
 
     def update(self, instance, validated_data):
         # Extract user data if present
         user_data = validated_data.pop('user', {})  
         user = instance.user  # Get associated User instance
 
-        # Extract & process languages
-        languages = validated_data.pop('languages', [])
-        if isinstance(languages, str):
-            try:
-                languages = json.loads(languages)  # Convert JSON string to list
-            except json.JSONDecodeError:
-                languages = []
+        # Extract languages from request directly
+        request = self.context.get('request')
+        raw_languages = request.data.get('languages')
 
-        # Update User fields correctly (NOT assigning dictionary)
+        languages = []
+        if raw_languages:
+            if isinstance(raw_languages, list):
+                languages = [int(l) for l in raw_languages if l.isdigit()]
+            elif isinstance(raw_languages, str):
+                try:
+                    parsed = json.loads(raw_languages)
+                    if isinstance(parsed, list):
+                        languages = [int(l) for l in parsed if isinstance(l, (int, str)) and str(l).isdigit()]
+                except json.JSONDecodeError:
+                    pass
+
+        # Update user fields
         for attr, value in user_data.items():
             if value is not None:
-                setattr(user, attr, value)  # Update User instance fields
+                setattr(user, attr, value)
 
-        # Update Many-to-Many Field (languages)
         if languages:
             user.languages.set(languages)
 
-        # Save User after all updates
         user.save()
 
         # Update Clinic fields
@@ -174,9 +180,7 @@ class ClinicInfoSerializer(serializers.ModelSerializer):
             if value is not None:
                 setattr(instance, attr, value)
 
-        # Save Clinic instance
         instance.save()
-
         return instance
 
 
