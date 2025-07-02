@@ -1945,3 +1945,54 @@ class AppointmentCountAPIView(APIView):
                 data['confirmed_appointments'] += 1
 
         return Response({'message': " Appointment count retrieved successfully.", 'data': data}, status=status.HTTP_200_OK)
+
+class AdminTransactionHistory(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+
+            if user.role != "SuperAdmin":
+                return Response({"error": "You are not authorized to access this"}, status=status.HTTP_403_FORBIDDEN)
+
+            transactions = Payment.objects.all().select_related('appointment')
+
+            payment = []
+            for transaction in transactions:
+                appointment = transaction.appointment
+                doctor = User.objects.get(pk=appointment.doctor)
+                patient = User.objects.get(pk=appointment.patient)
+
+                data = {
+                    "id": transaction.id,
+                    "appointment_id": appointment.id,
+                    "appointment_date": appointment.date.strftime("%d/%m/%Y") if appointment.date else None,
+                    "appointment_time": appointment.slot,
+                    "appointment_status": appointment.status,
+                    "doctor": {
+                        "id": doctor.id,
+                        "name": doctor.get_full_name(),
+                        "email": doctor.email
+                    },
+                    "patient": {
+                        "id": patient.id,
+                        "name": patient.get_full_name(),
+                        "email": patient.email
+                    },
+                    "amount": transaction.amount,
+                    "currency": patient.currency if getattr(patient, "currency", None) else "USD",
+                    "payment_status": appointment.payment_status,
+                    "payment_method": transaction.method,
+                    "payment_date": transaction.timestamp.strftime("%d/%m/%Y") if transaction.timestamp else None
+                }
+
+                payment.append(data)
+
+            return Response({
+                "message": "All transaction history retrieved successfully",
+                "data": payment
+            })
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
