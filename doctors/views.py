@@ -748,6 +748,7 @@ def update_appointment_status_post_timeout(appointment_id):
             appointment.status = 'In Progress'
             appointment.payment_status = 'Transect'
             appointment.save()
+            return "success"
     except BookedAppointment.DoesNotExist:
         return Response({'message':'appointment not found'}, status=status.HTTP_404_NOT_FOUND)
 
