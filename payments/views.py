@@ -658,7 +658,7 @@ class TransactionHistory(APIView):
                     payment.append(data)
                 
             elif request.user.role == "Doctor":
-                transactions = Payment.objects.filter(appointment__doctor=user.id)
+                transactions = Payment.objects.filter(appointment__doctor=user.id, appointment__status="Completed").select_related('appointment')
                 payment = []
                 for transaction in transactions:
                     doctor = User.objects.get(pk=transaction.appointment.doctor)
