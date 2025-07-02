@@ -21,7 +21,8 @@ from .models import (
             BookedAppointment, 
             Doctor, 
             Patient,
-            MeetingRoom
+            MeetingRoom,
+            VideoCallTimeTracker
 )
 from django.core.files.base import ContentFile
 from django.db.models import Q
@@ -29,6 +30,7 @@ import uuid
 from doctors.models import UserPreference
 import pytz
 from datetime import datetime
+from django.utils import timezone
 
 # Agora credentials
 APP_ID = settings.APP_ID
@@ -741,3 +743,67 @@ def appointment_in_timezone(slot_str, user_id, appointment_date=None):
     end_user_time = end_utc.astimezone(user_timezone)
 
     return f"{start_user_time.strftime('%I:%M')} - {end_user_time.strftime('%I:%M')}"
+
+class VideoCallTimeTrackerAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        user = request.user
+        appoointemt_id = request.query_params.get('appointment_id')
+        action = request.query_params.get('action', 'start')
+        try:
+             appointment = BookedAppointment.objects.get(id=appoointemt_id)
+        except:
+            return JsonResponse({'error': 'Appointment not found'}, status=404)
+        
+        if action not in ['start', 'end']:
+            return JsonResponse({'error': 'Invalid action'}, status=400)
+
+        if action  == 'start':
+            if user.role == 'Patient':
+                 VideoCallTimeTracker.objects.update_or_create(
+                    appointment = appointment,
+                    defaults={
+                        'patient_start_time': timezone.now(),
+                        'patient_end_time': None
+                    }
+                )
+
+            
+            elif user.role == 'Doctor':
+                VideoCallTimeTracker.objects.update_or_create(
+                    appointment = appointment,
+                    defaults={
+                        'doctor_start_time': timezone.now(),
+                        'doctor_end_time': None
+                    }
+                )
+
+            else:
+                return JsonResponse({'error': 'Invalid user role'}, status=400)
+            return JsonResponse({'message': f'Start time added successfully for {user.role}'}, status=200)
+        
+        elif action == 'end':
+            if user.role == 'Patient':
+                video_call_time_tracker = VideoCallTimeTracker.objects.get(appointment=appointment)
+
+                if not video_call_time_tracker:
+                    return JsonResponse({'error': 'Patient start time not found'}, status=404)
+                
+                video_call_time_tracker.patient_end_time = timezone.now()
+                video_call_time_tracker.save()
+                return JsonResponse({'message': 'Patient end time added successfully'}, status=200)
+            
+            elif user.role == 'Doctor':
+                video_call_time_tracker = VideoCallTimeTracker.objects.get(appointment=appointment)
+
+                if not video_call_time_tracker:
+                    return JsonResponse({'error': 'Doctor start time not found'}, status=404)
+                
+                video_call_time_tracker.doctor_end_time = timezone.now()
+                video_call_time_tracker.save()
+                return JsonResponse({'message': 'Doctor end time added successfully'}, status=200)
+
+            else:
+                return JsonResponse({'error': 'Invalid user role'}, status=400)
+        
+                

@@ -39,3 +39,14 @@ class MeetingRoom(models.Model):
     channel_name = models.TextField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="Pending")
     created_at = models.DateTimeField(auto_now_add=True)
+
+class VideoCallTimeTracker(models.Model):
+    appointment = models.OneToOneField(BookedAppointment, on_delete=models.CASCADE)
+    doctor_start_time = models.DateTimeField(null=True, blank=True)
+    doctor_end_time = models.DateTimeField(null=True, blank=True)
+    patient_start_time = models.DateTimeField(null=True, blank=True)
+    patient_end_time = models.DateTimeField(null=True, blank=True)
+    
+
+    def __str__(self):
+        return f"Video Call Time Tracker for {self.appointment.id}"
