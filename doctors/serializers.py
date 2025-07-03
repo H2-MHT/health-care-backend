@@ -295,9 +295,13 @@ class OtherClinicSerializer(serializers.ModelSerializer):
 
 class DoctorWalletSerializer(serializers.ModelSerializer):
     stripe_link = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField() 
     class Meta:
         model = DoctorWallet
-        fields = ['id', 'doctor_id', 'balance', 'stripe_link']
+        fields = ['id', 'doctor_id', 'balance', 'currency', 'stripe_link']
+
+    def get_currency(self, obj):
+        return obj.doctor.currency if obj.doctor else None
 
     def get_stripe_link(self, obj):
         try:

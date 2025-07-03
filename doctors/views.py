@@ -23,6 +23,8 @@ from utils.whatsapp import (
     appointment_reschedule_notification_patient,
     appointment_reschedule_notification_doctor,
 )
+from decimal import Decimal, ROUND_DOWN
+from forex_python.converter import CurrencyRates
 from utils.notifications import send_notification
 from .models import (
     AppointmentManagement,
@@ -3039,15 +3041,51 @@ class DoctorWalletAPIView(APIView):
     def get(self, request):
         try:
             doctor = request.user
+            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
+
+            doctor_currency = doctor.currency or 'USD'
+
             completed_appointments = BookedAppointment.objects.filter(
                 doctor=doctor.id,
                 payment_status='Completed',
                 status = "Completed"
             )
 
-            total_earned = sum(app.amount for app in completed_appointments)
-            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
-            wallet.balance = Decimal(total_earned)
+            total_earned = Decimal('0.00')
+            converter = CurrencyRates()
+
+            for appointment in completed_appointments:
+                amount = appointment.amount or Decimal('0.00')\
+                
+                try:
+                    patient = User.objects.get(id=appointment.patient)
+                    payment_currency = patient.currency or 'USD'
+                except User.DoesNotExist:
+                    payment_currency = 'USD'
+                
+
+                if payment_currency != doctor_currency:
+                    try:
+                        converted = converter.convert(
+                            payment_currency,
+                            doctor_currency,
+                            float(amount)
+                        )
+                        converted_amount = Decimal(converted).quantize(
+                            Decimal('0.01'), rounding=ROUND_DOWN
+                        )
+                        
+                    except Exception as e:
+                        return Response({
+                            "error": f"Currency conversion failed for {payment_currency} to {doctor_currency}",
+                            "detail": str(e)
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    converted_amount = amount
+
+                total_earned += converted_amount
+
+            wallet.balance = total_earned
             wallet.save()
 
             serializer = DoctorWalletSerializer(wallet)

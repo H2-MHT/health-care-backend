@@ -368,6 +368,9 @@ class MediaDigest(models.Model):
 class DoctorWallet(models.Model):
     doctor = models.ForeignKey(User, on_delete=models.CASCADE)
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.0'))
+
+    def __str__(self):
+        return f"Wallet for {self.doctor.first_name}"
     
 class Specialization(models.Model):
     name = models.CharField(max_length=100)
