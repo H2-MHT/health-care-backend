@@ -530,7 +530,7 @@ class WithdrawalAPIView(APIView):
             if not transactions.exists():
                 return Response(
                     {"message": "No withdrawal transactions found."},
-                    status=status.HTTP_404_NOT_FOUND
+                    status=status.HTTP_200_OK
                 )
             
             transaction_serializer = TransactionSerializer(transactions, many=True)
