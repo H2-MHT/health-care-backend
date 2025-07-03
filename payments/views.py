@@ -636,6 +636,7 @@ class TransactionHistory(APIView):
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
                         "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_time": BookedAppointment.objects.get(pk=transaction.appointment.id).slot,
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,
@@ -657,7 +658,7 @@ class TransactionHistory(APIView):
                     payment.append(data)
                 
             elif request.user.role == "Doctor":
-                transactions = Payment.objects.filter(appointment__doctor=user.id)
+                transactions = Payment.objects.filter(appointment__doctor=user.id, appointment__status="Completed").select_related('appointment')
                 payment = []
                 for transaction in transactions:
                     doctor = User.objects.get(pk=transaction.appointment.doctor)
@@ -667,6 +668,7 @@ class TransactionHistory(APIView):
                         "id": transaction.id,
                         "appointment_id": transaction.appointment.id,
                         "appointment_date": datetime.strftime(transaction.appointment.date, "%d/%m/%Y"),
+                        "appointment_time": BookedAppointment.objects.get(pk=transaction.appointment.id).slot,
                         "appointment_status": transaction.appointment.status,
                         "doctor":{
                             "id":doctor.id,

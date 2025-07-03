@@ -578,10 +578,11 @@ class ConsultationReportAPIView(APIView):
         appointment = request.data.get('appointment_id')
         prescription = request.data.get('prescription')
         short_description = request.data.get('short_description')
-        translated_text = request.data.get('translated_text')
+        patient_translated_text = request.data.get('patient_translated_text')
+        doctor_translated_text = request.data.get('doctor_translated_text')
         recommendation = request.data.get('recommendation')
 
-        if not appointment or not translated_text:
+        if not appointment or not patient_translated_text or not doctor_translated_text:
             return Response({"error": "Appointment or translated text is required"}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
@@ -616,7 +617,8 @@ class ConsultationReportAPIView(APIView):
             doctor=doctor,
             appointment=appointment,
             short_description=short_description,
-            translated_text=translated_text,
+            patient_translated_text=patient_translated_text,
+            doctor_translated_text=doctor_translated_text,
             prescription = prescription_obj,
             recommendation=recommendation
         )
@@ -632,7 +634,8 @@ class ConsultationReportAPIView(APIView):
                    user: user_id,
                   "appointment_id": Consultation.appointment.id,
                   "prescription": prescription_data,
-                  "translated_text": Consultation.translated_text,
+                  "patient_translated_text": Consultation.patient_translated_text,
+                  "doctor_translated_text": Consultation.doctor_translated_text,
                   "created_at": Consultation.created_at
               }
             },
@@ -669,7 +672,8 @@ class ConsultationReportAPIView(APIView):
                     "appointment_id": consultation.appointment.id,
                     "prescription": prescription_data,
                     "short_description": consultation.short_description,
-                    "translated_text": consultation.translated_text,
+                    "patient_translated_text": consultation.patient_translated_text,
+                    "doctor_translated_text": consultation.doctor_translated_text,
                     "recommendation": consultation.recommendation,
                     "created_at": consultation.created_at,
                 }
@@ -695,14 +699,18 @@ class ConsultationReportAPIView(APIView):
             return Response({"error": "Consultation report not found."}, status=status.HTTP_404_NOT_FOUND)
 
         short_description = request.data.get('short_description')
-        translated_text = request.data.get('translated_text')
+        patient_translated_text = request.data.get('patient_translated_text')
+        doctor_translated_text = request.data.get('doctor_translated_text')
         recommendation = request.data.get('recommendation')
 
-        if not translated_text and not recommendation and not short_description:
+        if not patient_translated_text and not recommendation and not short_description and not doctor_translated_text:
             return Response({"error": "No fields provided for update."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if translated_text:
-            consultation.translated_text = translated_text
+        if patient_translated_text:
+            consultation.patient_translated_text = patient_translated_text
+
+        if doctor_translated_text:
+            consultation.doctor_translated_text = doctor_translated_text    
 
         if recommendation:
             consultation.recommendation = recommendation
@@ -715,7 +723,8 @@ class ConsultationReportAPIView(APIView):
             {
                 "short_description": consultation.short_description,
                 "recommendation": consultation.recommendation,
-                "translated_text": consultation.translated_text
+                "patient_translated_text": consultation.patient_translated_text,
+                "doctor_translated_text": consultation.doctor_translated_text
             }
         ]
         return Response(

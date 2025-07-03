@@ -23,6 +23,8 @@ from utils.whatsapp import (
     appointment_reschedule_notification_patient,
     appointment_reschedule_notification_doctor,
 )
+from decimal import Decimal, ROUND_DOWN
+from forex_python.converter import CurrencyRates
 from utils.notifications import send_notification
 from .models import (
     AppointmentManagement,
@@ -1155,32 +1157,54 @@ class CompletedAppointmentListView(APIView):
         try:
             user = request.user
             
-            if not hasattr(user, "doctor"):
-                return Response({"message": "only doctor can perform this action"}, status=status.HTTP_403_FORBIDDEN)
+            if not hasattr(user, "doctor")and not hasattr(user, "patient_profile"):
+                return Response({"message": "only doctor and patient can perform this action"}, status=status.HTTP_403_FORBIDDEN)
             
-            appointments = BookedAppointment.objects.filter(doctor=user.id, status="Completed")
+            if hasattr(user, "doctor"):
+                appointments = BookedAppointment.objects.filter(doctor=user.id,  status="Completed")
+            else:
+                appointments = BookedAppointment.objects.filter(patient=user.id,  status="Completed")
 
             data = {
                 "message": "Appointment list retrieved successfully",
                 "data": []
             }
-
+            obj = "Patient" if user.role == 'Doctor' else "Doctor"
             for appointment in appointments:
-                try:
-                    patient_user = User.objects.get(id=appointment.patient)
-                    patient_data = {
-                        "first_name": patient_user.first_name,
-                        "last_name": patient_user.last_name,
-                        "email": patient_user.email,
-                        "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
-                    }
-                except User.DoesNotExist:
-                    patient_data = {
-                        "first_name": None,
-                        "last_name": None,
-                        "email": None,
-                        "profile_picture": None,
-                    }
+                if hasattr(user, "doctor"):
+                    try:
+                        patient_user = User.objects.get(id=appointment.patient)
+                        counterpart_data = {
+                            "first_name": patient_user.first_name,
+                            "last_name": patient_user.last_name,
+                            "email": patient_user.email,
+                            "profile_picture": patient_user.profile_picture.url if patient_user.profile_picture else None,
+                        }
+                    except User.DoesNotExist:
+                        counterpart_data = {
+                            "first_name": None,
+                            "last_name": None,
+                            "email": None,
+                            "profile_picture": None,
+                        }
+                        user.role = "Patient"
+                else:
+                    try:
+                        doctor_user = User.objects.get(id=appointment.doctor)
+                        counterpart_data = {
+                            "first_name": doctor_user.first_name,
+                            "last_name": doctor_user.last_name,
+                            "email": doctor_user.email,
+                            "profile_picture": doctor_user.profile_picture.url if doctor_user.profile_picture else None,
+                        }
+                    except User.DoesNotExist:
+                        counterpart_data = {
+                            "first_name": None,
+                            "last_name": None,
+                            "email": None,
+                            "profile_picture": None,
+                        }
+                    user.role = "Doctor"
 
                 data["data"].append({
                     "appointment_id": appointment.id,
@@ -1188,7 +1212,7 @@ class CompletedAppointmentListView(APIView):
                     "date": appointment.date,
                     "status": appointment.status,
                     "slot": appointment.slot,
-                    "patient": patient_data
+                    obj: counterpart_data
                 })
             return Response(data, status=200)
                 
@@ -3017,15 +3041,51 @@ class DoctorWalletAPIView(APIView):
     def get(self, request):
         try:
             doctor = request.user
+            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
+
+            doctor_currency = doctor.currency or 'USD'
+
             completed_appointments = BookedAppointment.objects.filter(
                 doctor=doctor.id,
                 payment_status='Completed',
                 status = "Completed"
             )
 
-            total_earned = sum(app.amount for app in completed_appointments)
-            wallet, _ = DoctorWallet.objects.get_or_create(doctor=doctor)
-            wallet.balance = Decimal(total_earned)
+            total_earned = Decimal('0.00')
+            converter = CurrencyRates()
+
+            for appointment in completed_appointments:
+                amount = appointment.amount or Decimal('0.00')\
+                
+                try:
+                    patient = User.objects.get(id=appointment.patient)
+                    payment_currency = patient.currency or 'USD'
+                except User.DoesNotExist:
+                    payment_currency = 'USD'
+                
+
+                if payment_currency != doctor_currency:
+                    try:
+                        converted = converter.convert(
+                            payment_currency,
+                            doctor_currency,
+                            float(amount)
+                        )
+                        converted_amount = Decimal(converted).quantize(
+                            Decimal('0.01'), rounding=ROUND_DOWN
+                        )
+                        
+                    except Exception as e:
+                        return Response({
+                            "error": f"Currency conversion failed for {payment_currency} to {doctor_currency}",
+                            "detail": str(e)
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    converted_amount = amount
+
+                total_earned += converted_amount
+
+            wallet.balance = total_earned
             wallet.save()
 
             serializer = DoctorWalletSerializer(wallet)
