@@ -100,4 +100,4 @@ reportlab
 pycountry
 deep-translator
 django_celery_results
-forex_python.converter
+forex-python
