@@ -1690,6 +1690,11 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
 
             doctor_dict = {user.id: user for user in users}
 
+            patient_ids = set(list(filtered_upcoming_appointments.values_list('patient', flat=True)) +
+                              list(filtered_completed_appointments.values_list('patient', flat=True)))
+            patients = User.objects.filter(id__in=patient_ids)
+            patient_dict = {user.id: user for user in patients}
+
             upcoming_appointments = pagination_view(filtered_upcoming_appointments, request)
             completed_appointments = pagination_view(filtered_completed_appointments, request)
 
@@ -1698,13 +1703,23 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
 
             for appointment in upcoming_appointments[0]:
                 doctor = doctor_dict.get(appointment.doctor)
-                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+                patient = patient_dict.get(appointment.patient)
+
+                doctor_name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+                patient_name = f"{patient.first_name} {patient.last_name}" if patient else "Unknown"
+
+                tracker = getattr(appointment, 'videocalltimetracker', None)
 
                 data = {
                     "id": appointment.id,
-                    "doctor_name": name,
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
+                    "doctor_start_time": tracker.doctor_start_time.strftime('%I:%M %p') if tracker and tracker.doctor_start_time else None,
+                    "doctor_end_time": tracker.doctor_end_time.strftime('%I:%M %p') if tracker and tracker.doctor_end_time else None,
+                    "patient_start_time": tracker.patient_start_time.strftime('%I:%M %p') if tracker and tracker.patient_start_time else None,
+                    "patient_end_time": tracker.patient_end_time.strftime('%I:%M %p') if tracker and tracker.patient_end_time else None,
                     "status": appointment.status,
                     "appointment_type": appointment.appointment_type
                 }
@@ -1712,13 +1727,21 @@ class PastAndAUpcomingAppointmentsAPIView(APIView):
 
             for appointment in completed_appointments[0]:
                 doctor = doctor_dict.get(appointment.doctor)
-                name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+                patient = patient_dict.get(appointment.patient)
+
+                doctor_name = f"{doctor.first_name} {doctor.last_name}" if doctor else "Unknown"
+                patient_name = f"{patient.first_name} {patient.last_name}" if patient else "Unknown"
 
                 data = {
                     "id": appointment.id,
-                    "doctor_name": name,
+                    "doctor_name": doctor_name,
+                    "patient_name": patient_name,
                     "date": appointment.date.strftime('%d-%m-%Y'),
                     "time": appointment.slot,
+                    "doctor_start_time": tracker.doctor_start_time.strftime('%I:%M %p') if tracker and tracker.doctor_start_time else None,
+                    "doctor_end_time": tracker.doctor_end_time.strftime('%I:%M %p') if tracker and tracker.doctor_end_time else None,
+                    "patient_start_time": tracker.patient_start_time.strftime('%I:%M %p') if tracker and tracker.patient_start_time else None,
+                    "patient_end_time": tracker.patient_end_time.strftime('%I:%M %p') if tracker and tracker.patient_end_time else None,
                     "status": appointment.status,
                     "appointment_type": appointment.appointment_type,
                     "amount": appointment.amount
