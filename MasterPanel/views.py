@@ -1958,8 +1958,10 @@ class AdminTransactionHistory(APIView):
 
             transactions = Payment.objects.all().select_related('appointment')
 
+            paginated_transactions, headers = pagination_view(transactions, request)
+
             payment = []
-            for transaction in transactions:
+            for transaction in paginated_transactions:
                 appointment = transaction.appointment
                 doctor = User.objects.get(pk=appointment.doctor)
                 patient = User.objects.get(pk=appointment.patient)
@@ -1989,10 +1991,7 @@ class AdminTransactionHistory(APIView):
 
                 payment.append(data)
 
-            return Response({
-                "message": "All transaction history retrieved successfully",
-                "data": payment
-            })
+            return create_paginated_response("All transaction history retrieved successfully", payment, headers)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
