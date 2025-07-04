@@ -135,8 +135,26 @@ class DashboardAPIView(APIView):
 
 
             # Doctor Notes
-            doctor_notes = Notes.objects.filter(user=request.user, user__role="Doctor").order_by('-created_at')
-            doctor_notes_data = NotesSerializer(doctor_notes, many=True).data
+            date_range = []
+            current_date = converted_start_date
+            while current_date <= converted_end_date:
+                date_range.append(current_date)
+                current_date += timedelta(days=1)
+
+            date_wise_notes = []
+            for date in date_range:
+                daily_notes = Notes.objects.filter(
+                    user=request.user,
+                    user__role="Doctor",
+                    created_at__date=date
+                ).order_by('-created_at')
+
+                serialized_notes = NotesSerializer(daily_notes, many=True).data
+
+                date_wise_notes.append({
+                    "date": date.isoformat(),
+                    "notes": serialized_notes  # [] if no notes
+                })
 
             # Patient Diagnoses
             patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
@@ -181,7 +199,7 @@ class DashboardAPIView(APIView):
                 "confirmed_data": confirmed_data,
                 "upcoming_requests": upcoming_requests_data,
                 "archived_data": archived_data,
-                "doctor_notes": doctor_notes_data,
+                "doctor_notes": date_wise_notes,
                 "patient_diagnoses": diagnoses_data,
                 "last_report": last_reports_data,
                 "total_consultations": total_consultations,
