@@ -582,8 +582,8 @@ class ConsultationReportAPIView(APIView):
         doctor_translated_text = request.data.get('doctor_translated_text')
         recommendation = request.data.get('recommendation')
 
-        if not appointment or not patient_translated_text or not doctor_translated_text:
-            return Response({"error": "Appointment or translated text is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not appointment:
+            return Response({"error": "Appointment is required"}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
             appointment = BookedAppointment.objects.get(pk=appointment)
