@@ -135,27 +135,20 @@ class DashboardAPIView(APIView):
 
 
             # Doctor Notes
-            date_range = []
-            current_date = converted_start_date
-            while current_date <= converted_end_date:
-                date_range.append(current_date)
-                current_date += timedelta(days=1)
+            doctor_notes = Notes.objects.filter(
+                user=request.user,
+                created_at__date__gte=converted_start_date,
+                created_at__date__lte=converted_end_date
+            ).order_by('-created_at')
 
-            date_wise_notes = []
-            for date in date_range:
-                daily_notes = Notes.objects.filter(
-                    user=request.user,
-                    user__role="Doctor",
-                    created_at__date=date
-                ).order_by('-created_at')
-
-                serialized_notes = NotesSerializer(daily_notes, many=True).data
-
-                date_wise_notes.append({
-                    "date": date.isoformat(),
-                    "notes": serialized_notes  # [] if no notes
-                })
-
+            notes_data = [
+                {
+                    "note_id": note.id,
+                    "title": note.title,
+                    "note": note.note,
+                    "created_at": note.created_at.isoformat(),
+                } for note in doctor_notes
+            ]
             # Patient Diagnoses
             patients = Patient.objects.filter(appointment__doctor=doctor).distinct()
             diagnoses = DashboardMedicalHistory.objects.filter(patient__in=patients).select_related("patient__user")[:5]
@@ -199,7 +192,7 @@ class DashboardAPIView(APIView):
                 "confirmed_data": confirmed_data,
                 "upcoming_requests": upcoming_requests_data,
                 "archived_data": archived_data,
-                "doctor_notes": date_wise_notes,
+                "doctor_notes": notes_data,
                 "patient_diagnoses": diagnoses_data,
                 "last_report": last_reports_data,
                 "total_consultations": total_consultations,
