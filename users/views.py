@@ -28,6 +28,8 @@ from django.core.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from patients.models import Patient
+from datetime import datetime, timedelta
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -296,8 +298,44 @@ class NotesAPIView(APIView):
     def get(self, request, *args, **kwargs):
         """Retrieve notes created by the logged-in user (Doctor or Patient)."""
         try:
-            notes = Notes.objects.filter(user=request.user).order_by("-created_at")
-            serializer = NotesSerializer(notes, many=True)
+            start_date = request.query_params.get("start_date")
+            end_date = request.query_params.get("end_date")
+
+            notes_queryset = Notes.objects.filter(user=request.user)
+
+            if start_date:
+                try:
+                    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+                    notes_queryset = notes_queryset.filter(created_at__gte=start_date)
+                except ValueError:
+                    return Response(
+                        {"message": "Invalid start_date format. Use YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if end_date:
+                try:
+                    end_date = datetime.strptime(end_date, "%Y-%m-%d")
+                    notes_queryset = notes_queryset.filter(created_at__lte=end_date)
+                except ValueError:
+                    return Response(
+                        {"message": "Invalid end_date format. Use YYYY-MM-DD."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            notes_queryset = notes_queryset.order_by("-created_at")
+            serializer = NotesSerializer(notes_queryset, many=True)
+
+            grouped_notes = {}
+            for note in serializer.data:
+                note_date = note['created_at'][:10]
+                grouped_notes.setdefault(note_date, []).append(note)
+
+            data_by_day = OrderedDict()
+            current_date = start_date
+            while current_date <= end_date:
+                date_str = current_date.strftime("%Y-%m-%d")
+                data_by_day[date_str] = grouped_notes.get(date_str, [])
+                current_date += timedelta(days=1)
+
             return Response(
                 {"message": "Notes retrieved successfully.", "data": serializer.data},
                 status=status.HTTP_200_OK,
