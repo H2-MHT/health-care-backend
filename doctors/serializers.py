@@ -272,9 +272,17 @@ class PasswordChangeConfirmSerializer(serializers.Serializer):
 
     
 class LicenceCertificateSerializer(serializers.ModelSerializer):
+    attachment = serializers.SerializerMethodField()
+
     class Meta:
         model = LicenceCertificate
-        fields = ['user_id','id','name','description','attachment','date','status', 'rejection_reason', 'is_delete']
+        fields = ['user_id', 'id', 'name', 'description', 'attachment', 'date', 'status', 'rejection_reason', 'is_delete']
+
+    def get_attachment(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and hasattr(obj.attachment, 'url'):
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
 
 
 class MediaDigestSerializer(serializers.ModelSerializer):
