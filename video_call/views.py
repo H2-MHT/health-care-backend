@@ -718,7 +718,7 @@ class UserInfoAPIView(APIView):
 
 def appointment_in_timezone(slot_str, user_id, appointment_date=None):
 
-    start_time_str, end_time_str = slot_str.split(" - ")
+    start_time_str, end_time_str = slot_str.split("-")
 
     if appointment_date is None:
         appointment_date = datetime.now().date()
@@ -742,7 +742,7 @@ def appointment_in_timezone(slot_str, user_id, appointment_date=None):
     start_user_time = start_utc.astimezone(user_timezone)
     end_user_time = end_utc.astimezone(user_timezone)
 
-    return f"{start_user_time.strftime('%I:%M')} - {end_user_time.strftime('%I:%M')}"
+    return f"{start_user_time.strftime('%I:%M')}-{end_user_time.strftime('%I:%M')}"
 
 class VideoCallTimeTrackerAPIView(APIView):
     permission_classes = [IsAuthenticated]

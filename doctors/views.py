@@ -979,12 +979,12 @@ class BookAppointmentAPIView(APIView):
                 doctor = User.objects.get(id=appointment.doctor)
                 doctor_name = f"{doctor.first_name} {doctor.last_name}"
                 doctor_profile = UserPreference.objects.filter(user=doctor).first()
-                doctor_timezone = doctor_profile.timezone or "Asia/Kolkata"
+                doctor_timezone = doctor_profile.timezone if doctor_profile else "UTC"
 
                 patient = User.objects.get(id=appointment.patient)
                 patient_name = f"{patient.first_name} {patient.last_name}"
                 patient_profile = UserPreference.objects.filter(user=patient).first()
-                patient_timezone = patient_profile.timezone or "Asia/Kolkata"
+                patient_timezone = patient_profile.timezone if patient_profile else "UTC"
 
                 slot_start_str = appointment.slot.split('-')[0].strip()
                 appointment_datetime_naive = datetime.strptime(f"{appointment.date} {slot_start_str}", "%Y-%m-%d %H:%M")
