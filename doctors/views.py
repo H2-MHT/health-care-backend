@@ -2752,7 +2752,7 @@ class LicenceCertificateAPIView(APIView):
 
     def post(self, request):
         try:
-            serializer = LicenceCertificateSerializer(data=request.data)
+            serializer = LicenceCertificateSerializer(data=request.data, context={"request": request})
             if serializer.is_valid():
                 serializer.save(user=request.user)
                 return Response({
@@ -2767,7 +2767,7 @@ class LicenceCertificateAPIView(APIView):
     def get(self, request):
         try:
             licence_certificates = LicenceCertificate.objects.filter(user=request.user, is_delete=False)
-            serializer = LicenceCertificateSerializer(licence_certificates, many=True)
+            serializer = LicenceCertificateSerializer(licence_certificates, many=True, context={"request": request})
             return Response({"data": serializer.data}, status=status.HTTP_200_OK)
         
         except Exception as e:
