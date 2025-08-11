@@ -746,61 +746,71 @@ def appointment_in_timezone(slot_str, user_id, appointment_date=None):
 
 class VideoCallTimeTrackerAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def update_appointment_status(self, tracker, appointment):
+        if tracker.doctor_start_time and tracker.doctor_end_time:
+            if (tracker.patient_start_time and tracker.patient_end_time) or not tracker.patient_start_time:
+                appointment.status = "Completed"
+                appointment.save()
+                return True
+        return False
+
     def get(self, request):
         user = request.user
-        appoointemt_id = request.query_params.get('appointment_id')
+        appointment_id = request.query_params.get('appointment_id')
         action = request.query_params.get('action', 'start')
+
+        if not appointment_id:
+            return JsonResponse({'error': 'appointment_id is required'}, status=400)
+
         try:
-             appointment = BookedAppointment.objects.get(id=appoointemt_id)
-        except:
+            appointment = BookedAppointment.objects.get(id=appointment_id)
+        except BookedAppointment.DoesNotExist:
             return JsonResponse({'error': 'Appointment not found'}, status=404)
-        
+
         if action not in ['start', 'end']:
             return JsonResponse({'error': 'Invalid action'}, status=400)
 
-        if action  == 'start':
+        if action == 'start':
             if user.role == 'Patient':
-                 VideoCallTimeTracker.objects.update_or_create(
-                    appointment = appointment,
+                VideoCallTimeTracker.objects.update_or_create(
+                    appointment=appointment,
                     defaults={
                         'patient_start_time': timezone.now(),
                         'patient_end_time': None
                     }
                 )
-
-            
             elif user.role == 'Doctor':
                 VideoCallTimeTracker.objects.update_or_create(
-                    appointment = appointment,
+                    appointment=appointment,
                     defaults={
                         'doctor_start_time': timezone.now(),
                         'doctor_end_time': None
                     }
                 )
-
             else:
                 return JsonResponse({'error': 'Invalid user role'}, status=400)
+
             return JsonResponse({'message': f'Start time added successfully for {user.role}'}, status=200)
-        
+
         elif action == 'end':
+            try:
+                tracker = VideoCallTimeTracker.objects.get(appointment=appointment)
+            except VideoCallTimeTracker.DoesNotExist:
+                return JsonResponse({'error': f'{user.role} start time not found'}, status=404)
+
             if user.role == 'Patient':
-                video_call_time_tracker = VideoCallTimeTracker.objects.get(appointment=appointment)
-
-                if not video_call_time_tracker:
-                    return JsonResponse({'error': 'Patient start time not found'}, status=404)
-                
-                video_call_time_tracker.patient_end_time = timezone.now()
-                video_call_time_tracker.save()
+                tracker.patient_end_time = timezone.now()
+                tracker.save()
+                if self.update_appointment_status(tracker, appointment):
+                    return JsonResponse({'message': 'Appointment completed successfully'}, status=200)
                 return JsonResponse({'message': 'Patient end time added successfully'}, status=200)
-            
-            elif user.role == 'Doctor':
-                video_call_time_tracker = VideoCallTimeTracker.objects.get(appointment=appointment)
 
-                if not video_call_time_tracker:
-                    return JsonResponse({'error': 'Doctor start time not found'}, status=404)
-                
-                video_call_time_tracker.doctor_end_time = timezone.now()
-                video_call_time_tracker.save()
+            elif user.role == 'Doctor':
+                tracker.doctor_end_time = timezone.now()
+                tracker.save()
+                if self.update_appointment_status(tracker, appointment):
+                    return JsonResponse({'message': 'Appointment completed successfully'}, status=200)
                 return JsonResponse({'message': 'Doctor end time added successfully'}, status=200)
 
             else:
