@@ -283,6 +283,14 @@ class LicenceCertificateSerializer(serializers.ModelSerializer):
         if obj.attachment and hasattr(obj.attachment, 'url'):
             return request.build_absolute_uri(obj.attachment.url)
         return None
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        file = request.FILES.get('attachment', None)
+        if file:
+            validated_data['attachment'] = file 
+            return super().create(validated_data)
+        return super().create(validated_data)
 
 
 class MediaDigestSerializer(serializers.ModelSerializer):
