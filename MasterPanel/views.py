@@ -676,7 +676,7 @@ class VerifyDocumentAPIView(APIView):
             else:
                 licence_certificate = LicenceCertificate.objects.all()
 
-            licence_certificate_serializer = LicenceCertificateSerializer(licence_certificate, many=True)
+            licence_certificate_serializer = LicenceCertificateSerializer(licence_certificate, many=True, context={"request": request})
 
             return Response(
                 {
