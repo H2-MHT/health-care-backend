@@ -1113,7 +1113,7 @@ class PatientAppointmentAPIView(APIView):
             start__date = datetime.strptime(start_date, "%d-%m-%Y").date()
             end__date = datetime.strptime(end_date, "%d-%m-%Y").date()
             
-            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, patient=patient_user_id)
+            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, patient=patient_user_id).exclude(status='In Progress')
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
