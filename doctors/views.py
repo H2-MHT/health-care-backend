@@ -147,8 +147,14 @@ class PublicDoctorListAPIView(APIView):
                 doctors = doctors.filter(gender__istartswith=gender)
 
             if speciality:
+                matching_ids = Specialization.objects.filter(
+                    name__istartswith=speciality
+                ).values_list("id", flat=True)
+                q = Q()
+                for sid in matching_ids:
+                    q |= Q(user__professional_stat__icontains=str(sid))
                 doctor_ids = Doctor.objects.filter(
-                    specialty__istartswith=speciality
+                    user__professional_stat__istartswith=speciality
                 ).values_list("user_id", flat=True)
                 doctors = doctors.filter(id__in=doctor_ids)
 
