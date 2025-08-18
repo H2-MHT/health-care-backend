@@ -116,7 +116,7 @@ class BookedAppointmentSerializer(serializers.ModelSerializer):
     meeting_link = serializers.SerializerMethodField()
     class Meta:
         model = BookedAppointment
-        fields = ['id', 'appointment_type', 'status', 'meeting_link', 'date', 'slot', 'created_at']
+        fields = ['id', 'appointment_type', 'status', 'meeting_link', 'date', 'slot', 'payment_status', 'created_at']
         
     def to_representation(self, instance):
         data = super().to_representation(instance)

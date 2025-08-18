@@ -107,11 +107,33 @@ class DoctorListAPIView(APIView):
         logger.info("User %s is requesting the doctor list.", request.user.email)
         try:
             search_key = request.query_params.get("search_key", "").strip()
+            country = request.query_params.get("country", "").strip()
+            gender = request.query_params.get("gender", "").strip()
+            speciality = request.query_params.get("speciality", "").strip()
+
+            doctors = User.objects.filter(role="Doctor")
+
             if search_key:
-                doctors = User.objects.filter(first_name__istartswith=search_key) | \
+                doctors = User.objects.filter(first_name__istartswith=search_key) |\
                         User.objects.filter(last_name__istartswith=search_key)
-            else:
-                doctors = User.objects.filter(role="Doctor")
+            if country:
+                doctors = doctors.filter(country__istartswith=country)
+
+            if gender:
+                doctors = doctors.filter(gender__istartswith=gender)
+
+            if speciality:
+                matching_ids = Specialization.objects.filter(
+                    name__istartswith=speciality
+                ).values_list("id", flat=True)
+                q = Q()
+                for sid in matching_ids:
+                    q |= Q(user__professional_stat__icontains=str(sid))
+                doctor_ids = Doctor.objects.filter(
+                    user__professional_stat__istartswith=speciality
+                ).values_list("user_id", flat=True)
+                doctors = doctors.filter(id__in=doctor_ids)
+
             paginated_data, headers = pagination_view(doctors, request)
             serializer = UserSerializer(paginated_data, many=True)      
             return create_paginated_response("Doctor list retrieved successfully.",serializer.data,headers)
@@ -1113,7 +1135,7 @@ class PatientAppointmentAPIView(APIView):
             start__date = datetime.strptime(start_date, "%d-%m-%Y").date()
             end__date = datetime.strptime(end_date, "%d-%m-%Y").date()
             
-            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, patient=patient_user_id)
+            appiontmtents = BookedAppointment.objects.filter(date__gte=start__date, date__lte=end__date, patient=patient_user_id).exclude(payment_status='Pending')
             if not appiontmtents.exists():
                 return Response({'message':'No appintment found', 'data':[]}, status=status.HTTP_200_OK)
             
