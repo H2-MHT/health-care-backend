@@ -97,7 +97,7 @@ class User(AbstractUser):
     # Address Information
     country = models.CharField(max_length=255, blank=True, default="")
     city = models.CharField(max_length=255, blank=True, default="")
-    currency=models.CharField(max_length=10, default="", help_text="Currency code")
+    currency=models.CharField(max_length=10, default="USD", help_text="Currency code")
     residence = models.CharField(max_length=255, blank=True, default="")
 
     # Professional Information
