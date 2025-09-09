@@ -926,8 +926,13 @@ class GoogleLoginView(APIView):
                     if role:
                         user.role = role
                     user.save()
-                else:
-                    logger.info("Existing user logged in: %s", email)
+                    
+                    if user.role == "Doctor":
+                       self.create_doctor_profile(user)
+                    elif user.role == "Patient":
+                        self.create_patient_profile(user)
+                    else:
+                        logger.info("Existing user logged in: %s", email)
 
                 # Generate JWT tokens
                 jwt_token = get_tokens_for_user(user)
@@ -958,6 +963,104 @@ class GoogleLoginView(APIView):
                 {"error": "An error occurred. Please try again later."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    def create_doctor_profile(self, user):
+        if user.role == "Doctor":
+            logger.info(f"User {user.email} is a doctor. Creating profile...")
+            try:
+                doctor, created = Doctor.objects.get_or_create(user=user)
+                if created:
+                    doctor.is_verified = True
+                    doctor.save()
+                    logger.info(f"Doctor profile created for {user.email}.")
+
+                    # Send doctor profile email using SendGrid Template ID
+                    message = Mail(
+                        from_email="it@my-health.today",
+                        to_emails="onboarding-doctor@my-health.today",
+                    )
+                    message.template_id = 'd-0def9bd6809a4776996693234b8e301b'
+
+                    # Dynamic template data for email
+                    message.dynamic_template_data = {
+                        "doctor_name": user.get_full_name(),
+                        "email": user.email,
+                        "country": user.country if user.country else "N/A",
+                        "languages": ", ".join([lang.name for lang in user.languages.all()]) if user.languages.exists() else "N/A",
+                        "specilization": doctor.specialty if doctor.specialty else "N/A",
+                        "clinic_name": doctor.user.work_place.name if doctor.user.work_place else "N/A",
+                        "experience": doctor.experience_years if doctor.experience_years else "N/A",
+                        "hourly_rate": f"{doctor.planned_hourly_rate} {user.currency}" if user.currency else f"{doctor.planned_hourly_rate} USD",
+                        "availability": ", ".join(doctor.available_dates) if doctor.available_dates else "N/A",
+                        "bio": user.bio if user.bio else "N/A"
+                    }
+
+
+                    try:
+                        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                        response = sg.send(message)
+                        logger.info(f"Doctor profile email sent. Response: {response.status_code}")
+                        return response
+                    except Exception as email_error:
+                        logger.error(f"Failed to send doctor profile email: {str(email_error)}")
+                        return str(email_error)
+                        
+                else:
+                    logger.info(f"Doctor profile already exists for {user.email}.")
+            except Exception as e:
+                logger.error(f"Error creating Doctor profile for {user.email}: {str(e)}")
+
+    def create_patient_profile(self, user):
+        if user.role == "Patient":
+            logger.info(f"User {user.email} is a patient. Creating profile...")
+            try:
+                patient, created = Patient.objects.get_or_create(user=user)
+                if created:
+                    patient.is_verified = True
+                    patient.save()
+                    logger.info(f"Patient profile created for {user.email}.")
+
+                    # Send patient profile email content
+                    subject = f"Patient Onboarding Team"
+                    body = f"""
+                    Dear Admin/Team,
+
+                    A new Patient has onboarded. Below are the details for your action:
+
+                    **Patient Details:**
+                    - **Patient ID:** {patient.id}
+                    - **Patient Name:** {user.get_full_name()}
+                    - **Email:** {user.email}
+                    - **Phone Number:** {user.phone_number}
+                    - **Date of Birth:** {user.dob}
+                    - **Country:** {user.country}
+                    - **City:** {user.city}
+                    - **Registration Date:** {patient.created_at}
+                    - **Verification Status:** {patient.is_verified}
+                    - **Last Login:** {patient.last_login}
+                    Best regards,  
+                    My Health Today Team
+                    """
+
+                    message = Mail(
+                        from_email="it@my-health.today",
+                        to_emails="onboarding-patient@my-health.today",
+                        subject=subject,
+                        plain_text_content=body.strip(),
+                    )
+                    try:
+                        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+                        response = sg.send(message)
+                        logger.info(f"Patient profile email sent. Response: {response.status_code}")
+                        return response
+                    except Exception as email_error:
+                        logger.error(f"Failed to send patient profile email: {str(email_error)}")
+                        return str(email_error)
+
+                else:
+                    logger.info(f"Patient profile already exists for {user.email}.")
+            except Exception as e:
+                logger.error(f"Error creating Patient profile for {user.email}: {str(e)}")
 
 
 class AppleLoginView(APIView):
