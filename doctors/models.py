@@ -399,3 +399,18 @@ class SlotsWeekDays(models.Model):
     week_day = models.ForeignKey(WeekDays, on_delete=models.CASCADE)
     slot = models.ForeignKey(Slot, on_delete=models.CASCADE)
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+
+
+class DocumentVerification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    government_id  = models.FileField(upload_to="government_id/", null=True, blank=True)
+    proof_of_address = models.FileField(upload_to="proof_of_address/", null=True, blank=True)
+    cv_resume = models.FileField(upload_to="cv_resume/", null=True, blank=True)
+    medical_license = models.FileField(upload_to="medical_license/", null=True, blank=True)
+    clinic_affiliation = models.FileField(upload_to="clinic_affiliation/", null=True, blank=True)
+    status = models.CharField(max_length=20, choices=[("Pending", "Pending"), ("Approved", "Approved"), ("Rejected", "Rejected")], default="Pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.first_name} {self.user.last_name}"

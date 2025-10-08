@@ -46,6 +46,7 @@ from .views import (
     AppointmentView,
     SlotFilterAPIView,
     PublicSpecializationListAPIView,
+    DocumentVerificationAPIView,
     )
 
 
@@ -117,6 +118,10 @@ urlpatterns = [
     path('generate-slots/', AppointmentView.as_view(), name='appointment-view'),
     path('filter-slots/', SlotFilterAPIView.as_view(), name='filter-slots'),
     path("all-specializations/", PublicSpecializationListAPIView.as_view(), name="all-specializations"),
+    path("upload-document/", DocumentVerificationAPIView.as_view(), name="upload-document"),
+    path("view-document/", DocumentVerificationAPIView.as_view(), name="view-document"),
+    path("update-document/<int:pk>/", DocumentVerificationAPIView.as_view(), name="update-document"),
+    path("delete-document/<int:pk>/", DocumentVerificationAPIView.as_view(), name="delete-document"),
     
 
 ]
