@@ -50,6 +50,7 @@ from .models import (
     WeekDays,
     SlotsWeekDays,
     UserPreference,
+    DocumentVerification,
 )
 from reviews.models import Review
 from notifications.models import Notification
@@ -66,6 +67,7 @@ from .serializers import (
     LicenceCertificateSerializer, 
     MediaDigestSerializer,
     DoctorWalletSerializer,
+    DocumentVerificationSerializer,
 )
 from django.utils.crypto import get_random_string
 import pytz
@@ -3437,3 +3439,72 @@ class PublicSpecializationListAPIView(APIView):
             return Response(data, status=200)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+class DocumentVerificationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            if request.user.role != 'Doctor':
+                return Response({"error": "Only doctors can add documents."}, status=status.HTTP_403_FORBIDDEN)
+            serializer = DocumentVerificationSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                return Response({
+                    "message": "Document uploaded successfully",
+                    "data": serializer.data
+                    }, status=status.HTTP_201_CREATED)
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def get(self, request):
+        try:
+            if request.user.role == 'Doctor':
+                documents = DocumentVerification.objects.filter(user=request.user)
+                serializer = DocumentVerificationSerializer(documents, many=True)
+                return Response(
+                    {
+                      "message": "Documents retrieved successfully",
+                      "data": serializer.data
+                      }, status=status.HTTP_200_OK
+                      )
+            return Response({"error": "Only doctors can retrieve documents."}, status=status.HTTP_403_FORBIDDEN)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def patch(self, request, pk):
+        try:
+            document = DocumentVerification.objects.get(pk=pk)
+            serializer = DocumentVerificationSerializer(document, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Document updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except DocumentVerification.DoesNotExist:
+            return Response({"error": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self, request, pk):
+        try:
+            document = DocumentVerification.objects.get(pk=pk)
+            fields_to_delete = request.data.get("fields", [])
+
+            if not fields_to_delete:
+                return Response({"error": "Please provide fields to delete"}, status=status.HTTP_400_BAD_REQUEST)
+
+            for field in fields_to_delete:
+                if hasattr(document, field):
+                    setattr(document, field, None)  # file ko null kar diya
+                else:
+                    return Response({"error": f"Invalid field: {field}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            document.save()
+            return Response({"message": "Selected document(s) deleted successfully"}, status=status.HTTP_200_OK)
+
+        except DocumentVerification.DoesNotExist:
+            return Response({"error": "Document not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

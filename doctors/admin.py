@@ -19,7 +19,8 @@ from .models import(
     Specialization,
     WeekDays,
     Slot,
-    SlotsWeekDays
+    SlotsWeekDays,
+    DocumentVerification,
 )
 # Register your models here.
 class DoctorAdmin(admin.ModelAdmin):
@@ -52,3 +53,4 @@ admin.site.register(Specialization)
 admin.site.register(WeekDays)
 admin.site.register(SlotsWeekDays)
 admin.site.register(Slot)
+admin.site.register(DocumentVerification)

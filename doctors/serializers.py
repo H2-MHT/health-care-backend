@@ -15,6 +15,7 @@ from .models import (
     MediaDigest,
     DoctorWallet,
     Doctor,
+    DocumentVerification,
     
 )
 from video_call.models import MeetingRoom
@@ -25,6 +26,7 @@ from django.contrib.auth.hashers import check_password
 from users.models import User
 from django.utils.timezone import now
 from clinics.models import OtherClinic
+import os
 # class DoctorNotesSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = DoctorNotes
@@ -331,3 +333,30 @@ class AddStripeLinkDoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Doctor
         fields = ['id', 'stripe_link']
+
+
+class DocumentVerificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentVerification
+        fields = ['id', 'user', 'government_id', 'proof_of_address', 'cv_resume', 'medical_license', 'clinic_affiliation', 'status']
+        read_only_fields = ['user']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        def get_filename(field):
+            return os.path.basename(field.name) if field else None
+
+        data['government_id'] = get_filename(instance.government_id)
+        data['proof_of_address'] = get_filename(instance.proof_of_address)
+        data['cv_resume'] = get_filename(instance.cv_resume)
+        data['medical_license'] = get_filename(instance.medical_license)
+        data['clinic_affiliation'] = get_filename(instance.clinic_affiliation)
+
+        data['government_id_url'] = instance.government_id.url if instance.government_id else None
+        data['proof_of_address_url'] = instance.proof_of_address.url if instance.proof_of_address else None
+        data['cv_resume_url'] = instance.cv_resume.url if instance.cv_resume else None
+        data['medical_license_url'] = instance.medical_license.url if instance.medical_license else None
+        data['clinic_affiliation_url'] = instance.clinic_affiliation.url if instance.clinic_affiliation else None
+
+        return data
